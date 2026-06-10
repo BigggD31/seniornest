@@ -996,15 +996,13 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                 ],
               ),
             ),
-            IconButton(
-              icon: Icon(
+            GestureDetector(
+              onTap: () => _removeBookmark(item),
+              child: Icon(
                 Icons.bookmark_remove_rounded,
                 color: catColor,
                 size: 20,
               ),
-              onPressed: () => _removeBookmark(item),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
             ),
           ],
         ),
