@@ -747,7 +747,7 @@ class _SafetyScreenState extends State<SafetyScreen>
             final anim = index < _itemAnimations.length
                 ? _itemAnimations[index + 2]
                 : const AlwaysStoppedAnimation(1.0);
-            final hasAvatar = (contact['avatar'] as String).isNotEmpty;
+            final hasAvatar = (contact['avatar'] as String? ?? '').isNotEmpty;
             return AnimatedBuilder(
               animation: anim,
               builder: (context, child) => Opacity(

@@ -921,8 +921,8 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
 
   Widget _buildMemoryCard(Map<String, dynamic> item, bool isTablet) {
     final category = item['category'] as String? ?? '';
-    final title = item['title'] as String? ?? '';
-    final subtitle = item['subtitle'] as String? ?? '';
+    final title = item['senderName'] as String? ?? item['title'] as String? ?? '';
+    final subtitle = item['content'] as String? ?? item['subtitle'] as String? ?? '';
     final timestamp = item['timestamp'] as String? ?? '';
     final catIndex = _categories.indexOf(category);
     final catColor = catIndex >= 0

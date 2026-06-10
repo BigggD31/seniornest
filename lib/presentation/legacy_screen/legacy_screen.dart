@@ -996,9 +996,9 @@ class _LegacyScreenState extends State<LegacyScreen>
   }
 
   Widget _buildStoryCard(Map<String, dynamic> story, int index, bool isTablet) {
-    final hasImage = (story['imageUrl'] as String).isNotEmpty;
-    final isHearted = story['isHearted'] as bool;
-    final heartCount = story['heartCount'] as int;
+    final hasImage = (story['imageUrl'] as String? ?? '').isNotEmpty;
+    final isHearted = story['isHearted'] as bool? ?? false;
+    final heartCount = story['heartCount'] as int? ?? 0;
 
     return Container(
       margin: EdgeInsets.fromLTRB(
