@@ -598,8 +598,10 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                                 _voicePlayTimer?.cancel();
                                 setState(() {
                                   _voiceHasRecording = true;
+                                  _selectedType = 'voice';
                                 });
                                 Navigator.pop(ctx);
+                                _sendMessage();
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
@@ -1098,8 +1100,10 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                                 _videoPlayTimer?.cancel();
                                 setState(() {
                                   _videoHasRecording = true;
+                                  _selectedType = 'video';
                                 });
                                 Navigator.pop(ctx);
+                                _sendMessage();
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
