@@ -495,6 +495,12 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
         _audioPlayer.seek(Duration.zero);
       }
     });
+
+    if (widget.audioUrl.isNotEmpty) {
+      _audioPlayer.setUrl(widget.audioUrl).catchError((e) {
+        debugPrint('Audio preload error: \$e');
+      });
+    }
   }
 
   @override
