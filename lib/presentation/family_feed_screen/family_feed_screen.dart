@@ -756,7 +756,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             ),
           ),
           // Messages
-          _messages.isEmpty
+          (_messages.isEmpty && _hasRealPost == false && !_isLoading)
               ? SliverFillRemaining(
                   hasScrollBody: false,
                   child: FeedEmptyStateWidget(

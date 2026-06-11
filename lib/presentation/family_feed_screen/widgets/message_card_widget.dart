@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../family_feed_screen.dart';
 import '../../../widgets/custom_image_widget.dart';
@@ -457,8 +458,11 @@ class _VoiceNotePlayer extends StatefulWidget {
 class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
     with SingleTickerProviderStateMixin {
   bool _isPlaying = false;
-  final double _progress = 0.0;
+  double _progress = 0.0;
+  int _durationSeconds = 0;
+  int _positionSeconds = 0;
   late AnimationController _waveController;
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   @override
   void initState() {
@@ -467,12 +471,63 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     )..repeat(reverse: true);
+
+    _audioPlayer.durationStream.listen((d) {
+      if (d != null && mounted) {
+        setState(() => _durationSeconds = d.inSeconds);
+      }
+    });
+    _audioPlayer.positionStream.listen((p) {
+      if (mounted && _durationSeconds > 0) {
+        setState(() {
+          _positionSeconds = p.inSeconds;
+          _progress = p.inSeconds / _durationSeconds;
+        });
+      }
+    });
+    _audioPlayer.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed && mounted) {
+        setState(() {
+          _isPlaying = false;
+          _progress = 0.0;
+          _positionSeconds = 0;
+        });
+        _audioPlayer.seek(Duration.zero);
+      }
+    });
   }
 
   @override
   void dispose() {
     _waveController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
+  }
+
+  Future<void> _togglePlayback() async {
+    if (_isPlaying) {
+      await _audioPlayer.pause();
+      setState(() => _isPlaying = false);
+    } else {
+      if (widget.audioUrl.isNotEmpty) {
+        try {
+          if (_audioPlayer.processingState == ProcessingState.idle ||
+              _audioPlayer.processingState == ProcessingState.completed) {
+            await _audioPlayer.setUrl(widget.audioUrl);
+          }
+          await _audioPlayer.play();
+          setState(() => _isPlaying = true);
+        } catch (e) {
+          debugPrint('Audio playback error: \$e');
+        }
+      }
+    }
+  }
+
+  String _fmt(int s) {
+    final m = (s ~/ 60).toString().padLeft(2, '0');
+    final sec = (s % 60).toString().padLeft(2, '0');
+    return '\$m:\$sec';
   }
 
   @override
@@ -492,7 +547,7 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => setState(() => _isPlaying = !_isPlaying),
+            onTap: _togglePlayback,
             child: Container(
               width: 40,
               height: 40,
@@ -575,7 +630,7 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '0:28',
+                  _isPlaying ? _fmt(_positionSeconds) : _fmt(_durationSeconds),
                   style: GoogleFonts.nunitoSans(
                     fontSize: 11,
                     color: widget.isDarkMode
