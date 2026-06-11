@@ -895,12 +895,16 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                                 child: SizedBox(
                                   width: double.infinity,
                                   height: double.infinity,
-                                  child: FittedBox(
-                                    fit: BoxFit.cover,
-                                    child: SizedBox(
-                                      width: _cameraController!.value.previewSize!.height,
-                                      height: _cameraController!.value.previewSize!.width,
-                                      child: CameraPreview(_cameraController!),
+                                  child: Transform(
+                                    alignment: Alignment.center,
+                                    transform: Matrix4.rotationY(3.14159),
+                                    child: FittedBox(
+                                      fit: BoxFit.cover,
+                                      child: SizedBox(
+                                        width: _cameraController!.value.previewSize!.height,
+                                        height: _cameraController!.value.previewSize!.width,
+                                        child: CameraPreview(_cameraController!),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1017,7 +1021,11 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                             if (_videoPlayerController != null && _videoPlayerController!.value.isInitialized)
                               AspectRatio(
                                 aspectRatio: _videoPlayerController!.value.aspectRatio,
-                                child: VideoPlayer(_videoPlayerController!),
+                                child: Transform(
+                                  alignment: Alignment.center,
+                                  transform: Matrix4.rotationY(3.14159),
+                                  child: VideoPlayer(_videoPlayerController!),
+                                ),
                               ),
                             // Play/pause overlay
                             GestureDetector(

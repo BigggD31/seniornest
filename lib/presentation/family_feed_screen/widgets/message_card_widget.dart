@@ -533,7 +533,7 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
   String _fmt(int s) {
     final m = (s ~/ 60).toString().padLeft(2, '0');
     final sec = (s % 60).toString().padLeft(2, '0');
-    return '\$m:\$sec';
+    return '$m:$sec';
   }
 
   @override

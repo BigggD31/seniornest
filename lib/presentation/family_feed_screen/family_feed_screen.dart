@@ -543,7 +543,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
       if (mounted) {
         setState(() {
-          _messages = loaded;
+          _messages = loaded.isNotEmpty ? loaded : _messageMaps.map(MessageModel.fromMap).toList();
           _hasRealPost = loaded.isNotEmpty;
         });
       }
