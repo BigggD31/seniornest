@@ -594,14 +594,11 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                           const SizedBox(width: 12),
                           Expanded(
                             child: GestureDetector(
-                              onTap: () {
+                              onTap: () async {
                                 _voicePlayTimer?.cancel();
-                                setState(() {
-                                  _voiceHasRecording = true;
-                                  _selectedType = 'voice';
-                                });
+                                final path = _voiceFilePath;
                                 Navigator.pop(ctx);
-                                _sendMessage();
+                                await _sendMessage(overrideType: 'voice', overridePath: path);
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
@@ -1098,12 +1095,9 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                             child: GestureDetector(
                               onTap: () {
                                 _videoPlayTimer?.cancel();
-                                setState(() {
-                                  _videoHasRecording = true;
-                                  _selectedType = 'video';
-                                });
+                                final path = _videoFilePath;
                                 Navigator.pop(ctx);
-                                _sendMessage();
+                                await _sendMessage(overrideType: 'video', overridePath: path);
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
@@ -3082,7 +3076,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     );
   }
 
-  Future<void> _sendMessage() async {
+  Future<void> _sendMessage({String? overrideType, String? overridePath}) async {
     if (_isSending) return;
     setState(() => _isSending = true);
 
@@ -3114,6 +3108,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       }
 
       String? mediaUrl;
+      final effectiveType = overrideType ?? _selectedType;
+      final effectivePath = overridePath;
 
       // Upload media if present
       if (_selectedPhotoBase64 != null) {
@@ -3125,8 +3121,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           fileOptions: const FileOptions(contentType: 'image/jpeg'),
         );
         mediaUrl = supabase.storage.from('media').getPublicUrl('posts/$fileName');
-      } else if (_selectedType == 'voice' && _voiceFilePath != null) {
-        final file = File(_voiceFilePath!);
+      } else if (effectiveType == 'voice' && effectivePath != null) {
+        final file = File(effectivePath);
         final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.m4a';
         await supabase.storage.from('media').upload(
           'audio/$fileName',
@@ -3134,8 +3130,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           fileOptions: const FileOptions(contentType: 'audio/m4a'),
         );
         mediaUrl = supabase.storage.from('media').getPublicUrl('audio/$fileName');
-      } else if (_selectedType == 'video' && _videoFilePath != null) {
-        final file = File(_videoFilePath!);
+      } else if (effectiveType == 'video' && effectivePath != null) {
+        final file = File(effectivePath);
         final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
         await supabase.storage.from('media').upload(
           'video/$fileName',
@@ -3149,7 +3145,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       await supabase.from('feed_posts').insert({
         'nest_id': nestId,
         'author_id': userId,
-        'post_type': _selectedType,
+        'post_type': effectiveType,
         'content': _messageController.text.trim(),
         'media_url': mediaUrl,
       });
