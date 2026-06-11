@@ -230,7 +230,13 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
           if (msg.type == MessageType.voice)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: _VoiceNotePlayer(isDarkMode: isDark),
+              child: _VoiceNotePlayer(isDarkMode: isDark, audioUrl: msg.imageUrl),
+            ),
+          // Video player
+          if (msg.type == MessageType.video && msg.imageUrl.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: _VideoPlayer(isDarkMode: isDark, videoUrl: msg.imageUrl),
             ),
           // Text content
           if (msg.content.isNotEmpty)
@@ -439,9 +445,10 @@ class _MessageTypeBadge extends StatelessWidget {
 }
 
 class _VoiceNotePlayer extends StatefulWidget {
-  const _VoiceNotePlayer({required this.isDarkMode});
+  const _VoiceNotePlayer({required this.isDarkMode, this.audioUrl = ''});
 
   final bool isDarkMode;
+  final String audioUrl;
 
   @override
   State<_VoiceNotePlayer> createState() => _VoiceNotePlayerState();
@@ -581,6 +588,81 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _VideoPlayer extends StatefulWidget {
+  const _VideoPlayer({required this.isDarkMode, required this.videoUrl});
+  final bool isDarkMode;
+  final String videoUrl;
+
+  @override
+  State<_VideoPlayer> createState() => _VideoPlayerState();
+}
+
+class _VideoPlayerState extends State<_VideoPlayer> {
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => openFullscreenVideo(
+        context: context,
+        videoUrl: widget.videoUrl,
+        isDarkMode: widget.isDarkMode,
+      ),
+      child: Container(
+        height: 180,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: double.infinity,
+                height: 180,
+                color: const Color(0xFF1A1020),
+              ),
+            ),
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(150),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white70, width: 2),
+              ),
+              child: const Icon(
+                Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 32,
+              ),
+            ),
+            Positioned(
+              bottom: 8,
+              right: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(120),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.fullscreen_rounded, color: Colors.white, size: 14),
+                    SizedBox(width: 3),
+                    Text('Tap to play', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
