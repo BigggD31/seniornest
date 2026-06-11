@@ -1093,7 +1093,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                           const SizedBox(width: 12),
                           Expanded(
                             child: GestureDetector(
-                              onTap: () {
+                              onTap: () async {
                                 _videoPlayTimer?.cancel();
                                 final path = _videoFilePath;
                                 Navigator.pop(ctx);
