@@ -241,7 +241,7 @@ class _LegacyScreenState extends State<LegacyScreen>
         }).toList();
       }
     } catch (e) {
-      print('LEGACY LOAD ERROR: \$e');
+      print('LEGACY LOAD ERROR: $e');
     }
 
     setState(() {
@@ -1733,11 +1733,24 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
       widget.isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E);
 
   Future<void> _saveStory() async {
-    if (_titleController.text.trim().isEmpty ||
-        _bodyController.text.trim().isEmpty) {
+    if (_bodyController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please write your story before saving.',
+            style: GoogleFonts.nunitoSans(fontSize: 14, color: Colors.white),
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       return;
     }
     setState(() => _isSaving = true);
+
+    final title = _titleController.text.trim().isNotEmpty
+        ? _titleController.text.trim()
+        : (widget.prompt ?? 'My Story');
 
     try {
       final supabase = Supabase.instance.client;
@@ -1750,7 +1763,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
         await supabase.from('legacy_entries').insert({
           'user_id': userId,
           'nest_id': nestId.isEmpty ? null : nestId,
-          'prompt': _titleController.text.trim(),
+          'prompt': title,
           'content': _bodyController.text.trim(),
           'entry_type': 'text',
           'is_custom': true,
@@ -1760,6 +1773,13 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
       }
     } catch (e) {
       print('LEGACY SAVE ERROR: $e');
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 8)),
+        );
+      }
+      return;
     }
 
     if (mounted) {
@@ -2807,7 +2827,13 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
         await prefs.setBool('has_sent_stories', true);
       }
     } catch (e) {
-      print('LEGACY AUDIO SEND ERROR: \$e');
+      print('LEGACY AUDIO SEND ERROR: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 8)),
+        );
+      }
+      return;
     }
     if (mounted) {
       Navigator.pop(context);
@@ -3290,6 +3316,12 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
       }
     } catch (e) {
       print('LEGACY VIDEO SEND ERROR: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 8)),
+        );
+      }
+      return;
     }
     if (mounted) {
       widget.onRecordingComplete?.call();
