@@ -3373,15 +3373,19 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
                   height: 380,
                   child: Stack(
                     children: [
-                      Transform(
-                        alignment: Alignment.center,
-                        transform: Matrix4.rotationY(3.14159),
-                        child: FittedBox(
-                          fit: BoxFit.cover,
-                          child: SizedBox(
-                            width: _cameraController!.value.previewSize!.height,
-                            height: _cameraController!.value.previewSize!.width,
-                            child: CameraPreview(_cameraController!),
+                      SizedBox(
+                        width: double.infinity,
+                        height: double.infinity,
+                        child: Transform(
+                          alignment: Alignment.center,
+                          transform: Matrix4.rotationY(3.14159),
+                          child: FittedBox(
+                            fit: BoxFit.cover,
+                            child: SizedBox(
+                              width: _cameraController!.value.previewSize!.height,
+                              height: _cameraController!.value.previewSize!.width,
+                              child: CameraPreview(_cameraController!),
+                            ),
                           ),
                         ),
                       ),
