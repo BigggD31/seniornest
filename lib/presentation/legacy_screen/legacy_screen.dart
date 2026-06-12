@@ -3373,7 +3373,18 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
                   height: 380,
                   child: Stack(
                     children: [
-                      CameraPreview(_cameraController!),
+                      Transform(
+                        alignment: Alignment.center,
+                        transform: Matrix4.rotationY(3.14159),
+                        child: FittedBox(
+                          fit: BoxFit.cover,
+                          child: SizedBox(
+                            width: _cameraController!.value.previewSize!.height,
+                            height: _cameraController!.value.previewSize!.width,
+                            child: CameraPreview(_cameraController!),
+                          ),
+                        ),
+                      ),
                       Positioned(top: 10, left: 12,
                         child: Row(children: [
                           Container(width: 8, height: 8,
@@ -3408,7 +3419,11 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
                       children: [
                         AspectRatio(
                           aspectRatio: _videoPlayerController!.value.aspectRatio,
-                          child: VideoPlayer(_videoPlayerController!),
+                          child: Transform(
+                            alignment: Alignment.center,
+                            transform: Matrix4.rotationY(3.14159),
+                            child: VideoPlayer(_videoPlayerController!),
+                          ),
                         ),
                         Container(
                           width: 60, height: 60,
