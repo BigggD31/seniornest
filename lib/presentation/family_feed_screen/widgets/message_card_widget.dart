@@ -541,14 +541,12 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: widget.isDarkMode
-            ? const Color(0xFF2E2820)
-            : const Color(0xFFEEF8F6),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF5DA399).withAlpha(64),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFE8C97A), Color(0xFFC9A84C)],
         ),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
@@ -557,13 +555,14 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
             child: Container(
               width: 40,
               height: 40,
-              decoration: const BoxDecoration(
-                color: Color(0xFF5DA399),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAF7F2),
                 shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF412402), width: 2),
               ),
               child: Icon(
                 _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                color: Colors.white,
+                color: const Color(0xFF412402),
                 size: 22,
               ),
             ),
@@ -624,8 +623,8 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
                                     : 1.0),
                             decoration: BoxDecoration(
                               color: isActive
-                                  ? const Color(0xFF5DA399)
-                                  : const Color(0xFF5DA399).withAlpha(89),
+                                  ? const Color(0xFF412402)
+                                  : const Color(0xFF412402).withAlpha(102),
                               borderRadius: BorderRadius.circular(2),
                             ),
                           );
@@ -639,9 +638,7 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
                   _isPlaying ? _fmt(_positionSeconds) : _fmt(_durationSeconds),
                   style: GoogleFonts.nunitoSans(
                     fontSize: 11,
-                    color: widget.isDarkMode
-                        ? const Color(0xFF6B5E4E)
-                        : const Color(0xFFA8A090),
+                    color: const Color(0xFF412402).withAlpha(166),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -675,52 +672,62 @@ class _VideoPlayerState extends State<_VideoPlayer> {
       child: Container(
         height: 180,
         decoration: BoxDecoration(
-          color: Colors.black,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF3D5266), Color(0xFF2A4A45)],
+          ),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Stack(
           alignment: Alignment.center,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: double.infinity,
-                height: 180,
-                color: const Color(0xFF1A1020),
-              ),
-            ),
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: Colors.black.withAlpha(150),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white70, width: 2),
-              ),
-              child: const Icon(
-                Icons.play_arrow_rounded,
-                color: Colors.white,
-                size: 32,
-              ),
-            ),
             Positioned(
-              bottom: 8,
-              right: 8,
+              top: 8,
+              left: 8,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.black.withAlpha(120),
+                  color: Colors.white.withAlpha(38),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.fullscreen_rounded, color: Colors.white, size: 14),
-                    SizedBox(width: 3),
-                    Text('Tap to play', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500)),
+                    Icon(Icons.videocam_rounded, color: Color(0xFFE1F5EE), size: 14),
+                    SizedBox(width: 4),
+                    Text('Video', style: TextStyle(color: Color(0xFFE1F5EE), fontSize: 12, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
+            ),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF5DA399),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFFAF7F2), width: 2),
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Color(0xFFFAF7F2),
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Tap to play',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 12,
+                    color: Colors.white.withAlpha(217),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
