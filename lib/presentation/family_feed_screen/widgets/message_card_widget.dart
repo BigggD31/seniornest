@@ -5,6 +5,7 @@ import '../family_feed_screen.dart';
 import '../../../widgets/custom_image_widget.dart';
 import '../../../widgets/share_preview_widget.dart';
 import '../../../widgets/fullscreen_media_viewer.dart';
+import '../../send_screen/send_screen.dart';
 
 class MessageCardWidget extends StatefulWidget {
   const MessageCardWidget({
@@ -307,7 +308,12 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                 const SizedBox(width: 16),
                 // Reply button
                 GestureDetector(
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SendScreen()),
+                    );
+                  },
                   child: Row(
                     children: [
                       Icon(

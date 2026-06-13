@@ -287,6 +287,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           'display_name': name,
           'full_name': name,
           'role': 'family',
+          'relation_type': _selectedRelationship ?? 'Family',
         });
 
         final profileCheck = await supabase
