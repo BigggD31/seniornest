@@ -671,6 +671,7 @@ class _VideoPlayerState extends State<_VideoPlayer> {
       ),
       child: Container(
         height: 180,
+        width: double.infinity,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
