@@ -5,7 +5,6 @@ import '../family_feed_screen.dart';
 import '../../../widgets/custom_image_widget.dart';
 import '../../../widgets/share_preview_widget.dart';
 import '../../../widgets/fullscreen_media_viewer.dart';
-import '../../send_screen/send_screen.dart';
 
 class MessageCardWidget extends StatefulWidget {
   const MessageCardWidget({
@@ -15,6 +14,7 @@ class MessageCardWidget extends StatefulWidget {
     required this.onHeart,
     this.isBookmarked = false,
     this.onBookmark,
+    this.onReply,
   });
 
   final MessageModel message;
@@ -22,6 +22,7 @@ class MessageCardWidget extends StatefulWidget {
   final VoidCallback onHeart;
   final bool isBookmarked;
   final VoidCallback? onBookmark;
+  final Function(String)? onReply;
 
   @override
   State<MessageCardWidget> createState() => _MessageCardWidgetState();
@@ -31,6 +32,10 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
     with SingleTickerProviderStateMixin {
   late AnimationController _heartController;
   late Animation<double> _heartScale;
+  bool _showReplyComposer = false;
+  bool _showReplies = false;
+  final TextEditingController _replyController = TextEditingController();
+  bool _sendingReply = false;
 
   @override
   void initState() {
@@ -51,6 +56,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
   @override
   void dispose() {
     _heartController.dispose();
+    _replyController.dispose();
     super.dispose();
   }
 
@@ -309,10 +315,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                 // Reply button
                 GestureDetector(
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const SendScreen()),
-                    );
+                    setState(() => _showReplyComposer = !_showReplyComposer);
                   },
                   child: Row(
                     children: [
@@ -325,7 +328,9 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'Reply',
+                        msg.replies.isNotEmpty
+                            ? 'Reply (${msg.replies.length})'
+                            : 'Reply',
                         style: GoogleFonts.nunitoSans(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
@@ -386,6 +391,199 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
               ],
             ),
           ),
+          // Reply thread
+          if (msg.replies.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+              child: GestureDetector(
+                onTap: () => setState(() => _showReplies = !_showReplies),
+                child: Row(
+                  children: [
+                    Icon(
+                      _showReplies ? Icons.expand_less : Icons.expand_more,
+                      size: 16,
+                      color: const Color(0xFF5DA399),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _showReplies
+                          ? 'Hide replies'
+                          : '${msg.replies.length} ${msg.replies.length == 1 ? 'reply' : 'replies'}',
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 12,
+                        color: const Color(0xFF5DA399),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_showReplies)
+              ...msg.replies.map((reply) => Container(
+                margin: const EdgeInsets.fromLTRB(24, 0, 14, 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF1A1612)
+                      : const Color(0xFFF0EBE3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark
+                        ? const Color(0xFF3D3428)
+                        : const Color(0xFFE0D8CC),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          reply.senderName,
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: isDark
+                                ? const Color(0xFFF5EDD8)
+                                : const Color(0xFF2C2417),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _formatTimestamp(reply.timestamp),
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 11,
+                            color: isDark
+                                ? const Color(0xFF6B5E4E)
+                                : const Color(0xFFA8A090),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      reply.content,
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 13,
+                        color: isDark
+                            ? const Color(0xFFD4C4A8)
+                            : const Color(0xFF4A3F33),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () {},
+                          child: Row(
+                            children: [
+                              Icon(Icons.favorite_border_rounded,
+                                  size: 16,
+                                  color: isDark
+                                      ? const Color(0xFF6B5E4E)
+                                      : const Color(0xFFA8A090)),
+                              const SizedBox(width: 4),
+                              Text('0',
+                                  style: GoogleFonts.nunitoSans(
+                                      fontSize: 12,
+                                      color: isDark
+                                          ? const Color(0xFF6B5E4E)
+                                          : const Color(0xFFA8A090))),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        GestureDetector(
+                          onTap: () => setState(() => _showReplyComposer = !_showReplyComposer),
+                          child: Text(
+                            'Reply',
+                            style: GoogleFonts.nunitoSans(
+                              fontSize: 12,
+                              color: const Color(0xFF5DA399),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              )),
+          ],
+          // Reply composer
+          if (_showReplyComposer)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _replyController,
+                      autofocus: true,
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 13,
+                        color: isDark
+                            ? const Color(0xFFF5EDD8)
+                            : const Color(0xFF2C2417),
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Write a reply...',
+                        hintStyle: GoogleFonts.nunitoSans(
+                          fontSize: 13,
+                          color: isDark
+                              ? const Color(0xFF6B5E4E)
+                              : const Color(0xFFA8A090),
+                        ),
+                        filled: true,
+                        fillColor: isDark
+                            ? const Color(0xFF1A1612)
+                            : const Color(0xFFF0EBE3),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _sendingReply
+                        ? null
+                        : () async {
+                            if (_replyController.text.trim().isEmpty) return;
+                            setState(() => _sendingReply = true);
+                            await widget.onReply?.call(_replyController.text);
+                            _replyController.clear();
+                            setState(() {
+                              _sendingReply = false;
+                              _showReplyComposer = false;
+                              _showReplies = true;
+                            });
+                          },
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF5DA399),
+                        shape: BoxShape.circle,
+                      ),
+                      child: _sendingReply
+                          ? const Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send_rounded,
+                              color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

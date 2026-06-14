@@ -33,6 +33,8 @@ class MessageModel {
     required this.timestamp,
     required this.heartCount,
     required this.isHearted,
+    this.parentPostId,
+    this.replies = const [],
   });
 
   final String id;
@@ -47,6 +49,8 @@ class MessageModel {
   final DateTime timestamp;
   int heartCount;
   bool isHearted;
+  final String? parentPostId;
+  List<MessageModel> replies;
 
   factory MessageModel.fromMap(Map<String, dynamic> map) {
     return MessageModel(
@@ -62,6 +66,7 @@ class MessageModel {
       timestamp: DateTime.parse(map['timestamp'] as String),
       heartCount: map['heartCount'] as int,
       isHearted: map['isHearted'] as bool,
+      parentPostId: map['parentPostId'] as String?,
     );
   }
 
@@ -511,15 +516,27 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
       if (nestId.isEmpty || userId == null) return;
 
+      // Fetch top-level posts only
       final response = await supabase
           .from('feed_posts')
           .select('*, user_profiles(display_name, avatar_url, relation_type)')
           .eq('nest_id', nestId)
+          .isFilter('parent_post_id', null)
           .order('created_at', ascending: false)
           .limit(50);
 
+      // Fetch all replies for this nest
+      final repliesResponse = await supabase
+          .from('feed_posts')
+          .select('*, user_profiles(display_name, avatar_url, relation_type)')
+          .eq('nest_id', nestId)
+          .not('parent_post_id', 'is', null)
+          .order('created_at', ascending: true);
+
       final posts = response as List<dynamic>;
-      final List<MessageModel> loaded = posts.map((post) {
+      final allReplies = repliesResponse as List<dynamic>;
+
+      MessageModel _postToModel(dynamic post, {String? parentPostId}) {
         final profile = post['user_profiles'] as Map<String, dynamic>?;
         final senderName = profile?['display_name'] as String? ?? 'Family';
         final avatarUrl = profile?['avatar_url'] as String? ?? '';
@@ -538,7 +555,19 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           timestamp: DateTime.parse(post['created_at'] as String),
           heartCount: 0,
           isHearted: false,
+          parentPostId: parentPostId,
         );
+      }
+
+      final List<MessageModel> loaded = posts.map((post) {
+        final postId = post['id'] as String;
+        final replies = allReplies
+            .where((r) => r['parent_post_id'] == postId)
+            .map((r) => _postToModel(r, parentPostId: postId))
+            .toList();
+        final model = _postToModel(post);
+        model.replies = replies;
+        return model;
       }).toList();
 
       if (mounted) {
@@ -549,6 +578,32 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       }
     } catch (e) {
       debugPrint('Feed load error: $e');
+    }
+  }
+
+  Future<void> _sendReply({
+    required String parentPostId,
+    required String replyText,
+  }) async {
+    if (replyText.trim().isEmpty) return;
+    try {
+      final supabase = Supabase.instance.client;
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      final userId = supabase.auth.currentUser?.id;
+      if (nestId.isEmpty || userId == null) return;
+
+      await supabase.from('feed_posts').insert({
+        'nest_id': nestId,
+        'author_id': userId,
+        'post_type': 'text',
+        'content': replyText.trim(),
+        'parent_post_id': parentPostId,
+      });
+
+      await _loadFeedFromSupabase();
+    } catch (e) {
+      debugPrint('Reply send error: \$e');
     }
   }
 
@@ -883,6 +938,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 onHeart: () => _toggleHeart(index),
                 isBookmarked: _bookmarkedIds.contains(_messages[index].id),
                 onBookmark: () => _toggleBookmark(_messages[index]),
+                onReply: (text) => _sendReply(
+                  parentPostId: _messages[index].id,
+                  replyText: text,
+                ),
               ),
             ),
           );
@@ -917,6 +976,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               onHeart: () => _toggleHeart(index),
               isBookmarked: _bookmarkedIds.contains(_messages[index].id),
               onBookmark: () => _toggleBookmark(_messages[index]),
+              onReply: (text) => _sendReply(
+                parentPostId: _messages[index].id,
+                replyText: text,
+              ),
             ),
           );
         }, childCount: _messages.length),
