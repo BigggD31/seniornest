@@ -214,6 +214,17 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                       ),
                       const SizedBox(height: 2),
                       Text(
+                        'To: Everyone in the Nest',
+                        style: GoogleFonts.nunitoSans(
+                          fontSize: 11,
+                          color: isDark
+                              ? const Color(0xFF6B5E4E)
+                              : const Color(0xFFA8A090),
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
                         _formatTimestamp(msg.timestamp),
                         style: GoogleFonts.nunitoSans(
                           fontSize: 11,

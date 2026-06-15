@@ -2690,6 +2690,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
   final AudioRecorder _audioRecorder = AudioRecorder();
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _audioFilePath;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -3162,7 +3163,11 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: GestureDetector(
-                    onTap: _send,
+                    onTap: _isSaving ? null : () async {
+                      setState(() => _isSaving = true);
+                      await _send();
+                      if (mounted) setState(() => _isSaving = false);
+                    },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       decoration: BoxDecoration(
@@ -3176,7 +3181,18 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
                           ),
                         ],
                       ),
-                      child: Row(
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const Icon(
@@ -3227,6 +3243,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
   bool _hasRecording = false;
   int _seconds = 0;
   Timer? _timer;
+  bool _isSaving = false;
   CameraController? _cameraController;
   VideoPlayerController? _videoPlayerController;
   String? _videoFilePath;
@@ -3527,17 +3544,25 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: GestureDetector(
-                    onTap: _send,
+                    onTap: _isSaving ? null : () async {
+                      setState(() => _isSaving = true);
+                      await _send();
+                      if (mounted) setState(() => _isSaving = false);
+                    },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
                         color: const Color(0xFF5DA399),
                         borderRadius: BorderRadius.circular(14)),
-                      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-                        const SizedBox(width: 6),
-                        Text('Save Story', style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
-                      ]),
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 18, width: 18,
+                              child: Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)))
+                          : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                              const SizedBox(width: 6),
+                              Text('Save Story', style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                            ]),
                     ),
                   ),
                 ),
