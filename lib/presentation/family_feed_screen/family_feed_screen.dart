@@ -516,12 +516,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
       if (nestId.isEmpty || userId == null) return;
 
-      // Fetch top-level posts only
+      // Fetch top-level posts only (parent_post_id is null)
       final response = await supabase
           .from('feed_posts')
           .select('*, user_profiles(display_name, avatar_url, relation_type)')
           .eq('nest_id', nestId)
-          .isFilter('parent_post_id', null)
+          .or('parent_post_id.is.null')
           .order('created_at', ascending: false)
           .limit(50);
 
