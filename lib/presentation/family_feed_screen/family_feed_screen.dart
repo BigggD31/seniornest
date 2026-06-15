@@ -516,12 +516,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
       if (nestId.isEmpty || userId == null) return;
 
-      // Fetch top-level posts only (parent_post_id is null)
+      // Fetch all posts then filter top-level in Dart
       final response = await supabase
           .from('feed_posts')
           .select('*, user_profiles(display_name, avatar_url, relation_type)')
           .eq('nest_id', nestId)
-          .or('parent_post_id.is.null')
           .order('created_at', ascending: false)
           .limit(50);
 
@@ -533,7 +532,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           .not('parent_post_id', 'is', null)
           .order('created_at', ascending: true);
 
-      final posts = response as List<dynamic>;
+      final allPosts = response as List<dynamic>;
+      // Filter top-level posts in Dart (parent_post_id is null or missing)
+      final posts = allPosts.where((p) => p['parent_post_id'] == null).toList();
       final allReplies = repliesResponse as List<dynamic>;
 
       MessageModel _postToModel(dynamic post, {String? parentPostId}) {
