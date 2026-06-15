@@ -33,8 +33,6 @@ class MessageModel {
     required this.timestamp,
     required this.heartCount,
     required this.isHearted,
-    this.parentPostId,
-    this.replies = const [],
   });
 
   final String id;
@@ -49,8 +47,6 @@ class MessageModel {
   final DateTime timestamp;
   int heartCount;
   bool isHearted;
-  final String? parentPostId;
-  List<MessageModel> replies;
 
   factory MessageModel.fromMap(Map<String, dynamic> map) {
     return MessageModel(
@@ -66,7 +62,6 @@ class MessageModel {
       timestamp: DateTime.parse(map['timestamp'] as String),
       heartCount: map['heartCount'] as int,
       isHearted: map['isHearted'] as bool,
-      parentPostId: map['parentPostId'] as String?,
     );
   }
 
@@ -516,7 +511,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
       if (nestId.isEmpty || userId == null) return;
 
-      // Fetch all posts then filter top-level in Dart
       final response = await supabase
           .from('feed_posts')
           .select('*, user_profiles(display_name, avatar_url, relation_type)')
@@ -531,8 +525,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         final avatarUrl = profile?['avatar_url'] as String? ?? '';
         final relation = profile?['relation_type'] as String? ?? 'Family';
         final type = post['post_type'] as String? ?? 'text';
-        // Only include top-level posts
-        if (post['parent_post_id'] != null) return null;
         return MessageModel(
           id: post['id'] as String,
           senderName: senderName,
@@ -547,7 +539,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           heartCount: 0,
           isHearted: false,
         );
-      }).whereType<MessageModel>().toList();
+      }).toList();
 
       if (mounted) {
         setState(() {
@@ -557,32 +549,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       }
     } catch (e) {
       debugPrint('Feed load error: $e');
-    }
-  }
-
-  Future<void> _sendReply({
-    required String parentPostId,
-    required String replyText,
-  }) async {
-    if (replyText.trim().isEmpty) return;
-    try {
-      final supabase = Supabase.instance.client;
-      final prefs = await SharedPreferences.getInstance();
-      final nestId = prefs.getString('nest_id') ?? '';
-      final userId = supabase.auth.currentUser?.id;
-      if (nestId.isEmpty || userId == null) return;
-
-      await supabase.from('feed_posts').insert({
-        'nest_id': nestId,
-        'author_id': userId,
-        'post_type': 'text',
-        'content': replyText.trim(),
-        'parent_post_id': parentPostId,
-      });
-
-      await _loadFeedFromSupabase();
-    } catch (e) {
-      debugPrint('Reply send error: \$e');
     }
   }
 
@@ -917,10 +883,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 onHeart: () => _toggleHeart(index),
                 isBookmarked: _bookmarkedIds.contains(_messages[index].id),
                 onBookmark: () => _toggleBookmark(_messages[index]),
-                onReply: (text) => _sendReply(
-                  parentPostId: _messages[index].id,
-                  replyText: text,
-                ),
               ),
             ),
           );
@@ -955,10 +917,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               onHeart: () => _toggleHeart(index),
               isBookmarked: _bookmarkedIds.contains(_messages[index].id),
               onBookmark: () => _toggleBookmark(_messages[index]),
-              onReply: (text) => _sendReply(
-                parentPostId: _messages[index].id,
-                replyText: text,
-              ),
             ),
           );
         }, childCount: _messages.length),
