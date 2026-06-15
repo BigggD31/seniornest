@@ -524,25 +524,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           .order('created_at', ascending: false)
           .limit(50);
 
-      // Fetch all replies for this nest
-      final repliesResponse = await supabase
-          .from('feed_posts')
-          .select('*, user_profiles(display_name, avatar_url, relation_type)')
-          .eq('nest_id', nestId)
-          .not('parent_post_id', 'is', null)
-          .order('created_at', ascending: true);
-
-      final allPosts = response as List<dynamic>;
-      // Filter top-level posts in Dart (parent_post_id is null or missing)
-      final posts = allPosts.where((p) => p['parent_post_id'] == null).toList();
-      final allReplies = repliesResponse as List<dynamic>;
-
-      MessageModel _postToModel(dynamic post, {String? parentPostId}) {
+      final posts = response as List<dynamic>;
+      final List<MessageModel> loaded = posts.map((post) {
         final profile = post['user_profiles'] as Map<String, dynamic>?;
         final senderName = profile?['display_name'] as String? ?? 'Family';
         final avatarUrl = profile?['avatar_url'] as String? ?? '';
         final relation = profile?['relation_type'] as String? ?? 'Family';
         final type = post['post_type'] as String? ?? 'text';
+        // Only include top-level posts
+        if (post['parent_post_id'] != null) return null;
         return MessageModel(
           id: post['id'] as String,
           senderName: senderName,
@@ -556,20 +546,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           timestamp: DateTime.parse(post['created_at'] as String),
           heartCount: 0,
           isHearted: false,
-          parentPostId: parentPostId,
         );
-      }
-
-      final List<MessageModel> loaded = posts.map((post) {
-        final postId = post['id'] as String;
-        final replies = allReplies
-            .where((r) => r['parent_post_id'] == postId)
-            .map((r) => _postToModel(r, parentPostId: postId))
-            .toList();
-        final model = _postToModel(post);
-        model.replies = replies;
-        return model;
-      }).toList();
+      }).whereType<MessageModel>().toList();
 
       if (mounted) {
         setState(() {
