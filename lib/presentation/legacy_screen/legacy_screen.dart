@@ -1026,8 +1026,8 @@ class _LegacyScreenState extends State<LegacyScreen>
                   GestureDetector(
                     onTap: () => openFullscreenImage(
                       context: context,
-                      imageUrl: story['imageUrl'] as String,
-                      semanticLabel: story['imageLabel'] as String,
+                      imageUrl: story['imageUrl'] as String? ?? '',
+                      semanticLabel: story['imageLabel'] as String? ?? '',
                       isDarkMode: _isDarkMode,
                     ),
                     child: ClipRRect(
@@ -1037,11 +1037,11 @@ class _LegacyScreenState extends State<LegacyScreen>
                       child: Stack(
                         children: [
                           Image.network(
-                            story['imageUrl'] as String,
+                            story['imageUrl'] as String? ?? '',
                             height: 160,
                             width: double.infinity,
                             fit: BoxFit.cover,
-                            semanticLabel: story['imageLabel'] as String,
+                            semanticLabel: story['imageLabel'] as String? ?? '',
                             errorBuilder: (_, __, ___) =>
                                 const SizedBox.shrink(),
                           ),
@@ -1400,7 +1400,7 @@ class _LegacyScreenState extends State<LegacyScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) =>
-          _WriteStorySheet(prompt: prompt, isDarkMode: _isDarkMode),
+          _WriteStorySheet(prompt: prompt, isDarkMode: _isDarkMode, onStorySaved: _loadData),
     );
   }
 
@@ -2543,7 +2543,7 @@ class _StoryDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = (story['imageUrl'] as String).isNotEmpty;
+    final hasImage = (story['imageUrl'] as String? ?? '').isNotEmpty;
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
@@ -2653,17 +2653,17 @@ class _StoryDetailSheet extends StatelessWidget {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: Image.network(
-                        story['imageUrl'] as String,
+                        story['imageUrl'] as String? ?? '',
                         height: 200,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        semanticLabel: story['imageLabel'] as String,
+                        semanticLabel: story['imageLabel'] as String? ?? '',
                         errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                       ),
                     ),
                   if (hasImage) const SizedBox(height: 20),
                   Text(
-                    story['excerpt'] as String,
+                    story['excerpt'] as String? ?? '',
                     style: GoogleFonts.nunitoSans(
                       fontSize: 16,
                       color: _textPrimary,
