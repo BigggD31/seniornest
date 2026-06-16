@@ -38,6 +38,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
   bool _sendingReply = false;
   List<Map<String, dynamic>> _replies = [];
   bool _loadingReplies = false;
+  final Set<String> _repliesHearted = {};
 
   @override
   void initState() {
@@ -526,14 +527,34 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Icon(Icons.favorite_border_rounded,
+                          GestureDetector(
+                            onTap: () {
+                              final replyId = reply['id'] as String? ?? '';
+                              setState(() {
+                                if (_repliesHearted.contains(replyId)) {
+                                  _repliesHearted.remove(replyId);
+                                } else {
+                                  _repliesHearted.add(replyId);
+                                }
+                              });
+                            },
+                            child: Icon(
+                              _repliesHearted.contains(reply['id'] as String? ?? '')
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
                               size: 16,
-                              color: isDark ? const Color(0xFF6B5E4E) : const Color(0xFFA8A090)),
+                              color: _repliesHearted.contains(reply['id'] as String? ?? '')
+                                  ? const Color(0xFFE05C5C)
+                                  : isDark ? const Color(0xFF6B5E4E) : const Color(0xFFA8A090)),
+                          ),
                           const SizedBox(width: 4),
-                          Text('0',
-                              style: GoogleFonts.nunitoSans(
+                          Text(
+                            _repliesHearted.contains(reply['id'] as String? ?? '') ? '1' : '0',
+                            style: GoogleFonts.nunitoSans(
                                   fontSize: 12,
-                                  color: isDark ? const Color(0xFF6B5E4E) : const Color(0xFFA8A090))),
+                                  color: _repliesHearted.contains(reply['id'] as String? ?? '')
+                                      ? const Color(0xFFE05C5C)
+                                      : isDark ? const Color(0xFF6B5E4E) : const Color(0xFFA8A090))),
                           const SizedBox(width: 16),
                           GestureDetector(
                             onTap: () => setState(() => _showReplyComposer = !_showReplyComposer),

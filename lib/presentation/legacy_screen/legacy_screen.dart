@@ -997,6 +997,28 @@ class _LegacyScreenState extends State<LegacyScreen>
   }
 
   Widget _buildStoryCard(Map<String, dynamic> story, int index, bool isTablet) {
+    return _LegacyStoryCard(
+      story: story,
+      index: index,
+      isTablet: isTablet,
+      isDarkMode: _isDarkMode,
+      isSenior: _isSenior,
+      onHeart: () => _toggleHeart(index),
+      onBookmark: () => _toggleStoryBookmark(story),
+      onShare: () => SharePreviewWidget.show(
+        context,
+        title: story['title'] as String,
+        body: story['excerpt'] as String,
+        imageUrl: story['imageUrl'] as String?,
+        isDarkMode: _isDarkMode,
+      ),
+      onTap: (story['entry_type'] as String? ?? 'text') == 'text'
+          ? () => _showStoryDetail(story)
+          : null,
+    );
+  }
+
+  Widget _buildStoryCardContent(Map<String, dynamic> story, int index, bool isTablet) {
     final hasImage = (story['imageUrl'] as String? ?? '').isNotEmpty;
     final isHearted = story['isHearted'] as bool? ?? false;
     final heartCount = story['heartCount'] as int? ?? 0;
@@ -1018,7 +1040,7 @@ class _LegacyScreenState extends State<LegacyScreen>
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () => _showStoryDetail(story),
+            onTap: (story['entry_type'] as String? ?? 'text') == 'text' ? () => _showStoryDetail(story) : null,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -3783,6 +3805,428 @@ class _LegacyVideoCardPlayer extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _LegacyStoryCard extends StatefulWidget {
+  const _LegacyStoryCard({
+    required this.story,
+    required this.index,
+    required this.isTablet,
+    required this.isDarkMode,
+    required this.isSenior,
+    required this.onHeart,
+    required this.onBookmark,
+    required this.onShare,
+    this.onTap,
+  });
+  final Map<String, dynamic> story;
+  final int index;
+  final bool isTablet;
+  final bool isDarkMode;
+  final bool isSenior;
+  final VoidCallback onHeart;
+  final VoidCallback onBookmark;
+  final VoidCallback onShare;
+  final VoidCallback? onTap;
+
+  @override
+  State<_LegacyStoryCard> createState() => _LegacyStoryCardState();
+}
+
+class _LegacyStoryCardState extends State<_LegacyStoryCard> {
+  bool _showReplyComposer = false;
+  bool _showReplies = false;
+  final TextEditingController _replyController = TextEditingController();
+  bool _sendingReply = false;
+  List<Map<String, dynamic>> _replies = [];
+  final Set<String> _repliesHearted = {};
+
+  Color get _cardBg => widget.isDarkMode ? const Color(0xFF242018) : const Color(0xFFFAF7F2);
+  Color get _cardBorder => widget.isDarkMode ? const Color(0xFF3D3428) : const Color(0xFFE8E0D0);
+  Color get _textPrimary => widget.isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417);
+  Color get _textSecondary => widget.isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReplies();
+  }
+
+  @override
+  void dispose() {
+    _replyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadReplies() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final storyId = widget.story['id'] as String? ?? '';
+      if (storyId.isEmpty) return;
+      final response = await supabase
+          .from('feed_posts')
+          .select('*, user_profiles(display_name)')
+          .eq('parent_post_id', storyId)
+          .order('created_at', ascending: true);
+      if (mounted) {
+        setState(() => _replies = List<Map<String, dynamic>>.from(response as List));
+      }
+    } catch (e) {
+      debugPrint('Legacy reply load error: \$e');
+    }
+  }
+
+  Future<void> _sendReply(String text) async {
+    if (text.trim().isEmpty) return;
+    setState(() => _sendingReply = true);
+    try {
+      final supabase = Supabase.instance.client;
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      final userId = supabase.auth.currentUser?.id;
+      if (nestId.isEmpty || userId == null) {
+        setState(() => _sendingReply = false);
+        return;
+      }
+      final storyId = widget.story['id'] as String? ?? '';
+      await supabase.from('feed_posts').insert({
+        'nest_id': nestId,
+        'author_id': userId,
+        'post_type': 'text',
+        'content': text.trim(),
+        'parent_post_id': storyId,
+      });
+      _replyController.clear();
+      await _loadReplies();
+      if (mounted) {
+        setState(() {
+          _sendingReply = false;
+          _showReplyComposer = false;
+          _showReplies = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _sendingReply = false);
+    }
+  }
+
+  String _formatTimestamp(DateTime ts) {
+    final now = DateTime.now();
+    final diff = now.difference(ts);
+    if (diff.inMinutes < 60) return '\${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '\${diff.inHours}h ago';
+    return '\${diff.inDays}d ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final story = widget.story;
+    final hasImage = (story['imageUrl'] as String? ?? '').isNotEmpty;
+    final isHearted = story['isHearted'] as bool? ?? false;
+    final heartCount = story['heartCount'] as int? ?? 0;
+    final entryType = story['entry_type'] as String? ?? 'text';
+    final mediaUrl = story['media_url'] as String? ?? '';
+
+    return Container(
+      margin: EdgeInsets.fromLTRB(widget.isTablet ? 28 : 20, 0, widget.isTablet ? 28 : 20, 14),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _cardBorder, width: 1.5),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14.5),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (hasImage)
+                  GestureDetector(
+                    onTap: () => openFullscreenImage(
+                      context: context,
+                      imageUrl: story['imageUrl'] as String? ?? '',
+                      semanticLabel: story['imageLabel'] as String? ?? '',
+                      isDarkMode: widget.isDarkMode,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                      child: Stack(
+                        children: [
+                          Image.network(
+                            story['imageUrl'] as String? ?? '',
+                            height: 160,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                          ),
+                          Positioned(
+                            bottom: 8, right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withAlpha(120),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.fullscreen_rounded, color: Colors.white, size: 14),
+                                  SizedBox(width: 3),
+                                  Text('Tap to expand', style: TextStyle(color: Colors.white, fontSize: 10)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF5DA399).withAlpha(25),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              story['category'] as String? ?? 'Memories',
+                              style: GoogleFonts.nunitoSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF5DA399)),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            story['date'] as String? ?? '',
+                            style: GoogleFonts.nunitoSans(fontSize: 12, color: _textSecondary),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        story['title'] as String? ?? '',
+                        style: GoogleFonts.nunitoSans(fontSize: 17, fontWeight: FontWeight.w700, color: _textPrimary, height: 1.3),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      if (entryType == 'audio' && mediaUrl.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _LegacyAudioPlayer(audioUrl: mediaUrl, isDarkMode: widget.isDarkMode),
+                        )
+                      else if (entryType == 'video' && mediaUrl.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _LegacyVideoCardPlayer(videoUrl: mediaUrl, isDarkMode: widget.isDarkMode),
+                        )
+                      else
+                        Text(
+                          story['excerpt'] as String? ?? '',
+                          style: GoogleFonts.nunitoSans(fontSize: 14, color: _textSecondary, height: 1.5),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 36, height: 36,
+                                child: IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                                  icon: Icon(
+                                    isHearted ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
+                                    color: isHearted ? const Color(0xFFE05C5C) : _textSecondary,
+                                    size: 22,
+                                  ),
+                                  onPressed: widget.onHeart,
+                                ),
+                              ),
+                              Text(
+                                '\$heartCount',
+                                style: GoogleFonts.nunitoSans(fontSize: 13, fontWeight: FontWeight.w600,
+                                    color: isHearted ? const Color(0xFFE05C5C) : _textSecondary),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 16),
+                          GestureDetector(
+                            onTap: () => setState(() => _showReplyComposer = !_showReplyComposer),
+                            child: Row(
+                              children: [
+                                Icon(Icons.reply_rounded, size: 18, color: _textSecondary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _replies.isNotEmpty ? 'Reply (\${_replies.length})' : 'Reply',
+                                  style: GoogleFonts.nunitoSans(fontSize: 13, fontWeight: FontWeight.w500, color: _textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Spacer(),
+                          GestureDetector(
+                            onTap: widget.onBookmark,
+                            child: Icon(
+                              (story['isBookmarked'] as bool? ?? false) ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                              size: 22,
+                              color: (story['isBookmarked'] as bool? ?? false) ? const Color(0xFF5DA399) : _textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: widget.onShare,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFD4AA00).withAlpha(18),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: const Color(0xFFD4AA00).withAlpha(60), width: 1),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.ios_share_rounded, size: 14, color: Color(0xFFD4AA00)),
+                                  const SizedBox(width: 5),
+                                  Text('Share Story', style: GoogleFonts.nunitoSans(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFFD4AA00))),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_replies.isNotEmpty) ...[
+                        GestureDetector(
+                          onTap: () => setState(() => _showReplies = !_showReplies),
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Row(
+                              children: [
+                                Icon(_showReplies ? Icons.expand_less : Icons.expand_more, size: 16, color: const Color(0xFF5DA399)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _showReplies ? 'Hide replies' : '\${_replies.length} \${_replies.length == 1 ? "reply" : "replies"}',
+                                  style: GoogleFonts.nunitoSans(fontSize: 12, color: const Color(0xFF5DA399), fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_showReplies)
+                          ..._replies.map((reply) {
+                            final profile = reply['user_profiles'] as Map<String, dynamic>?;
+                            final name = profile?['display_name'] as String? ?? 'Family';
+                            final text = reply['content'] as String? ?? '';
+                            final ts = DateTime.tryParse(reply['created_at'] as String? ?? '') ?? DateTime.now();
+                            final replyId = reply['id'] as String? ?? '';
+                            return Container(
+                              margin: const EdgeInsets.fromLTRB(0, 8, 0, 0),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: widget.isDarkMode ? const Color(0xFF1A1612) : const Color(0xFFF0EBE3),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: widget.isDarkMode ? const Color(0xFF3D3428) : const Color(0xFFE0D8CC)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(name, style: GoogleFonts.nunitoSans(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary)),
+                                      const SizedBox(width: 8),
+                                      Text(_formatTimestamp(ts), style: GoogleFonts.nunitoSans(fontSize: 11, color: _textSecondary)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(text, style: GoogleFonts.nunitoSans(fontSize: 13, color: _textPrimary)),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () => setState(() {
+                                          if (_repliesHearted.contains(replyId)) {
+                                            _repliesHearted.remove(replyId);
+                                          } else {
+                                            _repliesHearted.add(replyId);
+                                          }
+                                        }),
+                                        child: Icon(
+                                          _repliesHearted.contains(replyId) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                          size: 16,
+                                          color: _repliesHearted.contains(replyId) ? const Color(0xFFE05C5C) : _textSecondary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(_repliesHearted.contains(replyId) ? '1' : '0',
+                                          style: GoogleFonts.nunitoSans(fontSize: 12,
+                                              color: _repliesHearted.contains(replyId) ? const Color(0xFFE05C5C) : _textSecondary)),
+                                      const SizedBox(width: 16),
+                                      GestureDetector(
+                                        onTap: () => setState(() => _showReplyComposer = !_showReplyComposer),
+                                        child: Text('Reply', style: GoogleFonts.nunitoSans(fontSize: 12, color: const Color(0xFF5DA399), fontWeight: FontWeight.w600)),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                      ],
+                      if (_showReplyComposer)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _replyController,
+                                  autofocus: true,
+                                  style: GoogleFonts.nunitoSans(fontSize: 13, color: _textPrimary),
+                                  decoration: InputDecoration(
+                                    hintText: 'Write a reply...',
+                                    hintStyle: GoogleFonts.nunitoSans(fontSize: 13, color: _textSecondary),
+                                    filled: true,
+                                    fillColor: widget.isDarkMode ? const Color(0xFF1A1612) : const Color(0xFFF0EBE3),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: _sendingReply ? null : () => _sendReply(_replyController.text),
+                                child: Container(
+                                  width: 36, height: 36,
+                                  decoration: const BoxDecoration(color: Color(0xFF5DA399), shape: BoxShape.circle),
+                                  child: _sendingReply
+                                      ? const Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                      : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
