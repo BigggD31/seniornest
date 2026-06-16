@@ -453,9 +453,6 @@ class _LegacyScreenState extends State<LegacyScreen>
                               child: _buildPromptSection(isTablet),
                             ),
                           ],
-                          SliverToBoxAdapter(
-                            child: _buildPromptSection(isTablet),
-                          ),
                           _filteredStories.isEmpty
                               ? SliverFillRemaining(
                                   hasScrollBody: false,
@@ -1003,6 +1000,8 @@ class _LegacyScreenState extends State<LegacyScreen>
       isTablet: isTablet,
       isDarkMode: _isDarkMode,
       isSenior: _isSenior,
+      profileData: _profileData,
+      displayName: _displayName,
       onHeart: () => _toggleHeart(index),
       onBookmark: () => _toggleStoryBookmark(story),
       onShare: () => SharePreviewWidget.show(
@@ -3819,6 +3818,8 @@ class _LegacyStoryCard extends StatefulWidget {
     required this.isTablet,
     required this.isDarkMode,
     required this.isSenior,
+    required this.profileData,
+    required this.displayName,
     required this.onHeart,
     required this.onBookmark,
     required this.onShare,
@@ -3829,6 +3830,8 @@ class _LegacyStoryCard extends StatefulWidget {
   final bool isTablet;
   final bool isDarkMode;
   final bool isSenior;
+  final Map<String, dynamic>? profileData;
+  final String displayName;
   final VoidCallback onHeart;
   final VoidCallback onBookmark;
   final VoidCallback onShare;
@@ -3996,20 +3999,43 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                     children: [
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF5DA399).withAlpha(25),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              story['category'] as String? ?? 'Memories',
-                              style: GoogleFonts.nunitoSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF5DA399)),
-                            ),
+                          ProfileAvatarWidget(
+                            profileData: widget.profileData,
+                            displayName: widget.displayName,
+                            size: 36,
+                            borderColor: const Color(0xFF5DA399),
+                            borderWidth: 1.5,
+                          ),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.displayName.isNotEmpty ? widget.displayName : 'My Story',
+                                style: GoogleFonts.nunitoSans(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary),
+                              ),
+                              const SizedBox(height: 2),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF5DA399).withAlpha(25),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  story['category'] as String? ?? 'Memories',
+                                  style: GoogleFonts.nunitoSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF5DA399)),
+                                ),
+                              ),
+                            ],
                           ),
                           const Spacer(),
                           Text(
-                            story['date'] as String? ?? '',
+                            () {
+                              final d = DateTime.tryParse(story['date'] as String? ?? '');
+                              if (d == null) return story['date'] as String? ?? '';
+                              const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                              return '${months[d.month - 1]} ${d.day}';
+                            }(),
                             style: GoogleFonts.nunitoSans(fontSize: 12, color: _textSecondary),
                           ),
                         ],
@@ -4059,7 +4085,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                                 ),
                               ),
                               Text(
-                                '\$heartCount',
+                                heartCount.toString(),
                                 style: GoogleFonts.nunitoSans(fontSize: 13, fontWeight: FontWeight.w600,
                                     color: isHearted ? const Color(0xFFE05C5C) : _textSecondary),
                               ),
