@@ -278,30 +278,18 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
 
       if (userId != null) {
         print('NEST_DEBUG: upserting profile...');
-        await supabase.from('user_profiles').upsert({
+        final profileData = <String, dynamic>{
           'id': userId,
-          'display_name': name,
-          'full_name': name,
           'role': 'senior',
           'birthday': _birthday?.toIso8601String(),
           'anniversary': _anniversary?.toIso8601String(),
-        });
-        print('NEST_DEBUG: profile upsert done');
-
-        // Verify user profile was created before creating nest
-        final profileCheck = await supabase
-            .from('user_profiles')
-            .select('id')
-            .eq('id', userId)
-            .maybeSingle();
-
-        print('NEST_DEBUG: profileCheck = $profileCheck');
-
-        if (profileCheck == null) {
-          print('NEST_DEBUG: profile null -- skipping nest creation');
-          debugPrint('Profile not found after upsert -- skipping nest creation');
-          return;
+        };
+        if (name.isNotEmpty) {
+          profileData['display_name'] = name;
+          profileData['full_name'] = name;
         }
+        await supabase.from('user_profiles').upsert(profileData);
+        print('NEST_DEBUG: profile upsert done');
 
         // Check if nest already exists for this user
         final existingNestId = prefs.getString('nest_id') ?? '';

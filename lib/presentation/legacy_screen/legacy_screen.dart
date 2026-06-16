@@ -1161,7 +1161,7 @@ class _LegacyScreenState extends State<LegacyScreen>
                                         ? Icons.favorite_rounded
                                         : Icons.favorite_outline_rounded,
                                     color: isHearted
-                                        ? const Color(0xFFD4AA00)
+                                        ? const Color(0xFFE05C5C)
                                         : _textSecondary,
                                     size: 22,
                                   ),
