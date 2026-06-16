@@ -14,6 +14,7 @@ import './widgets/legacy_prompt_card_widget.dart';
 import './widgets/meds_reminder_card_widget.dart';
 import './widgets/message_card_widget.dart';
 import './widgets/celebrations_card_widget.dart';
+import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 // ── Data Models ────────────────────────────────────────────────
 
@@ -527,7 +528,16 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         final senderName = supabaseName.isNotEmpty
             ? supabaseName
             : (authorId == userId && localName.isNotEmpty ? localName : 'Family');
-        final avatarUrl = profile?['avatar_url'] as String? ?? '';
+        String avatarUrl = profile?['avatar_url'] as String? ?? '';
+        if (avatarUrl.isEmpty && authorId == userId) {
+          final profileJson = prefs.getString(kProfilePhotoKey);
+          if (profileJson != null) {
+            try {
+              final profileData = jsonDecode(profileJson) as Map<String, dynamic>;
+              avatarUrl = profileData['url'] as String? ?? '';
+            } catch (_) {}
+          }
+        }
         final relation = profile?['relation_type'] as String? ?? 'Family';
         final type = post['post_type'] as String? ?? 'text';
         return MessageModel(

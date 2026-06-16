@@ -1011,9 +1011,7 @@ class _LegacyScreenState extends State<LegacyScreen>
         imageUrl: story['imageUrl'] as String?,
         isDarkMode: _isDarkMode,
       ),
-      onTap: (story['entry_type'] as String? ?? 'text') == 'text'
-          ? () => _showStoryDetail(story)
-          : null,
+      onTap: () => _showStoryDetail(story), //
     );
   }
 
@@ -1039,7 +1037,7 @@ class _LegacyScreenState extends State<LegacyScreen>
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: (story['entry_type'] as String? ?? 'text') == 'text' ? () => _showStoryDetail(story) : null,
+            onTap: () => _showStoryDetail(story),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2683,23 +2681,28 @@ class _StoryDetailSheet extends StatelessWidget {
                       ),
                     ),
                   if (hasImage) const SizedBox(height: 20),
-                  Text(
-                    story['excerpt'] as String? ?? '',
-                    style: GoogleFonts.nunitoSans(
-                      fontSize: 16,
-                      color: _textPrimary,
-                      height: 1.7,
+                  if ((story['entry_type'] as String? ?? 'text') == 'audio' &&
+                      (story['media_url'] as String? ?? '').isNotEmpty)
+                    _LegacyAudioPlayer(
+                      audioUrl: story['media_url'] as String,
+                      isDarkMode: isDarkMode,
+                    )
+                  else if ((story['entry_type'] as String? ?? 'text') == 'video' &&
+                      (story['media_url'] as String? ?? '').isNotEmpty)
+                    _LegacyVideoCardPlayer(
+                      videoUrl: story['media_url'] as String,
+                      isDarkMode: isDarkMode,
+                    )
+                  else
+                    Text(
+                      story['excerpt'] as String? ?? '',
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 16,
+                        color: _textPrimary,
+                        height: 1.7,
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 20),
-                  Text(
-                    'Continue reading this story in the full app...',
-                    style: GoogleFonts.nunitoSans(
-                      fontSize: 14,
-                      color: _textSecondary,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -3874,7 +3877,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
       final response = await supabase
           .from('feed_posts')
           .select('*, user_profiles(display_name)')
-          .eq('parent_post_id', storyId)
+          .eq('legacy_entry_id', storyId)
           .order('created_at', ascending: true);
       if (mounted) {
         setState(() => _replies = List<Map<String, dynamic>>.from(response as List));
@@ -3902,7 +3905,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
         'author_id': userId,
         'post_type': 'text',
         'content': text.trim(),
-        'parent_post_id': storyId,
+        'legacy_entry_id': storyId,
       });
       _replyController.clear();
       await _loadReplies();
