@@ -1130,16 +1130,35 @@ class _LegacyScreenState extends State<LegacyScreen>
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        story['excerpt'] as String,
-                        style: GoogleFonts.nunitoSans(
-                          fontSize: 14,
-                          color: _textSecondary,
-                          height: 1.5,
+                      if ((story['entry_type'] as String? ?? 'text') == 'audio' &&
+                          (story['media_url'] as String? ?? '').isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _LegacyAudioPlayer(
+                            audioUrl: story['media_url'] as String,
+                            isDarkMode: _isDarkMode,
+                          ),
+                        )
+                      else if ((story['entry_type'] as String? ?? 'text') == 'video' &&
+                          (story['media_url'] as String? ?? '').isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _LegacyVideoCardPlayer(
+                            videoUrl: story['media_url'] as String,
+                            isDarkMode: _isDarkMode,
+                          ),
+                        )
+                      else
+                        Text(
+                          story['excerpt'] as String,
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 14,
+                            color: _textSecondary,
+                            height: 1.5,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
@@ -3575,6 +3594,194 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
               ]),
             ],
             const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _LegacyAudioPlayer extends StatefulWidget {
+  const _LegacyAudioPlayer({required this.audioUrl, required this.isDarkMode});
+  final String audioUrl;
+  final bool isDarkMode;
+  @override
+  State<_LegacyAudioPlayer> createState() => _LegacyAudioPlayerState();
+}
+
+class _LegacyAudioPlayerState extends State<_LegacyAudioPlayer> {
+  final AudioPlayer _player = AudioPlayer();
+  bool _isPlaying = false;
+  int _duration = 0;
+  int _position = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.durationStream.listen((d) {
+      if (d != null && mounted) setState(() => _duration = d.inSeconds);
+    });
+    _player.positionStream.listen((p) {
+      if (mounted) setState(() => _position = p.inSeconds);
+    });
+    _player.playerStateStream.listen((s) {
+      if (s.processingState == ProcessingState.completed && mounted) {
+        setState(() { _isPlaying = false; _position = 0; });
+        _player.seek(Duration.zero);
+      }
+    });
+    _player.setUrl(widget.audioUrl).catchError((e) { debugPrint('Audio load error: $e'); return Duration.zero; });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  String _fmt(int s) {
+    final m = (s ~/ 60).toString().padLeft(2, '0');
+    final sec = (s % 60).toString().padLeft(2, '0');
+    return '$m:$sec';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFE8C97A), Color(0xFFC9A84C)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () async {
+              if (_isPlaying) {
+                await _player.pause();
+                setState(() => _isPlaying = false);
+              } else {
+                if (_player.processingState == ProcessingState.idle ||
+                    _player.processingState == ProcessingState.completed) {
+                  await _player.setUrl(widget.audioUrl);
+                }
+                await _player.play();
+                setState(() => _isPlaying = true);
+              }
+            },
+            child: Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAF7F2),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF412402), width: 2),
+              ),
+              child: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  color: const Color(0xFF412402), size: 22),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 28,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: List.generate(22, (i) {
+                      final heights = [8.0,14.0,20.0,12.0,18.0,24.0,10.0,16.0,22.0,14.0,8.0,20.0,16.0,24.0,12.0,18.0,10.0,22.0,14.0,8.0,16.0,12.0];
+                      return Container(
+                        width: 3,
+                        height: heights[i % heights.length],
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF412402).withAlpha(102),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(_isPlaying ? _fmt(_position) : _fmt(_duration),
+                    style: GoogleFonts.nunitoSans(fontSize: 11, color: const Color(0xFF412402).withAlpha(166), fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegacyVideoCardPlayer extends StatelessWidget {
+  const _LegacyVideoCardPlayer({required this.videoUrl, required this.isDarkMode});
+  final String videoUrl;
+  final bool isDarkMode;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => openFullscreenVideo(
+        context: context,
+        videoUrl: videoUrl,
+        isDarkMode: isDarkMode,
+      ),
+      child: Container(
+        height: 180,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF3D5266), Color(0xFF2A4A45)],
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned(
+              top: 8, left: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(38),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.videocam_rounded, color: Color(0xFFE1F5EE), size: 14),
+                    SizedBox(width: 4),
+                    Text('Video', style: TextStyle(color: Color(0xFFE1F5EE), fontSize: 12, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 56, height: 56,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF5DA399),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFFAF7F2), width: 2),
+                  ),
+                  child: const Icon(Icons.play_arrow_rounded, color: Color(0xFFFAF7F2), size: 32),
+                ),
+                const SizedBox(height: 8),
+                Text('Tap to play',
+                    style: GoogleFonts.nunitoSans(fontSize: 12, color: Colors.white.withAlpha(217), fontStyle: FontStyle.italic)),
+              ],
+            ),
           ],
         ),
       ),
