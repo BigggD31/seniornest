@@ -1351,7 +1351,10 @@ class _LegacyScreenState extends State<LegacyScreen>
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
               builder: (ctx2) =>
-                  _LegacyVoiceRecordSheet(isDarkMode: _isDarkMode),
+                  _LegacyVoiceRecordSheet(
+                    isDarkMode: _isDarkMode,
+                    onRecordingComplete: _loadData,
+                  ),
             );
           },
           onRecordVideo: () {
@@ -1361,7 +1364,10 @@ class _LegacyScreenState extends State<LegacyScreen>
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
               builder: (ctx2) =>
-                  _LegacyVideoRecordSheet(isDarkMode: _isDarkMode),
+                  _LegacyVideoRecordSheet(
+                    isDarkMode: _isDarkMode,
+                    onRecordingComplete: _loadData,
+                  ),
             );
           },
         ),
