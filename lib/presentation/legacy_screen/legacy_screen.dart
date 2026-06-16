@@ -313,14 +313,14 @@ class _LegacyScreenState extends State<LegacyScreen>
       final story = _filteredStories[index];
       final globalIndex = _stories.indexWhere((s) => s['id'] == story['id']);
       if (globalIndex >= 0) {
-        if (_stories[globalIndex]['isHearted'] as bool) {
+        final isHearted = _stories[globalIndex]['isHearted'] as bool? ?? false;
+        final heartCount = _stories[globalIndex]['heartCount'] as int? ?? 0;
+        if (isHearted) {
           _stories[globalIndex]['isHearted'] = false;
-          _stories[globalIndex]['heartCount'] =
-              (_stories[globalIndex]['heartCount'] as int) - 1;
+          _stories[globalIndex]['heartCount'] = heartCount - 1;
         } else {
           _stories[globalIndex]['isHearted'] = true;
-          _stories[globalIndex]['heartCount'] =
-              (_stories[globalIndex]['heartCount'] as int) + 1;
+          _stories[globalIndex]['heartCount'] = heartCount + 1;
         }
       }
     });
