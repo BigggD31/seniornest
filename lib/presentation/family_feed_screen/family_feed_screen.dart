@@ -518,10 +518,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           .order('created_at', ascending: false)
           .limit(50);
 
+      final localName = prefs.getString('display_name') ?? '';
       final posts = response as List<dynamic>;
       final List<MessageModel> loaded = posts.map((post) {
         final profile = post['user_profiles'] as Map<String, dynamic>?;
-        final senderName = profile?['display_name'] as String? ?? 'Family';
+        final authorId = post['author_id'] as String? ?? '';
+        final supabaseName = profile?['display_name'] as String? ?? '';
+        final senderName = supabaseName.isNotEmpty
+            ? supabaseName
+            : (authorId == userId && localName.isNotEmpty ? localName : 'Family');
         final avatarUrl = profile?['avatar_url'] as String? ?? '';
         final relation = profile?['relation_type'] as String? ?? 'Family';
         final type = post['post_type'] as String? ?? 'text';
