@@ -2766,9 +2766,9 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
   Color get _bg =>
       widget.isDarkMode ? const Color(0xFF242018) : const Color(0xFFFDFDFD);
   Color get _surface =>
-      widget.isDarkMode ? const Color(0xFF2E2820) : const Color(0xFFF5F0FF);
+      widget.isDarkMode ? const Color(0xFF2E2820) : const Color(0xFFF5F0E8);
   Color get _cardBorder =>
-      widget.isDarkMode ? const Color(0xFF3D3428) : const Color(0xFF9B8FD4);
+      widget.isDarkMode ? const Color(0xFF3D3428) : const Color(0xFFE8E0D0);
   Color get _textPrimary =>
       widget.isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417);
   Color get _textSecondary =>
@@ -2939,14 +2939,16 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8),
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+      padding: EdgeInsets.fromLTRB(24, 20, 24, 36 + bottomPadding),
       decoration: BoxDecoration(
         color: _bg,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
@@ -3327,6 +3329,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
           ],
           const SizedBox(height: 8),
         ],
+      ),
       ),
     );
   }
@@ -3979,6 +3982,15 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
   void initState() {
     super.initState();
     _loadReplies();
+  }
+
+  @override
+  void didUpdateWidget(_LegacyStoryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.story['id'] != widget.story['id']) {
+      setState(() => _replies = []);
+      _loadReplies();
+    }
   }
 
   @override
