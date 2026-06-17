@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +8,7 @@ import '../family_feed_screen.dart';
 import '../../../widgets/custom_image_widget.dart';
 import '../../../widgets/share_preview_widget.dart';
 import '../../../widgets/fullscreen_media_viewer.dart';
+import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 class MessageCardWidget extends StatefulWidget {
   const MessageCardWidget({
@@ -16,6 +18,7 @@ class MessageCardWidget extends StatefulWidget {
     required this.onHeart,
     this.isBookmarked = false,
     this.onBookmark,
+    this.senderAvatarJson,
   });
 
   final MessageModel message;
@@ -23,6 +26,7 @@ class MessageCardWidget extends StatefulWidget {
   final VoidCallback onHeart;
   final bool isBookmarked;
   final VoidCallback? onBookmark;
+  final String? senderAvatarJson;
 
   @override
   State<MessageCardWidget> createState() => _MessageCardWidgetState();
@@ -165,15 +169,23 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                       width: 2,
                     ),
                   ),
-                  child: ClipOval(
-                    child: CustomImageWidget(
-                      imageUrl: msg.senderAvatarUrl,
-                      width: 44,
-                      height: 44,
-                      fit: BoxFit.cover,
-                      semanticLabel: msg.senderAvatarLabel,
-                    ),
-                  ),
+                  child: widget.senderAvatarJson != null
+                    ? ProfileAvatarWidget(
+                        profileData: json.decode(widget.senderAvatarJson!) as Map<String, dynamic>,
+                        displayName: msg.senderName,
+                        size: 44,
+                        borderColor: const Color(0xFF5DA399),
+                        borderWidth: 2,
+                      )
+                    : ClipOval(
+                        child: CustomImageWidget(
+                          imageUrl: msg.senderAvatarUrl,
+                          width: 44,
+                          height: 44,
+                          fit: BoxFit.cover,
+                          semanticLabel: msg.senderAvatarLabel,
+                        ),
+                      ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(

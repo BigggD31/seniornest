@@ -27,6 +27,7 @@ class MessageModel {
     required this.senderRelationship,
     required this.senderAvatarUrl,
     required this.senderAvatarLabel,
+    this.senderAvatarJson,
     required this.type,
     required this.content,
     required this.imageUrl,
@@ -41,6 +42,7 @@ class MessageModel {
   final String senderRelationship;
   final String senderAvatarUrl;
   final String senderAvatarLabel;
+  final String? senderAvatarJson;
   final MessageType type;
   final String content;
   final String imageUrl;
@@ -534,7 +536,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           if (profileJson != null) {
             try {
               final profileData = jsonDecode(profileJson) as Map<String, dynamic>;
-              avatarUrl = profileData['url'] as String? ?? '';
+              avatarUrl = profileData['value'] as String? ?? '';
             } catch (_) {}
           }
         }
@@ -546,6 +548,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           senderRelationship: relation,
           senderAvatarUrl: avatarUrl,
           senderAvatarLabel: senderName,
+          senderAvatarJson: (authorId == userId) ? prefs.getString(kProfilePhotoKey) : null,
           type: MessageModel._messageTypeFromString(type),
           content: post['content'] as String? ?? '',
           imageUrl: post['media_url'] as String? ?? '',
@@ -898,6 +901,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 onHeart: () => _toggleHeart(index),
                 isBookmarked: _bookmarkedIds.contains(_messages[index].id),
                 onBookmark: () => _toggleBookmark(_messages[index]),
+                senderAvatarJson: _messages[index].senderAvatarJson,
               ),
             ),
           );
@@ -932,6 +936,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               onHeart: () => _toggleHeart(index),
               isBookmarked: _bookmarkedIds.contains(_messages[index].id),
               onBookmark: () => _toggleBookmark(_messages[index]),
+              senderAvatarJson: _messages[index].senderAvatarJson,
             ),
           );
         }, childCount: _messages.length),

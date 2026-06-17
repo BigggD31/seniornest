@@ -3924,9 +3924,9 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
   String _formatTimestamp(DateTime ts) {
     final now = DateTime.now();
     final diff = now.difference(ts);
-    if (diff.inMinutes < 60) return '\${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '\${diff.inHours}h ago';
-    return '\${diff.inDays}d ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 
   @override
@@ -4102,7 +4102,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                                 Icon(Icons.reply_rounded, size: 18, color: _textSecondary),
                                 const SizedBox(width: 4),
                                 Text(
-                                  _replies.isNotEmpty ? 'Reply (\${_replies.length})' : 'Reply',
+                                  _replies.isNotEmpty ? 'Reply (${_replies.length})' : 'Reply',
                                   style: GoogleFonts.nunitoSans(fontSize: 13, fontWeight: FontWeight.w500, color: _textSecondary),
                                 ),
                               ],
@@ -4149,7 +4149,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                                 Icon(_showReplies ? Icons.expand_less : Icons.expand_more, size: 16, color: const Color(0xFF5DA399)),
                                 const SizedBox(width: 4),
                                 Text(
-                                  _showReplies ? 'Hide replies' : '\${_replies.length} \${_replies.length == 1 ? "reply" : "replies"}',
+                                  _showReplies ? 'Hide replies' : '${_replies.length} ${_replies.length == 1 ? "reply" : "replies"}',
                                   style: GoogleFonts.nunitoSans(fontSize: 12, color: const Color(0xFF5DA399), fontWeight: FontWeight.w600),
                                 ),
                               ],
