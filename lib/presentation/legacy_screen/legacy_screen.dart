@@ -2740,6 +2740,9 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _audioFilePath;
   bool _isSaving = false;
+  final TextEditingController _titleController = TextEditingController();
+  String _selectedCategory = 'Memories';
+  static const List<String> _categories = ['Memories', 'Wisdom', 'Family', 'Life Lessons'];
 
   @override
   void initState() {
@@ -2775,6 +2778,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
   void dispose() {
     _timer?.cancel();
     _playTimer?.cancel();
+    _titleController.dispose();
     super.dispose();
   }
 
@@ -2886,9 +2890,13 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
           fileOptions: const FileOptions(contentType: 'audio/m4a'),
         );
         final mediaUrl = supabase.storage.from('media').getPublicUrl('audio/$fileName');
+        final title = _titleController.text.trim().isNotEmpty
+            ? _titleController.text.trim()
+            : 'My Voice Story';
         await supabase.from('legacy_entries').insert({
           'user_id': userId,
           'nest_id': nestId.isEmpty ? null : nestId,
+          'prompt': title,
           'content': 'Voice story',
           'entry_type': 'audio',
           'media_url': mediaUrl,
@@ -2982,7 +2990,58 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
               ),
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 16),
+          // Story Title
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Story Title', style: GoogleFonts.nunitoSans(fontSize: 12, fontWeight: FontWeight.w600, color: _textSecondary, letterSpacing: 0.5)),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: _cardBorder, width: 1)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            child: TextField(
+              controller: _titleController,
+              style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w600, color: _textPrimary),
+              decoration: InputDecoration(
+                hintText: 'Give your story a title…',
+                hintStyle: GoogleFonts.nunitoSans(fontSize: 15, color: _textSecondary),
+                border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none,
+                isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Category
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Category', style: GoogleFonts.nunitoSans(fontSize: 12, fontWeight: FontWeight.w600, color: _textSecondary, letterSpacing: 0.5)),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: _categories.map((cat) {
+              final isSelected = _selectedCategory == cat;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedCategory = cat),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: EdgeInsets.only(right: cat != _categories.last ? 6 : 0),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFF5DA399).withAlpha(26) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: isSelected ? const Color(0xFF5DA399) : _cardBorder, width: 1.5),
+                    ),
+                    child: Text(cat, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.nunitoSans(fontSize: 10, fontWeight: FontWeight.w600,
+                          color: isSelected ? const Color(0xFF5DA399) : _textSecondary)),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
           if (!_hasRecording && !_isRecording) ...[
             GestureDetector(
               onTap: _startRecording,
@@ -3296,6 +3355,9 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
   CameraController? _cameraController;
   VideoPlayerController? _videoPlayerController;
   String? _videoFilePath;
+  final TextEditingController _titleController = TextEditingController();
+  String _selectedCategory = 'Memories';
+  static const List<String> _categories = ['Memories', 'Wisdom', 'Family', 'Life Lessons'];
 
   Color get _bg => widget.isDarkMode ? const Color(0xFF242018) : const Color(0xFFFDFDFD);
   Color get _cardBorder => widget.isDarkMode ? const Color(0xFF3D3428) : const Color(0xFFB0C4DE);
@@ -3307,6 +3369,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
     _timer?.cancel();
     _cameraController?.dispose();
     _videoPlayerController?.dispose();
+    _titleController.dispose();
     super.dispose();
   }
 
@@ -3390,9 +3453,13 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
           fileOptions: const FileOptions(contentType: 'video/mp4'),
         );
         final mediaUrl = supabase.storage.from('media').getPublicUrl('video/$fileName');
+        final title = _titleController.text.trim().isNotEmpty
+            ? _titleController.text.trim()
+            : 'My Video Story';
         await supabase.from('legacy_entries').insert({
           'user_id': userId,
           'nest_id': nestId.isEmpty ? null : nestId,
+          'prompt': title,
           'content': 'Video story',
           'entry_type': 'video',
           'media_url': mediaUrl,
@@ -3449,8 +3516,59 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
             Text('Share your story face to face with your family',
               style: GoogleFonts.nunitoSans(fontSize: 13, color: _textSecondary),
               textAlign: TextAlign.center),
-            const SizedBox(height: 24),
-            // Camera preview during recording
+          const SizedBox(height: 16),
+          // Story Title
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Story Title', style: GoogleFonts.nunitoSans(fontSize: 12, fontWeight: FontWeight.w600, color: _textSecondary, letterSpacing: 0.5)),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: _cardBorder, width: 1)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            child: TextField(
+              controller: _titleController,
+              style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w600, color: _textPrimary),
+              decoration: InputDecoration(
+                hintText: 'Give your story a title…',
+                hintStyle: GoogleFonts.nunitoSans(fontSize: 15, color: _textSecondary),
+                border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none,
+                isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Category
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Category', style: GoogleFonts.nunitoSans(fontSize: 12, fontWeight: FontWeight.w600, color: _textSecondary, letterSpacing: 0.5)),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: _categories.map((cat) {
+              final isSelected = _selectedCategory == cat;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedCategory = cat),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: EdgeInsets.only(right: cat != _categories.last ? 6 : 0),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFF5DA399).withAlpha(26) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: isSelected ? const Color(0xFF5DA399) : _cardBorder, width: 1.5),
+                    ),
+                    child: Text(cat, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.nunitoSans(fontSize: 10, fontWeight: FontWeight.w600,
+                          color: isSelected ? const Color(0xFF5DA399) : _textSecondary)),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          // Camera preview during recording
             if (_isRecording && _cameraController != null && _cameraController!.value.isInitialized)
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
