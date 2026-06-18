@@ -806,7 +806,7 @@ class _LegacyScreenState extends State<LegacyScreen>
           ),
           const Spacer(),
           Text(
-            '${_filteredStories.length} stories',
+            _filteredStories.length == 1 ? '1 story' : '${_filteredStories.length} stories',
             style: GoogleFonts.nunitoSans(fontSize: 13, color: _textSecondary),
           ),
         ],

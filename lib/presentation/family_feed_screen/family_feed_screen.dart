@@ -633,6 +633,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         'imageSemanticLabel': msg.imageSemanticLabel,
         'timestamp': msg.timestamp.toIso8601String(),
         'sourceType': 'message',
+        'media_url': msg.imageUrl,
+        'entry_type': category.toLowerCase(),
       };
       allItems.removeWhere((e) => (e as Map<String, dynamic>)['id'] == id);
       allItems.add(item);
