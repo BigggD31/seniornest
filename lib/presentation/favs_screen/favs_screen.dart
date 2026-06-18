@@ -376,7 +376,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
 
   Widget _buildAllCategoriesView(bool isTablet) {
     // Categories 1-4: Text, Photos, Audio, Video
-    final categoryIndices = [1, 2, 3, 4];
+    final categoryIndices = [1, 2, 3, 4, 5];
     final hPad = isTablet ? 28.0 : 20.0;
 
     return ListView(
@@ -962,98 +962,129 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
 
   Widget _buildMemoryCard(Map<String, dynamic> item, bool isTablet) {
     final category = item['category'] as String? ?? '';
-    final title = item['senderName'] as String? ?? item['title'] as String? ?? '';
-    final subtitle = item['content'] as String? ?? item['subtitle'] as String? ?? '';
+    final title = item['senderName'] as String? ?? item['storyTitle'] as String? ?? 'Memory';
+    final subtitle = item['content'] as String? ?? '';
     final timestamp = item['timestamp'] as String? ?? '';
+    final entryType = item['entry_type'] as String? ?? 'text';
+    final mediaUrl = item['media_url'] as String? ?? '';
+    final imageUrl = item['imageUrl'] as String? ?? '';
+    final senderRelationship = item['senderRelationship'] as String? ?? '';
+
+    // Format date
+    String formattedDate = '';
+    if (timestamp.isNotEmpty) {
+      final dt = DateTime.tryParse(timestamp);
+      if (dt != null) {
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        formattedDate = '${months[dt.month - 1]} ${dt.day}';
+      }
+    }
+
+    // Category color and icon
     final catIndex = _categories.indexOf(category);
-    final catColor = catIndex >= 0
-        ? _categoryColors[catIndex]
-        : const Color(0xFF5DA399);
-    final catIcon = catIndex >= 0
-        ? _categoryIcons[catIndex]
-        : Icons.bookmark_rounded;
+    final catColor = catIndex >= 0 ? _categoryColors[catIndex] : const Color(0xFF5DA399);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _openMemory(item),
       child: Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _cardBorder, width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: catColor.withAlpha(30),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(catIcon, size: 18, color: catColor),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (title.isNotEmpty)
-                    Text(
-                      title,
-                      style: GoogleFonts.nunitoSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: _textPrimary,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: GoogleFonts.nunitoSans(
-                        fontSize: 13,
-                        color: _textSecondary,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (timestamp.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      () {
-                        final dt = DateTime.tryParse(timestamp);
-                        if (dt == null) return timestamp;
-                        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                        return '\${months[dt.month - 1]} \${dt.day}';
-                      }(),
-                      style: GoogleFonts.nunitoSans(
-                        fontSize: 11,
-                        color: _textSecondary.withAlpha(160),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            GestureDetector(
-              onTap: () => _removeBookmark(item),
-              child: Icon(
-                Icons.bookmark_remove_rounded,
-                color: catColor,
-                size: 20,
-              ),
+        margin: EdgeInsets.fromLTRB(isTablet ? 28 : 20, 0, isTablet ? 28 : 20, 14),
+        decoration: BoxDecoration(
+          color: _cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _cardBorder, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(12),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14.5),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Photo preview if available
+              if (imageUrl.isNotEmpty)
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                  child: Image.network(imageUrl, height: 160, width: double.infinity, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header row
+                    Row(
+                      children: [
+                        ProfileAvatarWidget(
+                          profileData: _profileData,
+                          displayName: _displayName,
+                          size: 36,
+                          borderColor: catColor,
+                          borderWidth: 1.5,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(title,
+                                style: GoogleFonts.nunitoSans(fontSize: 14, fontWeight: FontWeight.w700, color: _textPrimary),
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                              if (senderRelationship.isNotEmpty)
+                                Text(senderRelationship,
+                                  style: GoogleFonts.nunitoSans(fontSize: 11, color: _textSecondary)),
+                            ],
+                          ),
+                        ),
+                        // Category badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: catColor.withAlpha(25),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(category,
+                            style: GoogleFonts.nunitoSans(fontSize: 10, fontWeight: FontWeight.w700, color: catColor)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Content — audio player, video player, text, or photo
+                    if ((category == 'Audio' || entryType == 'audio') && mediaUrl.isNotEmpty)
+                      _FavsAudioPlayer(audioUrl: mediaUrl, isDarkMode: _isDarkMode)
+                    else if ((category == 'Video' || entryType == 'video') && mediaUrl.isNotEmpty)
+                      _FavsVideoPlayer(videoUrl: mediaUrl, isDarkMode: _isDarkMode)
+                    else if (subtitle.isNotEmpty)
+                      Text(subtitle,
+                        style: GoogleFonts.nunitoSans(fontSize: 13, color: _textSecondary, height: 1.5),
+                        maxLines: 3, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 10),
+                    // Footer row
+                    Row(
+                      children: [
+                        if (formattedDate.isNotEmpty)
+                          Text(formattedDate,
+                            style: GoogleFonts.nunitoSans(fontSize: 11, color: _textSecondary.withAlpha(160))),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () => _removeBookmark(item),
+                          child: Icon(Icons.bookmark_rounded, color: catColor, size: 20),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-    ),
     );
   }
 
