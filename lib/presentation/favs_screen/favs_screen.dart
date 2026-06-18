@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
+import 'package:just_audio/just_audio.dart';
+import '../../widgets/fullscreen_media_viewer.dart';
 
 class FavsScreen extends StatefulWidget {
   const FavsScreen({super.key});
@@ -27,6 +29,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
 
   static const List<String> _categories = [
     'All',
+    'Legacy',
     'Text',
     'Photos',
     'Audio',
@@ -34,6 +37,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
   ];
   static const List<IconData> _categoryIcons = [
     Icons.bookmark_rounded,
+    Icons.auto_stories_rounded,
     Icons.chat_bubble_outline_rounded,
     Icons.photo_camera_rounded,
     Icons.mic_rounded,
@@ -41,6 +45,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
   ];
   static const List<Color> _categoryColors = [
     Color(0xFF5DA399),
+    Color(0xFFD4AA00),
     Color(0xFFA8A090),
     Color(0xFF4A7FA5),
     Color(0xFF5DA399),
@@ -879,44 +884,80 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
   void _openMemory(Map<String, dynamic> item) {
     final category = item['category'] as String? ?? '';
     final mediaUrl = item['media_url'] as String? ?? '';
+    final entryType = item['entry_type'] as String? ?? 'text';
     final content2 = item['content'] as String? ?? '';
+    final title = item['senderName'] as String? ?? item['storyTitle'] as String? ?? 'Memory';
+    final imageUrl = item['imageUrl'] as String? ?? '';
 
-    if (category == 'Audio' && mediaUrl.isNotEmpty) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(item['title'] ?? 'Audio Memory'),
-          content: Text('Audio: $mediaUrl'),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: _isDarkMode ? const Color(0xFF242018) : const Color(0xFFFDFDFD),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
-      );
-    } else if (category == 'Video' && mediaUrl.isNotEmpty) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(item['title'] ?? 'Video Memory'),
-          content: Text('Video: $mediaUrl'),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: _isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(ctx),
+                    child: Icon(Icons.close_rounded, color: _textSecondary, size: 24),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if ((category == 'Audio' || entryType == 'audio') && mediaUrl.isNotEmpty)
+                      _FavsAudioPlayer(audioUrl: mediaUrl, isDarkMode: _isDarkMode)
+                    else if ((category == 'Video' || entryType == 'video') && mediaUrl.isNotEmpty)
+                      _FavsVideoPlayer(videoUrl: mediaUrl, isDarkMode: _isDarkMode)
+                    else if ((category == 'Photos') && imageUrl.isNotEmpty)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(imageUrl, width: double.infinity, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                      )
+                    else if (content2.isNotEmpty)
+                      Text(content2,
+                          style: GoogleFonts.nunitoSans(
+                              fontSize: 16,
+                              color: _isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417),
+                              height: 1.7)),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-      );
-    } else if (category == 'Photos' && mediaUrl.isNotEmpty) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          content: Image.network(mediaUrl, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
-        ),
-      );
-    } else if (content2.isNotEmpty) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(item['title'] ?? 'Memory'),
-          content: Text(content2),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
-        ),
-      );
-    }
+      ),
+    );
   }
 
   Widget _buildMemoryCard(Map<String, dynamic> item, bool isTablet) {
@@ -986,7 +1027,12 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                   if (timestamp.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Text(
-                      timestamp,
+                      () {
+                        final dt = DateTime.tryParse(timestamp);
+                        if (dt == null) return timestamp;
+                        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                        return '\${months[dt.month - 1]} \${dt.day}';
+                      }(),
                       style: GoogleFonts.nunitoSans(
                         fontSize: 11,
                         color: _textSecondary.withAlpha(160),
@@ -1008,6 +1054,170 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
         ),
       ),
     ),
+    );
+  }
+
+}
+class _FavsAudioPlayer extends StatefulWidget {
+  const _FavsAudioPlayer({required this.audioUrl, required this.isDarkMode});
+  final String audioUrl;
+  final bool isDarkMode;
+  @override
+  State<_FavsAudioPlayer> createState() => _FavsAudioPlayerState();
+}
+
+class _FavsAudioPlayerState extends State<_FavsAudioPlayer> {
+  final AudioPlayer _player = AudioPlayer();
+  bool _isPlaying = false;
+  int _duration = 0;
+  int _position = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.durationStream.listen((d) {
+      if (d != null && mounted) setState(() => _duration = d.inSeconds);
+    });
+    _player.positionStream.listen((p) {
+      if (mounted) setState(() => _position = p.inSeconds);
+    });
+    _player.playerStateStream.listen((s) {
+      if (s.processingState == ProcessingState.completed && mounted) {
+        setState(() { _isPlaying = false; _position = 0; });
+        _player.seek(Duration.zero);
+      }
+    });
+    _player.setUrl(widget.audioUrl).catchError((e) => Duration.zero);
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  String _fmt(int s) {
+    final m = (s ~/ 60).toString().padLeft(2, '0');
+    final sec = (s % 60).toString().padLeft(2, '0');
+    return '$m:$sec';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFE8C97A), Color(0xFFC9A84C)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () async {
+              if (_isPlaying) {
+                await _player.pause();
+                setState(() => _isPlaying = false);
+              } else {
+                if (_player.processingState == ProcessingState.idle ||
+                    _player.processingState == ProcessingState.completed) {
+                  await _player.setUrl(widget.audioUrl);
+                }
+                await _player.play();
+                setState(() => _isPlaying = true);
+              }
+            },
+            child: Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAF7F2),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF412402), width: 2),
+              ),
+              child: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  color: const Color(0xFF412402), size: 22),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 28,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: List.generate(22, (i) {
+                      final heights = [8.0,14.0,20.0,12.0,18.0,24.0,10.0,16.0,22.0,14.0,8.0,20.0,16.0,24.0,12.0,18.0,10.0,22.0,14.0,8.0,16.0,12.0];
+                      return Container(
+                        width: 3, height: heights[i % heights.length],
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF412402).withAlpha(102),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(_isPlaying ? _fmt(_position) : _fmt(_duration),
+                    style: GoogleFonts.nunitoSans(fontSize: 11, color: const Color(0xFF412402).withAlpha(166), fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FavsVideoPlayer extends StatelessWidget {
+  const _FavsVideoPlayer({required this.videoUrl, required this.isDarkMode});
+  final String videoUrl;
+  final bool isDarkMode;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => openFullscreenVideo(context: context, videoUrl: videoUrl, isDarkMode: isDarkMode),
+      child: Container(
+        height: 220,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF3D5266), Color(0xFF2A4A45)],
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 56, height: 56,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF5DA399),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFFAF7F2), width: 2),
+                  ),
+                  child: const Icon(Icons.play_arrow_rounded, color: Color(0xFFFAF7F2), size: 32),
+                ),
+                const SizedBox(height: 8),
+                Text('Tap to play',
+                    style: GoogleFonts.nunitoSans(fontSize: 12, color: Colors.white.withAlpha(217), fontStyle: FontStyle.italic)),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

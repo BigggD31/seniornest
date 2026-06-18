@@ -363,18 +363,20 @@ class _LegacyScreenState extends State<LegacyScreen>
     if (isNowBookmarked) {
       final item = {
         'id': id,
-        'category': 'Text',
-        'senderName': 'Legacy Story',
+        'category': 'Legacy',
+        'senderName': story['title'] as String? ?? 'Legacy Story',
         'senderRelationship': story['category'] as String? ?? 'Story',
         'senderAvatarUrl': '',
         'senderAvatarLabel': '',
-        'content': '${story['title']}\n\n${story['excerpt']}',
+        'content': story['excerpt'] as String? ?? '',
         'imageUrl': story['imageUrl'] as String? ?? '',
         'imageSemanticLabel': story['imageLabel'] as String? ?? '',
         'timestamp': DateTime.now().toIso8601String(),
         'sourceType': 'story',
         'storyTitle': story['title'] as String? ?? '',
         'storyCategory': story['category'] as String? ?? '',
+        'entry_type': story['entry_type'] as String? ?? 'text',
+        'media_url': story['media_url'] as String? ?? '',
       };
       allItems.removeWhere((e) => (e as Map<String, dynamic>)['id'] == id);
       allItems.add(item);
