@@ -704,6 +704,91 @@ class _SafetyScreenState extends State<SafetyScreen>
     );
   }
 
+  Widget _buildContactPlaceholder(String title, String subtitle, bool isTablet, {bool isPrimary = false}) {
+    return GestureDetector(
+      onTap: _isSenior ? () => _showAddContactSheet() : null,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isPrimary
+              ? const Color(0xFFC0392B).withAlpha(6)
+              : _cardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isPrimary
+                ? const Color(0xFFC0392B).withAlpha(40)
+                : _cardBorder,
+            width: 1.5,
+            strokeAlign: BorderSide.strokeAlignInside,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: isPrimary
+                    ? const Color(0xFFC0392B).withAlpha(15)
+                    : _cardBorder.withAlpha(80),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.person_add_outlined,
+                color: isPrimary
+                    ? const Color(0xFFC0392B).withAlpha(150)
+                    : _textSecondary.withAlpha(120),
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: _textSecondary.withAlpha(180),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _isSenior ? subtitle : 'Not yet added',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 12,
+                      color: _textSecondary.withAlpha(130),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_isSenior)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF5DA399).withAlpha(20),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF5DA399).withAlpha(60)),
+                ),
+                child: Text(
+                  '+ Add',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF5DA399),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmergencyContacts(bool isTablet) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -741,6 +826,11 @@ class _SafetyScreenState extends State<SafetyScreen>
             ],
           ),
           const SizedBox(height: 12),
+          if (_mockContacts.isEmpty) ...[
+            _buildContactPlaceholder('Primary Contact', '(e.g. Son, Daughter)', isTablet, isPrimary: true),
+            _buildContactPlaceholder('Emergency Contact 2', '(e.g. Sibling, Friend)', isTablet),
+            _buildContactPlaceholder('Emergency Contact 3', '(e.g. Neighbor, Doctor)', isTablet),
+          ],
           ..._mockContacts.asMap().entries.map((entry) {
             final index = entry.key;
             final contact = entry.value;

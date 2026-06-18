@@ -362,9 +362,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       _inviteCodeShared = inviteCodeShared;
       _isGuest = isGuest;
       _isNestOwner = !joinedViaInvite;
-      // Show demo messages until user has made their first real post
-      // After first real post, show only real messages (empty state if none)
-      _messages = _messageMaps.map(MessageModel.fromMap).toList(); // placeholder until Supabase loads
+      // Show demo messages only if user has never posted — avoids placeholder flash
+      _messages = hasRealPost ? [] : _messageMaps.map(MessageModel.fromMap).toList();
       _isLoading = false;
       _todayCelebrations = todayEvents;
       _upcomingCelebrations = upcomingEvents;
@@ -561,8 +560,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
       if (mounted) {
         setState(() {
-          _messages = loaded.isNotEmpty ? loaded : _messageMaps.map(MessageModel.fromMap).toList();
           _hasRealPost = loaded.isNotEmpty;
+          _messages = loaded.isNotEmpty ? loaded : (_hasRealPost ? [] : _messageMaps.map(MessageModel.fromMap).toList());
         });
       }
     } catch (e) {
