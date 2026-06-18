@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
 import './widgets/heartbeat_painter_widget.dart';
@@ -34,7 +35,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    _clearStaleUserRole();
+    _checkExistingSession();
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -256,12 +257,25 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  Future<void> _clearStaleUserRole() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('user_role');
-    await prefs.remove('joined_via_invite');
-    await prefs.remove('invite_code');
-    await prefs.remove('onboarding_complete');
+  Future<void> _checkExistingSession() async {
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
+        if (hasOnboarded && mounted) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) {
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/family-feed-screen',
+                (route) => false,
+              );
+            }
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override

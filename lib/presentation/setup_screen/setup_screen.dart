@@ -1629,9 +1629,8 @@ class _SetupScreenState extends State<SetupScreen>
               Navigator.pop(ctx);
               // Sign out from Supabase (and Google if applicable)
               await AuthService.signOut();
-              // Clear local preferences
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.clear();
+              // Keep has_onboarded and other permanent flags so user goes
+              // straight to Sign In next time, not back through onboarding.
               if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(
                   context,

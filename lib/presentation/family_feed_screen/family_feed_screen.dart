@@ -500,7 +500,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   Future<void> _onRefresh() async {
-    await _loadData();
     await _loadFeedFromSupabase();
   }
 
