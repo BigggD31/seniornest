@@ -454,14 +454,14 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
 
   // Demo content for each category — shown only when category is empty
   static const Map<int, Map<String, String>> _demoContent = {
-    1: {
+    2: {
       'title': 'Sarah — Daughter',
       'subtitle':
           '"Mom, just wanted to say I love you and I\'m so proud of everything you do. You inspire me every single day. 💛"',
       'timestamp': 'Example · Text Memory',
       'avatar': 'S',
     },
-    2: {
+    3: {
       'title': 'Michael — Son',
       'subtitle':
           'Family photo from Thanksgiving — everyone together around the table, smiling.',
@@ -470,14 +470,14 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
       'imageUrl':
           'https://img.rocket.new/generatedImages/rocket_gen_img_1bc8e5f7f-1767107199150.png',
     },
-    3: {
+    4: {
       'title': 'Priya — Granddaughter',
       'subtitle':
           '"Hi Grandma! I recorded this just to say good morning and tell you I miss you so much. Can\'t wait to visit!"',
       'timestamp': 'Example · Voice Memory · 0:18',
       'avatar': 'P',
     },
-    4: {
+    5: {
       'title': 'Michael — Son',
       'subtitle':
           'Birthday video message — Michael and the kids singing Happy Birthday from the backyard.',
@@ -487,10 +487,10 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
   };
 
   static const Map<int, Color> _demoAvatarColors = {
-    1: Color(0xFF5DA399),
-    2: Color(0xFF4A7FA5),
-    3: Color(0xFFB07A5A),
-    4: Color(0xFF4A7FA5),
+    2: Color(0xFF5DA399),
+    3: Color(0xFF4A7FA5),
+    4: Color(0xFFB07A5A),
+    5: Color(0xFF4A7FA5),
   };
 
   Widget _buildInlineCategoryPlaceholder(int catIndex) {

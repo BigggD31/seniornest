@@ -25,6 +25,7 @@ class MessageModel {
     required this.id,
     required this.senderName,
     required this.senderRelationship,
+    this.senderRole = 'family',
     required this.senderAvatarUrl,
     required this.senderAvatarLabel,
     this.senderAvatarJson,
@@ -40,6 +41,7 @@ class MessageModel {
   final String id;
   final String senderName;
   final String senderRelationship;
+  final String senderRole;
   final String senderAvatarUrl;
   final String senderAvatarLabel;
   final String? senderAvatarJson;
@@ -514,7 +516,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
       final response = await supabase
           .from('feed_posts')
-          .select('*, user_profiles(display_name, avatar_url, relation_type)')
+          .select('*, user_profiles(display_name, avatar_url, relation_type, role)')
           .eq('nest_id', nestId)
           .order('created_at', ascending: false)
           .limit(50);
@@ -539,11 +541,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           }
         }
         final relation = profile?['relation_type'] as String? ?? 'Family';
+        final senderRole = profile?['role'] as String? ?? 'family';
         final type = post['post_type'] as String? ?? 'text';
         return MessageModel(
           id: post['id'] as String,
           senderName: senderName,
           senderRelationship: relation,
+          senderRole: senderRole,
           senderAvatarUrl: avatarUrl,
           senderAvatarLabel: senderName,
           senderAvatarJson: (authorId == userId) ? prefs.getString(kProfilePhotoKey) : null,

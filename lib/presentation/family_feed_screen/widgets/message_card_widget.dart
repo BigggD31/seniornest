@@ -215,9 +215,9 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              (msg.senderRelationship.isEmpty || msg.senderRelationship == 'Family')
+                              msg.senderRole == 'senior'
                                   ? 'Senior'
-                                  : msg.senderRelationship,
+                                  : (msg.senderRelationship.isEmpty ? 'Family' : msg.senderRelationship),
                               style: GoogleFonts.nunitoSans(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,

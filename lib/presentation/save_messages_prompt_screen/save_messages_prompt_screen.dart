@@ -88,6 +88,32 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     await prefs.setBool('first_load', true);
     await prefs.setBool('has_onboarded', true);
 
+    // If user already has a valid nest, skip nest creation and go straight to Home Feed
+    final supabaseClient = Supabase.instance.client;
+    final checkUserId = userId ?? supabaseClient.auth.currentUser?.id;
+    if (checkUserId != null) {
+      try {
+        final existingMembership = await supabaseClient
+            .from('nest_members')
+            .select('nest_id')
+            .eq('user_id', checkUserId)
+            .maybeSingle();
+        if (existingMembership != null) {
+          final existingNestId = existingMembership['nest_id'] as String;
+          await prefs.setString('nest_id', existingNestId);
+          if (mounted) {
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/family-feed-screen',
+              (route) => false,
+              arguments: {'role': prefs.getString('user_role') ?? 'senior'},
+            );
+          }
+          return;
+        }
+      } catch (_) {}
+    }
+
     // Generate invite code if not already set
     final existingCode = prefs.getString('invite_code') ?? '';
     if (existingCode.isEmpty || !RegExp(r'^NEST-[0-9]{6}$').hasMatch(existingCode)) {
