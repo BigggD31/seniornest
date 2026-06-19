@@ -253,11 +253,13 @@ class _LegacyScreenState extends State<LegacyScreen>
       // Show real stories if any exist, otherwise show mock placeholders
       _stories = realStories.isNotEmpty
           ? realStories
-          : _mockStories.map((s) {
-              final m = Map<String, dynamic>.from(s);
-              m['isBookmarked'] = bookmarkedIds.contains(m['id'] as String);
-              return m;
-            }).toList();
+          : (_isSenior
+              ? _mockStories.map((s) {
+                  final m = Map<String, dynamic>.from(s);
+                  m['isBookmarked'] = bookmarkedIds.contains(m['id'] as String);
+                  return m;
+                }).toList()
+              : <Map<String, dynamic>>[]);
       _submittedPrompts = loadedPrompts;
       _isLoading = false;
       _profileData = profileData;

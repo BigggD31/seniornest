@@ -540,7 +540,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             } catch (_) {}
           }
         }
-        final relation = profile?['relation_type'] as String? ?? 'Family';
+        final rawRelation = profile?['relation_type'] as String? ?? 'Family';
+        final relation = rawRelation.isNotEmpty
+            ? rawRelation[0].toUpperCase() + rawRelation.substring(1)
+            : rawRelation;
         final senderRole = profile?['role'] as String? ?? 'family';
         final type = post['post_type'] as String? ?? 'text';
         return MessageModel(

@@ -287,7 +287,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           'display_name': name,
           'full_name': name,
           'role': 'family',
-          'relation_type': _selectedRelationship ?? 'Family',
+          'relation_type': (_selectedRelationship ?? 'Other').toLowerCase(),
         });
 
         final profileCheck = await supabase
