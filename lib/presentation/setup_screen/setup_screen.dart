@@ -1631,6 +1631,8 @@ class _SetupScreenState extends State<SetupScreen>
               await AuthService.signOut();
               // Keep has_onboarded and other permanent flags so user goes
               // straight to Sign In next time, not back through onboarding.
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('just_signed_out', true);
               if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(
                   context,

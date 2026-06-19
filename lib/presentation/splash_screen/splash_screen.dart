@@ -257,11 +257,13 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
+  bool _showSignInLink = false;
+
   Future<void> _checkExistingSession() async {
     try {
       final session = Supabase.instance.client.auth.currentSession;
+      final prefs = await SharedPreferences.getInstance();
       if (session != null) {
-        final prefs = await SharedPreferences.getInstance();
         final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
         if (hasOnboarded && mounted) {
           Future.delayed(const Duration(milliseconds: 300), () {
@@ -273,7 +275,13 @@ class _SplashScreenState extends State<SplashScreen>
               );
             }
           });
+          return;
         }
+      }
+      // No active session — check if they just signed out, to show Sign In link
+      final justSignedOut = prefs.getBool('just_signed_out') ?? false;
+      if (justSignedOut && mounted) {
+        setState(() => _showSignInLink = true);
       }
     } catch (_) {}
   }
@@ -569,6 +577,28 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                             ),
                           ),
+                          if (_showSignInLink)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4, bottom: 8),
+                              child: GestureDetector(
+                                onTap: () {
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/save-messages-prompt-screen',
+                                    arguments: {'signInMode': true},
+                                  );
+                                },
+                                child: Text(
+                                  'Already have an account? Sign In',
+                                  style: GoogleFonts.nunitoSans(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF5DA399),
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),

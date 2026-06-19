@@ -40,6 +40,12 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null && args['signInMode'] == true) {
+        _showCreateAccountSheet();
+      }
+    });
     _fadeAnim = Tween<double>(
       begin: 0.0,
       end: 1.0,
