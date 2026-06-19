@@ -294,6 +294,24 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         // Check if nest already exists for this user
         final existingNestId = prefs.getString('nest_id') ?? '';
         String nestId = existingNestId;
+        bool nestIdIsValid = false;
+        if (nestId.isNotEmpty) {
+          try {
+            final membershipCheck = await supabase
+                .from('nest_members')
+                .select('nest_id')
+                .eq('nest_id', nestId)
+                .eq('user_id', userId)
+                .maybeSingle();
+            nestIdIsValid = membershipCheck != null;
+          } catch (_) {
+            nestIdIsValid = false;
+          }
+        }
+        if (!nestIdIsValid) {
+          nestId = '';
+          await prefs.remove('nest_id');
+        }
 
         if (nestId.isEmpty) {
           // Create new nest with invite code

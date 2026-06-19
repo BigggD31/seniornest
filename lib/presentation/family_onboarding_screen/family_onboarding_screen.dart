@@ -298,7 +298,22 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
 
         if (profileCheck != null) {
           final existingNestId = prefs.getString('nest_id') ?? '';
-          if (existingNestId.isEmpty) {
+          bool nestIdIsValid = false;
+          if (existingNestId.isNotEmpty) {
+            try {
+              final membershipCheck = await supabase
+                  .from('nest_members')
+                  .select('nest_id')
+                  .eq('nest_id', existingNestId)
+                  .eq('user_id', userId)
+                  .maybeSingle();
+              nestIdIsValid = membershipCheck != null;
+            } catch (_) {
+              nestIdIsValid = false;
+            }
+          }
+          if (!nestIdIsValid) {
+            await prefs.remove('nest_id');
             if (joinedViaInvite && inviteCode.isNotEmpty) {
               // Member joining existing nest via invite code
               try {
