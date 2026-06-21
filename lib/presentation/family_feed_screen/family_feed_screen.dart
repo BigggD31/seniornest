@@ -356,7 +356,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
     // Prefer real cached messages over generic demo placeholders — avoids
     // showing mismatched content that then flashes/swaps once the network loads.
-    final cachedMessagesJson = prefs.getString('cached_real_messages');
+    final _currentNestIdForCache = prefs.getString('nest_id') ?? '';
+    final _cachedNestId = prefs.getString('cached_real_messages_nest_id') ?? '';
+    final cachedMessagesJson = (_cachedNestId.isNotEmpty && _cachedNestId == _currentNestIdForCache)
+        ? prefs.getString('cached_real_messages')
+        : null;
     List<MessageModel> initialMessages;
     if (cachedMessagesJson != null && cachedMessagesJson.isNotEmpty) {
       try {
@@ -587,6 +591,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           'cached_real_messages',
           jsonEncode(loaded.map((m) => m.toMap()).toList()),
         );
+        await prefs.setString('cached_real_messages_nest_id', nestId);
         if (mounted) {
           setState(() {
             _hasRealPost = true;

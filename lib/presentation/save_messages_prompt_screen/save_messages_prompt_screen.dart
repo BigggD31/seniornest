@@ -133,6 +133,10 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     print('NEST_DEBUG: _navigateToHome effectiveUserId = $effectiveUserId');
 
     if (effectiveUserId != null) {
+      // We already confirmed via the database above that this user has no
+      // existing nest membership — clear any stale local nest_id left over
+      // from a different account previously signed in on this same device.
+      await prefs.remove('nest_id');
       final existingNestId = prefs.getString('nest_id') ?? '';
       if (existingNestId.isEmpty) {
         try {
