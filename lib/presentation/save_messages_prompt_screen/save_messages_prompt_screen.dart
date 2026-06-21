@@ -142,11 +142,13 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           final role = prefs.getString('user_role') ?? 'senior';
 
           // Upsert profile first
+          final relationshipType = prefs.getString('relationship') ?? 'Family';
           await supabase.from('user_profiles').upsert({
             'id': effectiveUserId,
             'display_name': name,
             'full_name': name,
             'role': role,
+            'relation_type': relationshipType.toLowerCase(),
           });
           print('NEST_DEBUG: profile upserted');
 
