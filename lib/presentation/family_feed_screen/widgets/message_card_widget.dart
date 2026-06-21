@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:just_audio/just_audio.dart';
@@ -125,6 +127,50 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
   void _onHeartTap() {
     _heartController.forward(from: 0);
     widget.onHeart();
+  }
+
+  static final RegExp _urlPattern = RegExp(
+    r'((https?:\/\/)|(www\.))[^\s]+',
+    caseSensitive: false,
+  );
+
+  Widget _buildLinkifiedText(String text, TextStyle style) {
+    final matches = _urlPattern.allMatches(text);
+    if (matches.isEmpty) {
+      return Text(text, style: style);
+    }
+
+    final spans = <InlineSpan>[];
+    int last = 0;
+    for (final match in matches) {
+      if (match.start > last) {
+        spans.add(TextSpan(text: text.substring(last, match.start)));
+      }
+      final url = text.substring(match.start, match.end);
+      spans.add(
+        TextSpan(
+          text: url,
+          style: style.copyWith(
+            color: const Color(0xFF2E7D6B),
+            decoration: TextDecoration.underline,
+          ),
+          recognizer: TapGestureRecognizer()
+            ..onTap = () async {
+              final fixedUrl = url.startsWith('http') ? url : 'https://$url';
+              final uri = Uri.tryParse(fixedUrl);
+              if (uri != null && await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+        ),
+      );
+      last = match.end;
+    }
+    if (last < text.length) {
+      spans.add(TextSpan(text: text.substring(last)));
+    }
+
+    return RichText(text: TextSpan(style: style, children: spans));
   }
 
   String _formatTimestamp(DateTime ts) {
@@ -340,9 +386,9 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                 14,
                 0,
               ),
-              child: Text(
+              child: _buildLinkifiedText(
                 msg.content,
-                style: GoogleFonts.nunitoSans(
+                GoogleFonts.nunitoSans(
                   fontSize: 15,
                   fontWeight: FontWeight.w400,
                   color: isDark
