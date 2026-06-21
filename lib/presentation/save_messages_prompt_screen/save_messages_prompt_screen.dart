@@ -227,7 +227,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       setState(() => _authError = result.errorMessage);
       return;
     }
-    // Apple OAuth redirects — navigation handled by auth state listener
+    _navigateToHome();
   }
 
   // ── Email form ────────────────────────────────────────────────────────────

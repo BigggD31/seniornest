@@ -46,10 +46,11 @@ class AuthService {
               : null,
         );
 
-        // Try silent sign-in first, then interactive
-        GoogleSignInAccount? googleUser = await googleSignIn
-            .attemptLightweightAuthentication();
-        googleUser ??= await googleSignIn.authenticate();
+        // Explicit sign-in tap: always show the account picker.
+        // (attemptLightweightAuthentication silently reuses a cached
+        // account with no picker — wrong for an explicit "Sign In" tap.)
+        final GoogleSignInAccount? googleUser =
+            await googleSignIn.authenticate();
 
         final googleAuth = googleUser?.authentication;
         final idToken = googleAuth?.idToken;
