@@ -131,7 +131,7 @@ class _FeedTopBarWidgetState extends State<FeedTopBarWidget> {
             icon: Icons.notifications_outlined,
             isDarkMode: widget.isDarkMode,
             onTap: widget.onNotificationTap,
-            badgeCount: 2,
+            badgeCount: 0, // TODO: wire to real notification count once notifications feature is built
           ),
           const SizedBox(width: 8),
           // Profile avatar — shows user's chosen photo/emoji or initials
