@@ -58,6 +58,7 @@ class MessageModel {
       id: map['id'] as String,
       senderName: map['senderName'] as String,
       senderRelationship: map['senderRelationship'] as String,
+      senderRole: map['senderRole'] as String? ?? 'family',
       senderAvatarUrl: map['senderAvatarUrl'] as String,
       senderAvatarLabel: map['senderAvatarLabel'] as String,
       type: _messageTypeFromString(map['type'] as String),
@@ -87,6 +88,7 @@ class MessageModel {
     'id': id,
     'senderName': senderName,
     'senderRelationship': senderRelationship,
+    'senderRole': senderRole,
     'senderAvatarUrl': senderAvatarUrl,
     'senderAvatarLabel': senderAvatarLabel,
     'type': type.name,
@@ -352,6 +354,23 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     checkEvent(anniversary, CelebrationEventType.anniversary);
     upcomingEvents.sort((a, b) => a.daysUntil.compareTo(b.daysUntil));
 
+    // Prefer real cached messages over generic demo placeholders — avoids
+    // showing mismatched content that then flashes/swaps once the network loads.
+    final cachedMessagesJson = prefs.getString('cached_real_messages');
+    List<MessageModel> initialMessages;
+    if (cachedMessagesJson != null && cachedMessagesJson.isNotEmpty) {
+      try {
+        final List<dynamic> cachedList = jsonDecode(cachedMessagesJson) as List<dynamic>;
+        initialMessages = cachedList
+            .map((m) => MessageModel.fromMap(m as Map<String, dynamic>))
+            .toList();
+      } catch (_) {
+        initialMessages = hasRealPost ? [] : _messageMaps.map(MessageModel.fromMap).toList();
+      }
+    } else {
+      initialMessages = hasRealPost ? [] : _messageMaps.map(MessageModel.fromMap).toList();
+    }
+
     setState(() {
       _isSenior = role == 'senior';
       _displayName = name;
@@ -364,8 +383,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       _inviteCodeShared = inviteCodeShared;
       _isGuest = isGuest;
       _isNestOwner = !joinedViaInvite;
-      // Show demo messages only if user has never posted — avoids placeholder flash
-      _messages = hasRealPost ? [] : _messageMaps.map(MessageModel.fromMap).toList();
+      _messages = initialMessages;
       _isLoading = false;
       _todayCelebrations = todayEvents;
       _upcomingCelebrations = upcomingEvents;
@@ -564,11 +582,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         );
       }).toList();
 
-      if (mounted) {
-        setState(() {
-          _hasRealPost = loaded.isNotEmpty;
-          _messages = loaded.isNotEmpty ? loaded : (_hasRealPost ? [] : _messageMaps.map(MessageModel.fromMap).toList());
-        });
+      if (loaded.isNotEmpty) {
+        await prefs.setString(
+          'cached_real_messages',
+          jsonEncode(loaded.map((m) => m.toMap()).toList()),
+        );
+        if (mounted) {
+          setState(() {
+            _hasRealPost = true;
+            _messages = loaded;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Feed load error: $e');
