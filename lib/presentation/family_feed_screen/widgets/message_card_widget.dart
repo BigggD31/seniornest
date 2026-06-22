@@ -64,6 +64,18 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
   }
 
   @override
+  void didUpdateWidget(MessageCardWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.id != widget.message.id) {
+      setState(() {
+        _replies = [];
+        _repliesHearted.clear();
+      });
+      _loadReplies();
+    }
+  }
+
+  @override
   void dispose() {
     _heartController.dispose();
     _replyController.dispose();
