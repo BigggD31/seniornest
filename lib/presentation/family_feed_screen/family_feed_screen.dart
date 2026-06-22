@@ -394,7 +394,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     });
 
     // Load bookmarks
-    final bookmarksJson = prefs.getString('bookmarks');
+    final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id ?? 'unknown';
+    final bookmarksJson = prefs.getString('bookmarks_\$bookmarkUserId');
     if (bookmarksJson != null) {
       try {
         final List<dynamic> list = jsonDecode(bookmarksJson) as List<dynamic>;
@@ -618,7 +619,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     });
 
     // Build full bookmarks list from prefs, update this item
-    final bookmarksJson = prefs.getString('bookmarks');
+    final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id ?? 'unknown';
+    final bookmarksJson = prefs.getString('bookmarks_\$bookmarkUserId');
     List<String> ids = [];
     if (bookmarksJson != null) {
       try {
@@ -630,10 +632,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     } else {
       ids.remove(id);
     }
-    await prefs.setString('bookmarks', jsonEncode(ids));
+    await prefs.setString('bookmarks_\$bookmarkUserId', jsonEncode(ids));
 
     // Persist the full bookmark item data for Memories page
-    final allItemsJson = prefs.getString('bookmarked_items') ?? '[]';
+    final allItemsJson = prefs.getString('bookmarked_items_\$bookmarkUserId') ?? '[]';
     List<dynamic> allItems = [];
     try {
       allItems = jsonDecode(allItemsJson) as List<dynamic>;
@@ -675,7 +677,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     } else {
       allItems.removeWhere((e) => (e as Map<String, dynamic>)['id'] == id);
     }
-    await prefs.setString('bookmarked_items', jsonEncode(allItems));
+    await prefs.setString('bookmarked_items_\$bookmarkUserId', jsonEncode(allItems));
   }
 
   void _onNavTap(int index) {

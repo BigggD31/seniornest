@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -73,7 +74,8 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
     }
 
     List<Map<String, dynamic>> items = [];
-    final itemsJson = prefs.getString('bookmarked_items');
+    final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id ?? 'unknown';
+    final itemsJson = prefs.getString('bookmarked_items_\$bookmarkUserId');
     if (itemsJson != null) {
       try {
         final list = jsonDecode(itemsJson) as List<dynamic>;
@@ -142,26 +144,27 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
     final id = item['id'] as String;
     final prefs = await SharedPreferences.getInstance();
 
+    final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id ?? 'unknown';
     // Remove from IDs list
-    final bookmarksJson = prefs.getString('bookmarks');
+    final bookmarksJson = prefs.getString('bookmarks_\$bookmarkUserId');
     if (bookmarksJson != null) {
       try {
         final ids = List<String>.from(
           jsonDecode(bookmarksJson) as List<dynamic>,
         );
         ids.remove(id);
-        await prefs.setString('bookmarks', jsonEncode(ids));
+        await prefs.setString('bookmarks_\$bookmarkUserId', jsonEncode(ids));
       } catch (_) {}
     }
 
     // Remove from items list
-    final allItemsJson = prefs.getString('bookmarked_items') ?? '[]';
+    final allItemsJson = prefs.getString('bookmarked_items_\$bookmarkUserId') ?? '[]';
     try {
       final allItems = (jsonDecode(allItemsJson) as List<dynamic>)
           .map((e) => Map<String, dynamic>.from(e as Map))
           .where((e) => e['id'] != id)
           .toList();
-      await prefs.setString('bookmarked_items', jsonEncode(allItems));
+      await prefs.setString('bookmarked_items_\$bookmarkUserId', jsonEncode(allItems));
     } catch (_) {}
 
     setState(() {
