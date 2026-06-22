@@ -282,13 +282,12 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       final inviteCode = prefs.getString('invite_code') ?? '';
 
       if (userId != null) {
-        await supabase.from('user_profiles').upsert({
-          'id': userId,
+        await supabase.from('user_profiles').update({
           'display_name': name,
           'full_name': name,
           'role': 'family',
           'relation_type': (_selectedRelationship ?? 'Other').toLowerCase(),
-        });
+        }).eq('id', userId);
 
         final profileCheck = await supabase
             .from('user_profiles')

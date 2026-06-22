@@ -147,14 +147,13 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
 
           // Upsert profile first
           final relationshipType = prefs.getString('relationship') ?? 'Family';
-          await supabase.from('user_profiles').upsert({
-            'id': effectiveUserId,
+          await supabase.from('user_profiles').update({
             'display_name': name,
             'full_name': name,
             'role': role,
             'relation_type': relationshipType.toLowerCase(),
-          });
-          print('NEST_DEBUG: profile upserted');
+          }).eq('id', effectiveUserId);
+          print('NEST_DEBUG: profile updated');
 
           // Create nest
           await supabase.from('nests').insert({
