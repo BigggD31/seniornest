@@ -94,9 +94,30 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     await prefs.setBool('first_load', true);
     await prefs.setBool('has_onboarded', true);
 
-    // If user already has a valid nest, skip nest creation and go straight to Home Feed
+    // Always update profile first regardless of whether nest exists
     final supabaseClient = Supabase.instance.client;
     final checkUserId = userId ?? supabaseClient.auth.currentUser?.id;
+    if (checkUserId != null) {
+      try {
+        final name = prefs.getString('display_name') ?? '';
+        final role = prefs.getString('user_role') ?? 'senior';
+        final relationshipType = prefs.getString('relationship') ?? '';
+        final updateData = <String, dynamic>{
+          'display_name': name,
+          'full_name': name,
+          'role': role,
+        };
+        if (relationshipType.isNotEmpty) {
+          updateData['relation_type'] = relationshipType.toLowerCase();
+        }
+        await supabaseClient.from('user_profiles').update(updateData).eq('id', checkUserId);
+        print('NEST_DEBUG: profile updated at top of _navigateToHome');
+      } catch (e) {
+        print('NEST_DEBUG: profile update error = \$e');
+      }
+    }
+
+    // If user already has a valid nest, skip nest creation and go straight to Home Feed
     if (checkUserId != null) {
       try {
         final existingMembership = await supabaseClient
