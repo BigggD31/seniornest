@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -25,6 +26,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
   Map<String, dynamic>? _profileData;
   String _displayName = '';
   List<Map<String, dynamic>> _bookmarkedItems = [];
+  StreamSubscription<AuthState>? _authSubscription;
 
   late AnimationController _entranceController;
 
@@ -61,6 +63,13 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 500),
     );
     _loadData();
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.userUpdated) {
+        if (mounted) _loadData();
+      } else if (data.event == AuthChangeEvent.signedOut) {
+        if (mounted) setState(() => _bookmarkedItems = []);
+      }
+    });
   }
 
   Future<void> _loadData() async {
@@ -95,6 +104,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _entranceController.dispose();
     super.dispose();
   }
