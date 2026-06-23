@@ -206,17 +206,20 @@ class _LegacyScreenState extends State<LegacyScreen>
         loadedPrompts = List<String>.from(jsonDecode(promptsJson) as List);
       } catch (_) {}
     }
-    // Load bookmark state for stories
-    final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id ?? 'unknown';
-    final bookmarksJson = prefs.getString('bookmarks_\$bookmarkUserId');
+    // Load bookmark state from Supabase
     Set<String> bookmarkedIds = {};
-    if (bookmarksJson != null) {
-      try {
-        bookmarkedIds = Set<String>.from(
-          jsonDecode(bookmarksJson) as List<dynamic>,
-        );
-      } catch (_) {}
-    }
+    try {
+      final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
+      if (bookmarkUserId != null) {
+        final rows = await Supabase.instance.client
+            .from('user_favourites')
+            .select('item_id')
+            .eq('user_id', bookmarkUserId);
+        bookmarkedIds = (rows as List<dynamic>)
+            .map((e) => e['item_id'] as String)
+            .toSet();
+      }
+    } catch (_) {}
 
     // Load real stories from Supabase BEFORE setState
     List<Map<String, dynamic>> realStories = [];
@@ -341,28 +344,9 @@ class _LegacyScreenState extends State<LegacyScreen>
 
     final prefs = await SharedPreferences.getInstance();
 
-    // Update bookmarked IDs list
-    final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id ?? 'unknown';
-    final bookmarksJson = prefs.getString('bookmarks_\$bookmarkUserId');
-    List<String> ids = [];
-    if (bookmarksJson != null) {
-      try {
-        ids = List<String>.from(jsonDecode(bookmarksJson) as List<dynamic>);
-      } catch (_) {}
-    }
-    if (isNowBookmarked) {
-      if (!ids.contains(id)) ids.add(id);
-    } else {
-      ids.remove(id);
-    }
-    await prefs.setString('bookmarks_\$bookmarkUserId', jsonEncode(ids));
-
-    // Persist full item data for Memories page
-    final allItemsJson = prefs.getString('bookmarked_items_\$bookmarkUserId') ?? '[]';
-    List<dynamic> allItems = [];
-    try {
-      allItems = jsonDecode(allItemsJson) as List<dynamic>;
-    } catch (_) {}
+    // Save bookmark to Supabase
+    final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (bookmarkUserId == null) return;
 
     if (isNowBookmarked) {
       final item = {
@@ -382,12 +366,22 @@ class _LegacyScreenState extends State<LegacyScreen>
         'entry_type': story['entry_type'] as String? ?? 'text',
         'media_url': story['media_url'] as String? ?? '',
       };
-      allItems.removeWhere((e) => (e as Map<String, dynamic>)['id'] == id);
-      allItems.add(item);
+      try {
+        await Supabase.instance.client.from('user_favourites').upsert({
+          'user_id': bookmarkUserId,
+          'item_id': id,
+          'item_data': item,
+        });
+      } catch (_) {}
     } else {
-      allItems.removeWhere((e) => (e as Map<String, dynamic>)['id'] == id);
+      try {
+        await Supabase.instance.client
+            .from('user_favourites')
+            .delete()
+            .eq('user_id', bookmarkUserId)
+            .eq('item_id', id);
+      } catch (_) {}
     }
-    await prefs.setString('bookmarked_items_\$bookmarkUserId', jsonEncode(allItems));
   }
 
   void _onNavTap(int index) {
