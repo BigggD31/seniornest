@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../../main.dart' show RestartWidget;
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1650,11 +1651,7 @@ class _SetupScreenState extends State<SetupScreen>
               await prefs.remove('cached_nest_id');
               await prefs.setBool('just_signed_out', true);
               if (mounted) {
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  '/splash-screen',
-                  (route) => false,
-                );
+                RestartWidget.restartApp(context);
               }
             },
             child: Text(
