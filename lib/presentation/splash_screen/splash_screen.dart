@@ -278,36 +278,7 @@ class _SplashScreenState extends State<SplashScreen>
           return;
         }
       }
-      // No active session — wipe ALL user-specific cached data.
-      // This handles both fresh install (iOS NSUserDefaults persists across
-      // reinstall) and post-sign-out scenarios.
-      final allKeys = prefs.getKeys().toList();
-      const userSpecificPrefixes = [
-        'bookmarks_',
-        'bookmarked_items_',
-        'cached_real_messages_',
-        'cache_timestamp_',
-      ];
-      const userSpecificExactKeys = [
-        'bookmarks',
-        'bookmarked_items',
-        'display_name',
-        'nest_id',
-        'profile_photo_data',
-        'user_role',
-        'relation_type',
-        'cached_nest_id',
-      ];
-      for (final key in allKeys) {
-        final isUserSpecificPrefix = userSpecificPrefixes.any(
-          (prefix) => key.startsWith(prefix),
-        );
-        final isUserSpecificExact = userSpecificExactKeys.contains(key);
-        if (isUserSpecificPrefix || isUserSpecificExact) {
-          await prefs.remove(key);
-        }
-      }
-      // Check if they just signed out, to show Sign In link
+      // No active session — check if they just signed out, to show Sign In link
       final justSignedOut = prefs.getBool('just_signed_out') ?? false;
       if (justSignedOut && mounted) {
         setState(() => _showSignInLink = true);

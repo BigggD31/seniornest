@@ -1627,22 +1627,27 @@ class _SetupScreenState extends State<SetupScreen>
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              // Capture userId before signing out so we can clear their bookmarks
+              // Capture userId before signing out so we can clear their data
               final signingOutUserId = Supabase.instance.client.auth.currentUser?.id;
               // Sign out from Supabase (and Google if applicable)
               await AuthService.signOut();
-              // Keep has_onboarded and other permanent flags so user goes
-              // straight to Sign In next time, not back through onboarding.
               final prefs = await SharedPreferences.getInstance();
-              // Clear bookmark keys for the signed-out user so next account
-              // starts with a clean slate
+              // Clear ALL user-specific cached data so next account
+              // gets a completely clean slate on this device.
+              // Keep: has_onboarded, dark_mode (device-level preferences)
               if (signingOutUserId != null) {
                 await prefs.remove('bookmarks_\$signingOutUserId');
                 await prefs.remove('bookmarked_items_\$signingOutUserId');
+                await prefs.remove('cached_real_messages_\$signingOutUserId');
               }
-              // Also clear any legacy untagged bookmark keys from older builds
               await prefs.remove('bookmarks');
               await prefs.remove('bookmarked_items');
+              await prefs.remove('profile_photo_data');
+              await prefs.remove('display_name');
+              await prefs.remove('relation_type');
+              await prefs.remove('user_role');
+              await prefs.remove('nest_id');
+              await prefs.remove('cached_nest_id');
               await prefs.setBool('just_signed_out', true);
               if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(
