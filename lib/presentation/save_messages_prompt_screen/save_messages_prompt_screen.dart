@@ -99,6 +99,33 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     final checkUserId = userId ?? supabaseClient.auth.currentUser?.id;
     if (checkUserId != null) {
       try {
+        // For returning users (signInMode), load profile FROM Supabase first
+        // to repopulate SharedPreferences that were cleared on sign-out.
+        // This prevents empty name/role overwriting real data in Supabase.
+        final existingProfile = await supabaseClient
+            .from('user_profiles')
+            .select('display_name, role, relation_type, nest_id')
+            .eq('id', checkUserId)
+            .maybeSingle();
+        if (existingProfile != null) {
+          final supabaseName = existingProfile['display_name'] as String? ?? '';
+          final supabaseRole = existingProfile['role'] as String? ?? 'senior';
+          final supabaseRelation = existingProfile['relation_type'] as String? ?? '';
+          final supabaseNestId = existingProfile['nest_id'] as String? ?? '';
+          if (supabaseName.isNotEmpty) {
+            await prefs.setString('display_name', supabaseName);
+          }
+          await prefs.setString('user_role', supabaseRole);
+          if (supabaseRelation.isNotEmpty) {
+            await prefs.setString('relation_type', supabaseRelation);
+            await prefs.setString('relationship', supabaseRelation);
+          }
+          if (supabaseNestId.isNotEmpty) {
+            await prefs.setString('nest_id', supabaseNestId);
+          }
+          print('NEST_DEBUG: profile loaded from Supabase on sign-in');
+        }
+        // Now write the refreshed local values back to Supabase
         final name = prefs.getString('display_name') ?? '';
         final role = prefs.getString('user_role') ?? 'senior';
         final relationshipType = prefs.getString('relationship') ?? '';
@@ -110,7 +137,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
         if (relationshipType.isNotEmpty) {
           updateData['relation_type'] = relationshipType.toLowerCase();
         }
-        await supabaseClient.from('user_profiles').update(updateData).eq('id', checkUserId);
+        if (name.isNotEmpty) {
+          await supabaseClient.from('user_profiles').update(updateData).eq('id', checkUserId);
+        }
         print('NEST_DEBUG: profile updated at top of _navigateToHome');
       } catch (e) {
         print('NEST_DEBUG: profile update error = \$e');
