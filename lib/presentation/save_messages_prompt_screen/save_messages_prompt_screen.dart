@@ -125,22 +125,10 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           }
           print('NEST_DEBUG: profile loaded from Supabase on sign-in');
         }
-        // Now write the refreshed local values back to Supabase
-        final name = prefs.getString('display_name') ?? '';
-        final role = prefs.getString('user_role') ?? 'senior';
-        final relationshipType = prefs.getString('relationship') ?? '';
-        final updateData = <String, dynamic>{
-          'display_name': name,
-          'full_name': name,
-          'role': role,
-        };
-        if (relationshipType.isNotEmpty) {
-          updateData['relation_type'] = relationshipType.toLowerCase();
-        }
-        if (name.isNotEmpty) {
-          await supabaseClient.from('user_profiles').update(updateData).eq('id', checkUserId);
-        }
-        print('NEST_DEBUG: profile updated at top of _navigateToHome');
+        // Do NOT write back to Supabase here for returning users.
+        // Their profile data is already correct in Supabase.
+        // We only read from Supabase to repopulate local SharedPreferences.
+        print('NEST_DEBUG: profile loaded from Supabase, skipping write-back for returning user');
       } catch (e) {
         print('NEST_DEBUG: profile update error = \$e');
       }
