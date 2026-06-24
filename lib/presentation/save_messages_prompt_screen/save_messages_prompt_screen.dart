@@ -88,7 +88,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     }
   }
 
-  void _navigateToHome({String? userId}) async {
+  Future<void> _navigateToHome({String? userId}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_complete', true);
     await prefs.setBool('first_load', true);
@@ -282,7 +282,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       setState(() => _authError = result.errorMessage);
       return;
     }
-    _navigateToHome();
+    await _navigateToHome();
   }
 
   // ── Apple Sign-In ─────────────────────────────────────────────────────────
@@ -300,7 +300,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       setState(() => _authError = result.errorMessage);
       return;
     }
-    _navigateToHome();
+    await _navigateToHome();
   }
 
   // ── Email form ────────────────────────────────────────────────────────────
@@ -311,9 +311,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       backgroundColor: Colors.transparent,
       builder: (ctx) => _EmailAuthSheet(
         isSignIn: isSignIn,
-        onSuccess: ({String? userId}) {
+        onSuccess: ({String? userId}) async {
           Navigator.pop(ctx);
-          _navigateToHome(userId: userId);
+          await _navigateToHome(userId: userId);
         },
         onGoogleTap: () {
           Navigator.pop(ctx);
