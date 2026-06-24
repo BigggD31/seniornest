@@ -125,10 +125,40 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           }
           print('NEST_DEBUG: profile loaded from Supabase on sign-in');
         }
-        // Do NOT write back to Supabase here for returning users.
-        // Their profile data is already correct in Supabase.
-        // We only read from Supabase to repopulate local SharedPreferences.
-        print('NEST_DEBUG: profile loaded from Supabase, skipping write-back for returning user');
+        // Use Supabase data to fill any empty local values
+        String name = prefs.getString('display_name') ?? '';
+        String role = prefs.getString('user_role') ?? 'senior';
+        String relationshipType = prefs.getString('relationship') ?? '';
+        if (existingProfile != null) {
+          if (name.isEmpty) {
+            name = existingProfile['display_name'] as String? ?? '';
+            if (name.isNotEmpty) await prefs.setString('display_name', name);
+          }
+          final supabaseRole = existingProfile['role'] as String? ?? '';
+          if (supabaseRole.isNotEmpty) {
+            role = supabaseRole;
+            await prefs.setString('user_role', role);
+          }
+          final supabaseRelation = existingProfile['relation_type'] as String? ?? '';
+          if (relationshipType.isEmpty && supabaseRelation.isNotEmpty) {
+            relationshipType = supabaseRelation;
+            await prefs.setString('relation_type', supabaseRelation);
+            await prefs.setString('relationship', supabaseRelation);
+          }
+        }
+        // Only write non-empty values to Supabase — never overwrite real data with empty strings
+        if (name.isNotEmpty) {
+          final updateData = <String, dynamic>{
+            'display_name': name,
+            'full_name': name,
+            'role': role,
+          };
+          if (relationshipType.isNotEmpty) {
+            updateData['relation_type'] = relationshipType.toLowerCase();
+          }
+          await supabaseClient.from('user_profiles').update(updateData).eq('id', checkUserId);
+        }
+        print('NEST_DEBUG: profile sync complete');
       } catch (e) {
         print('NEST_DEBUG: profile update error = \$e');
       }
