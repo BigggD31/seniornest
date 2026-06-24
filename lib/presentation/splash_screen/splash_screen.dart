@@ -265,45 +265,16 @@ class _SplashScreenState extends State<SplashScreen>
       final prefs = await SharedPreferences.getInstance();
       if (session != null) {
         final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
-        if (hasOnboarded) {
-          // Reload user profile from Supabase to repopulate SharedPreferences
-          // This ensures display_name, role, relation_type are always correct
-          // after sign-out + sign-in, regardless of what was cleared locally.
-          try {
-            final userId = session.user.id;
-            final profile = await Supabase.instance.client
-                .from('user_profiles')
-                .select('display_name, role, relation_type, nest_id')
-                .eq('id', userId)
-                .maybeSingle();
-            if (profile != null) {
-              final displayName = profile['display_name'] as String? ?? '';
-              final role = profile['role'] as String? ?? 'senior';
-              final relationType = profile['relation_type'] as String? ?? '';
-              final nestId = profile['nest_id'] as String? ?? '';
-              if (displayName.isNotEmpty) {
-                await prefs.setString('display_name', displayName);
-              }
-              await prefs.setString('user_role', role);
-              if (relationType.isNotEmpty) {
-                await prefs.setString('relation_type', relationType);
-              }
-              if (nestId.isNotEmpty) {
-                await prefs.setString('nest_id', nestId);
-              }
+        if (hasOnboarded && mounted) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) {
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/family-feed-screen',
+                (route) => false,
+              );
             }
-          } catch (_) {}
-          if (mounted) {
-            Future.delayed(const Duration(milliseconds: 300), () {
-              if (mounted) {
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  '/family-feed-screen',
-                  (route) => false,
-                );
-              }
-            });
-          }
+          });
           return;
         }
       }

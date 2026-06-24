@@ -54,37 +54,10 @@ void main() async {
     Future.wait([
       SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]),
     ]).then((value) {
-      runApp(RestartWidget(child: MyApp()));
+      runApp(MyApp());
     });
   } else {
-    runApp(RestartWidget(child: MyApp()));
-  }
-}
-
-class RestartWidget extends StatefulWidget {
-  const RestartWidget({super.key, required this.child});
-  final Widget child;
-
-  static void restartApp(BuildContext context) {
-    context.findAncestorStateOfType<_RestartWidgetState>()?.restartApp();
-  }
-
-  @override
-  State<RestartWidget> createState() => _RestartWidgetState();
-}
-
-class _RestartWidgetState extends State<RestartWidget> {
-  Key _key = UniqueKey();
-
-  void restartApp() {
-    setState(() {
-      _key = UniqueKey();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return KeyedSubtree(key: _key, child: widget.child);
+    runApp(MyApp());
   }
 }
 

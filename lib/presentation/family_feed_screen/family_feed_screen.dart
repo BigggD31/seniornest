@@ -393,21 +393,16 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       _upcomingCelebrations = upcomingEvents;
     });
 
-    // Load bookmarks from Supabase
-    try {
-      final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
-      if (bookmarkUserId != null) {
-        final rows = await Supabase.instance.client
-            .from('user_favourites')
-            .select('item_id')
-            .eq('user_id', bookmarkUserId);
+    // Load bookmarks
+    final bookmarksJson = prefs.getString('bookmarks');
+    if (bookmarksJson != null) {
+      try {
+        final List<dynamic> list = jsonDecode(bookmarksJson) as List<dynamic>;
         setState(() {
-          _bookmarkedIds = (rows as List<dynamic>)
-              .map((e) => e['item_id'] as String)
-              .toSet();
+          _bookmarkedIds = list.map((e) => e as String).toSet();
         });
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
 
     _setupItemAnimations();
     _listEntranceController.forward();
@@ -610,6 +605,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   Future<void> _toggleBookmark(MessageModel msg) async {
+    final prefs = await SharedPreferences.getInstance();
     final id = msg.id;
     final isNowBookmarked = !_bookmarkedIds.contains(id);
 
@@ -621,11 +617,30 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       }
     });
 
-    // Save bookmark to Supabase
-    final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
-    if (bookmarkUserId == null) return;
+    // Build full bookmarks list from prefs, update this item
+    final bookmarksJson = prefs.getString('bookmarks');
+    List<String> ids = [];
+    if (bookmarksJson != null) {
+      try {
+        ids = List<String>.from(jsonDecode(bookmarksJson) as List<dynamic>);
+      } catch (_) {}
+    }
+    if (isNowBookmarked) {
+      if (!ids.contains(id)) ids.add(id);
+    } else {
+      ids.remove(id);
+    }
+    await prefs.setString('bookmarks', jsonEncode(ids));
+
+    // Persist the full bookmark item data for Memories page
+    final allItemsJson = prefs.getString('bookmarked_items') ?? '[]';
+    List<dynamic> allItems = [];
+    try {
+      allItems = jsonDecode(allItemsJson) as List<dynamic>;
+    } catch (_) {}
 
     if (isNowBookmarked) {
+      // Determine category
       String category;
       switch (msg.type) {
         case MessageType.photo:
@@ -655,22 +670,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         'media_url': msg.imageUrl,
         'entry_type': category.toLowerCase(),
       };
-      try {
-        await Supabase.instance.client.from('user_favourites').upsert({
-          'user_id': bookmarkUserId,
-          'item_id': id,
-          'item_data': item,
-        });
-      } catch (_) {}
+      allItems.removeWhere((e) => (e as Map<String, dynamic>)['id'] == id);
+      allItems.add(item);
     } else {
-      try {
-        await Supabase.instance.client
-            .from('user_favourites')
-            .delete()
-            .eq('user_id', bookmarkUserId)
-            .eq('item_id', id);
-      } catch (_) {}
+      allItems.removeWhere((e) => (e as Map<String, dynamic>)['id'] == id);
     }
+    await prefs.setString('bookmarked_items', jsonEncode(allItems));
   }
 
   void _onNavTap(int index) {
