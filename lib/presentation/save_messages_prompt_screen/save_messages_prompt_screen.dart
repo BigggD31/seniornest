@@ -282,7 +282,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       setState(() => _authError = result.errorMessage);
       return;
     }
-    await _navigateToHome();
+    await _navigateToHome(userId: result.user?.id);
   }
 
   // ── Apple Sign-In ─────────────────────────────────────────────────────────
@@ -300,7 +300,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       setState(() => _authError = result.errorMessage);
       return;
     }
-    await _navigateToHome();
+    await _navigateToHome(userId: result.user?.id);
   }
 
   // ── Email form ────────────────────────────────────────────────────────────
