@@ -297,6 +297,14 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           Navigator.pop(ctx);
           _navigateToHome(userId: userId);
         },
+        onGoogleTap: () {
+          Navigator.pop(ctx);
+          _handleGoogleSignIn();
+        },
+        onAppleTap: () {
+          Navigator.pop(ctx);
+          _handleAppleSignIn();
+        },
       ),
     );
   }
@@ -780,9 +788,16 @@ class _GoogleLogoPainter extends CustomPainter {
 
 // ── Email Auth Bottom Sheet ───────────────────────────────────────────────────
 class _EmailAuthSheet extends StatefulWidget {
-  const _EmailAuthSheet({required this.isSignIn, required this.onSuccess});
+  const _EmailAuthSheet({
+    required this.isSignIn,
+    required this.onSuccess,
+    this.onGoogleTap,
+    this.onAppleTap,
+  });
   final bool isSignIn;
   final Function({String? userId}) onSuccess;
+  final VoidCallback? onGoogleTap;
+  final VoidCallback? onAppleTap;
 
   @override
   State<_EmailAuthSheet> createState() => _EmailAuthSheetState();
@@ -896,6 +911,86 @@ class _EmailAuthSheetState extends State<_EmailAuthSheet> {
               ),
             ),
             const SizedBox(height: 20),
+            if (_isSignIn) ...[
+              // Google sign-in button
+              GestureDetector(
+                onTap: widget.onGoogleTap,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFDDD5C8)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CustomPaint(painter: _GoogleLogoPainter()),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Continue with Google',
+                        style: GoogleFonts.nunitoSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF2C2417),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Apple sign-in button
+              GestureDetector(
+                onTap: widget.onAppleTap,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1C1C1E),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.apple, color: Colors.white, size: 20),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Continue with Apple',
+                        style: GoogleFonts.nunitoSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Expanded(child: Divider(color: Color(0xFFDDD5C8))),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'or sign in with email',
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 12,
+                        color: const Color(0xFF9E8E7E),
+                      ),
+                    ),
+                  ),
+                  const Expanded(child: Divider(color: Color(0xFFDDD5C8))),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
             if (_error != null) ...[
               Container(
                 width: double.infinity,
