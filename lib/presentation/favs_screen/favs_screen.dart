@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -73,13 +74,19 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
     }
 
     List<Map<String, dynamic>> items = [];
-    final itemsJson = prefs.getString('bookmarked_items');
-    if (itemsJson != null) {
-      try {
-        final list = jsonDecode(itemsJson) as List<dynamic>;
-        items = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-      } catch (_) {}
-    }
+    try {
+      final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
+      if (bookmarkUserId != null) {
+        final rows = await Supabase.instance.client
+            .from('user_favourites')
+            .select('item_data')
+            .eq('user_id', bookmarkUserId)
+            .order('created_at', ascending: false);
+        items = (rows as List<dynamic>)
+            .map((e) => Map<String, dynamic>.from(e['item_data'] as Map))
+            .toList();
+      }
+    } catch (_) {}
 
     setState(() {
       _isDarkMode = prefs.getBool('dark_mode') ?? false;
@@ -140,30 +147,16 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
 
   Future<void> _removeBookmark(Map<String, dynamic> item) async {
     final id = item['id'] as String;
-    final prefs = await SharedPreferences.getInstance();
-
-    // Remove from IDs list
-    final bookmarksJson = prefs.getString('bookmarks');
-    if (bookmarksJson != null) {
-      try {
-        final ids = List<String>.from(
-          jsonDecode(bookmarksJson) as List<dynamic>,
-        );
-        ids.remove(id);
-        await prefs.setString('bookmarks', jsonEncode(ids));
-      } catch (_) {}
-    }
-
-    // Remove from items list
-    final allItemsJson = prefs.getString('bookmarked_items') ?? '[]';
     try {
-      final allItems = (jsonDecode(allItemsJson) as List<dynamic>)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .where((e) => e['id'] != id)
-          .toList();
-      await prefs.setString('bookmarked_items', jsonEncode(allItems));
+      final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
+      if (bookmarkUserId != null) {
+        await Supabase.instance.client
+            .from('user_favourites')
+            .delete()
+            .eq('user_id', bookmarkUserId)
+            .eq('item_id', id);
+      }
     } catch (_) {}
-
     setState(() {
       _bookmarkedItems.removeWhere((e) => e['id'] == id);
     });

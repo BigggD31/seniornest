@@ -102,19 +102,51 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     final checkUserId = userId ?? supabaseClient.auth.currentUser?.id;
     if (checkUserId != null) {
       try {
-        final name = prefs.getString('display_name') ?? '';
-        final role = prefs.getString('user_role') ?? 'senior';
-        final relationshipType = prefs.getString('relationship') ?? '';
-        final updateData = <String, dynamic>{
-          'display_name': name,
-          'full_name': name,
-          'role': role,
-        };
-        if (relationshipType.isNotEmpty) {
-          updateData['relation_type'] = relationshipType.toLowerCase();
+        // For returning users: read from Supabase first to get real data
+        // This prevents stale SharedPreferences from overwriting Supabase
+        final existingProfile = await supabaseClient
+            .from('user_profiles')
+            .select('display_name, role, relation_type')
+            .eq('id', checkUserId)
+            .maybeSingle();
+
+        String name = prefs.getString('display_name') ?? '';
+        String role = prefs.getString('user_role') ?? 'senior';
+        String relationshipType = prefs.getString('relationship') ?? '';
+
+        if (existingProfile != null) {
+          final supabaseName = existingProfile['display_name'] as String? ?? '';
+          final supabaseRole = existingProfile['role'] as String? ?? '';
+          final supabaseRelation = existingProfile['relation_type'] as String? ?? '';
+          // If Supabase already has real data, use it (returning user)
+          if (supabaseName.isNotEmpty) {
+            name = supabaseName;
+            await prefs.setString('display_name', name);
+          }
+          if (supabaseRole.isNotEmpty && supabaseRole != 'senior') {
+            role = supabaseRole;
+            await prefs.setString('user_role', role);
+          }
+          if (supabaseRelation.isNotEmpty) {
+            relationshipType = supabaseRelation;
+            await prefs.setString('relation_type', supabaseRelation);
+            await prefs.setString('relationship', supabaseRelation);
+          }
         }
-        await supabaseClient.from('user_profiles').update(updateData).eq('id', checkUserId);
-        print('NEST_DEBUG: profile updated at top of _navigateToHome');
+
+        // Only write to Supabase if we have real data
+        if (name.isNotEmpty) {
+          final updateData = <String, dynamic>{
+            'display_name': name,
+            'full_name': name,
+            'role': role,
+          };
+          if (relationshipType.isNotEmpty) {
+            updateData['relation_type'] = relationshipType.toLowerCase();
+          }
+          await supabaseClient.from('user_profiles').update(updateData).eq('id', checkUserId);
+          print('NEST_DEBUG: profile updated at top of _navigateToHome');
+        }
       } catch (e) {
         print('NEST_DEBUG: profile update error = \$e');
       }
