@@ -88,11 +88,14 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     }
   }
 
-  void _navigateToHome({String? userId}) async {
+  Future<void> _navigateToHome({String? userId}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_complete', true);
     await prefs.setBool('first_load', true);
     await prefs.setBool('has_onboarded', true);
+
+    // Small delay to ensure Supabase auth session is fully established
+    await Future.delayed(const Duration(milliseconds: 500));
 
     // Always update profile first regardless of whether nest exists
     final supabaseClient = Supabase.instance.client;
@@ -235,7 +238,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       setState(() => _authError = result.errorMessage);
       return;
     }
-    _navigateToHome();
+    await _navigateToHome(userId: result.user?.id);
   }
 
   // ── Apple Sign-In ─────────────────────────────────────────────────────────
@@ -253,7 +256,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       setState(() => _authError = result.errorMessage);
       return;
     }
-    _navigateToHome();
+    await _navigateToHome(userId: result.user?.id);
   }
 
   // ── Email form ────────────────────────────────────────────────────────────
