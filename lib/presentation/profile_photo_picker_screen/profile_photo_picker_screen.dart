@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Key used to persist the profile photo choice across the app.
 /// Value is a JSON string: {"type": "emoji"|"photo", "value": "<emoji char>"|"<base64 bytes>"}
@@ -124,6 +125,22 @@ class _ProfilePhotoPickerScreenState extends State<ProfilePhotoPickerScreen>
   Future<void> _saveAndReturn(Map<String, String> data) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(kProfilePhotoKey, jsonEncode(data));
+
+    // Save to Supabase so photo survives sign-out and restores on sign-in
+    try {
+      final supabaseClient = Supabase.instance.client;
+      final userId = supabaseClient.auth.currentUser?.id;
+      if (userId != null) {
+        await supabaseClient
+            .from('user_profiles')
+            .update({'avatar_url': jsonEncode(data)})
+            .eq('id', userId);
+        print('PROFILE_PHOTO: saved to Supabase for user $userId');
+      }
+    } catch (e) {
+      print('PROFILE_PHOTO: Supabase save error = $e');
+    }
+
     if (mounted) Navigator.pop(context, data);
   }
 

@@ -4,9 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../routes/app_routes.dart';
+import '../profile_photo_picker_screen/profile_photo_picker_screen.dart' show kProfilePhotoKey;
 import '../../services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'dart:convert';
 import '../splash_screen/widgets/nest_logo_widget.dart';
 
 class SaveMessagesPromptScreen extends StatefulWidget {
@@ -106,7 +108,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
         // This prevents stale SharedPreferences from overwriting Supabase
         final existingProfile = await supabaseClient
             .from('user_profiles')
-            .select('display_name, role, relation_type')
+            .select('display_name, role, relation_type, avatar_url')
             .eq('id', checkUserId)
             .maybeSingle();
 
@@ -131,6 +133,12 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             relationshipType = supabaseRelation;
             await prefs.setString('relation_type', supabaseRelation);
             await prefs.setString('relationship', supabaseRelation);
+          }
+          // Restore profile photo from Supabase on sign-in
+          final avatarUrl = existingProfile['avatar_url'] as String? ?? '';
+          if (avatarUrl.isNotEmpty) {
+            await prefs.setString(kProfilePhotoKey, avatarUrl);
+            print('PROFILE_PHOTO: restored from Supabase for user $checkUserId');
           }
         }
 
