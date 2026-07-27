@@ -514,18 +514,42 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     setState(() => _showMedsReminder = false);
   }
 
-  void _toggleHeart(int index) {
-    // TODO: Replace with Supabase hearts update for production
+  Future<void> _toggleHeart(int index) async {
+    final msg = _messages[index];
+    final wasHearted = msg.isHearted;
+    final prevCount = msg.heartCount;
+
     setState(() {
-      final msg = _messages[index];
-      if (msg.isHearted) {
-        msg.isHearted = false;
-        msg.heartCount--;
-      } else {
-        msg.isHearted = true;
-        msg.heartCount++;
-      }
+      msg.isHearted = !wasHearted;
+      msg.heartCount = wasHearted ? prevCount - 1 : prevCount + 1;
     });
+
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      if (wasHearted) {
+        await supabase
+            .from('feed_hearts')
+            .delete()
+            .eq('feed_post_id', msg.id)
+            .eq('user_id', userId);
+      } else {
+        await supabase.from('feed_hearts').insert({
+          'feed_post_id': msg.id,
+          'user_id': userId,
+        });
+      }
+    } catch (e) {
+      debugPrint('FEED HEART TOGGLE ERROR: $e');
+      if (mounted) {
+        setState(() {
+          msg.isHearted = wasHearted;
+          msg.heartCount = prevCount;
+        });
+      }
+    }
   }
 
   Future<void> _onRefresh() async {
@@ -551,6 +575,27 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
       final localName = prefs.getString('display_name') ?? '';
       final posts = response as List<dynamic>;
+      final postIds = posts.map((p) => p['id'] as String).toList();
+
+      Map<String, int> heartCounts = {};
+      Set<String> heartedByMe = {};
+      if (postIds.isNotEmpty) {
+        try {
+          final heartsResponse = await supabase
+              .from('feed_hearts')
+              .select('feed_post_id, user_id')
+              .inFilter('feed_post_id', postIds);
+          final hearts = heartsResponse as List<dynamic>;
+          for (final h in hearts) {
+            final pId = h['feed_post_id'] as String;
+            heartCounts[pId] = (heartCounts[pId] ?? 0) + 1;
+            if (h['user_id'] == userId) heartedByMe.add(pId);
+          }
+        } catch (e) {
+          debugPrint('FEED HEARTS LOAD ERROR: $e');
+        }
+      }
+
       final List<MessageModel> loaded = posts.map((post) {
         final profile = post['user_profiles'] as Map<String, dynamic>?;
         final authorId = post['author_id'] as String? ?? '';
@@ -587,8 +632,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           imageUrl: post['media_url'] as String? ?? '',
           imageSemanticLabel: '',
           timestamp: DateTime.parse(post['created_at'] as String),
-          heartCount: 0,
-          isHearted: false,
+          heartCount: heartCounts[post['id'] as String] ?? 0,
+          isHearted: heartedByMe.contains(post['id'] as String),
         );
       }).toList();
 
