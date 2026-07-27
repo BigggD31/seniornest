@@ -230,6 +230,28 @@ class _LegacyScreenState extends State<LegacyScreen>
             .eq('user_id', userId)
             .order('created_at', ascending: false);
         final entries = response as List<dynamic>;
+        final entryIds = entries.map((e) => e['id'] as String).toList();
+
+        // Load heart data for these entries: counts + whether current user hearted each
+        Map<String, int> heartCounts = {};
+        Set<String> heartedByMe = {};
+        if (entryIds.isNotEmpty) {
+          try {
+            final heartsResponse = await supabase
+                .from('legacy_hearts')
+                .select('legacy_entry_id, user_id')
+                .inFilter('legacy_entry_id', entryIds);
+            final hearts = heartsResponse as List<dynamic>;
+            for (final h in hearts) {
+              final eId = h['legacy_entry_id'] as String;
+              heartCounts[eId] = (heartCounts[eId] ?? 0) + 1;
+              if (h['user_id'] == userId) heartedByMe.add(eId);
+            }
+          } catch (e) {
+            debugPrint('LEGACY HEARTS LOAD ERROR: $e');
+          }
+        }
+
         realStories = entries.map((e) => <String, dynamic>{
           'id': e['id'],
           'title': e['prompt'] ?? 'My Story',
@@ -239,6 +261,8 @@ class _LegacyScreenState extends State<LegacyScreen>
           'entry_type': e['entry_type'] ?? 'text',
           'media_url': e['media_url'] ?? '',
           'isBookmarked': bookmarkedIds.contains(e['id'] as String),
+          'heartCount': heartCounts[e['id']] ?? 0,
+          'isHearted': heartedByMe.contains(e['id']),
         }).toList();
       }
     } catch (e) {
@@ -310,22 +334,58 @@ class _LegacyScreenState extends State<LegacyScreen>
     return _stories.where((s) => s['category'] == cat).toList();
   }
 
-  void _toggleHeart(int index) {
+  static final RegExp _uuidPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
+  Future<void> _toggleHeart(int index) async {
+    final story = _filteredStories[index];
+    final storyId = story['id'] as String;
+    final globalIndex = _stories.indexWhere((s) => s['id'] == storyId);
+    if (globalIndex < 0) return;
+
+    final wasHearted = _stories[globalIndex]['isHearted'] as bool? ?? false;
+    final prevCount = _stories[globalIndex]['heartCount'] as int? ?? 0;
+
+    // Optimistic UI update
     setState(() {
-      final story = _filteredStories[index];
-      final globalIndex = _stories.indexWhere((s) => s['id'] == story['id']);
-      if (globalIndex >= 0) {
-        final isHearted = _stories[globalIndex]['isHearted'] as bool? ?? false;
-        final heartCount = _stories[globalIndex]['heartCount'] as int? ?? 0;
-        if (isHearted) {
-          _stories[globalIndex]['isHearted'] = false;
-          _stories[globalIndex]['heartCount'] = heartCount - 1;
-        } else {
-          _stories[globalIndex]['isHearted'] = true;
-          _stories[globalIndex]['heartCount'] = heartCount + 1;
-        }
-      }
+      _stories[globalIndex]['isHearted'] = !wasHearted;
+      _stories[globalIndex]['heartCount'] =
+          wasHearted ? prevCount - 1 : prevCount + 1;
     });
+
+    // Mock/placeholder stories (non-UUID ids like 's2') are cosmetic only — don't persist
+    if (!_uuidPattern.hasMatch(storyId)) return;
+
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      if (wasHearted) {
+        // Was hearted, now un-hearting: delete the row
+        await supabase
+            .from('legacy_hearts')
+            .delete()
+            .eq('legacy_entry_id', storyId)
+            .eq('user_id', userId);
+      } else {
+        // Wasn't hearted, now hearting: insert the row
+        await supabase.from('legacy_hearts').insert({
+          'legacy_entry_id': storyId,
+          'user_id': userId,
+        });
+      }
+    } catch (e) {
+      debugPrint('LEGACY HEART TOGGLE ERROR: $e');
+      // Roll back optimistic update on failure
+      if (mounted) {
+        setState(() {
+          _stories[globalIndex]['isHearted'] = wasHearted;
+          _stories[globalIndex]['heartCount'] = prevCount;
+        });
+      }
+    }
   }
 
   Future<void> _toggleStoryBookmark(Map<String, dynamic> story) async {
