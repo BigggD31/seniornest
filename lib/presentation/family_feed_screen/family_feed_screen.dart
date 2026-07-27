@@ -472,11 +472,30 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   Future<void> _handleGoodToday() async {
-    // TODO: Replace with Supabase message send for production
     if (_isGoodTodaySent) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('good_today_${_todayKey()}', true);
     setState(() => _isGoodTodaySent = true);
+
+    try {
+      final supabase = Supabase.instance.client;
+      final nestId = prefs.getString('nest_id') ?? '';
+      final userId = supabase.auth.currentUser?.id;
+      if (nestId.isNotEmpty && userId != null) {
+        await supabase.from('feed_posts').insert({
+          'nest_id': nestId,
+          'author_id': userId,
+          'post_type': 'text',
+          'content': "\u2764\ufe0f I'm doing good today!",
+          'media_url': null,
+        });
+        if (mounted) {
+          await _loadFeedFromSupabase();
+        }
+      }
+    } catch (e) {
+      debugPrint('GOOD_TODAY_SEND_ERROR: $e');
+    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
