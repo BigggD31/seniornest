@@ -178,10 +178,18 @@ class AuthService {
         try {
           final googleSignIn = GoogleSignIn.instance;
           await googleSignIn.disconnect();
-        } catch (_) {}
+          debugPrint('AUTH: Google disconnect() succeeded');
+        } catch (e, st) {
+          debugPrint('AUTH ERROR: Google disconnect() failed: $e');
+          debugPrint('AUTH ERROR stack: $st');
+        }
       }
       await _client.auth.signOut();
-    } catch (_) {}
+      debugPrint('AUTH: Supabase signOut() succeeded');
+    } catch (e, st) {
+      debugPrint('AUTH ERROR: Supabase signOut() failed: $e');
+      debugPrint('AUTH ERROR stack: $st');
+    }
   }
 
   // ── Auth state stream ─────────────────────────────────────────────────────
