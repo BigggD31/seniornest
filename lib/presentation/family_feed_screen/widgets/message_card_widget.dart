@@ -649,6 +649,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                 children: [
                   Expanded(
                     child: TextField(
+                      textCapitalization: TextCapitalization.sentences,
                       controller: _replyController,
                       autofocus: true,
                       style: GoogleFonts.nunitoSans(

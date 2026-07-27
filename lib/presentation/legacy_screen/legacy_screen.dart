@@ -1938,6 +1938,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
                       vertical: 4,
                     ),
                     child: TextField(
+                      textCapitalization: TextCapitalization.sentences,
                       controller: _titleController,
                       style: GoogleFonts.nunitoSans(
                         fontSize: 16,
@@ -2052,6 +2053,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
                       vertical: 4,
                     ),
                     child: TextField(
+                      textCapitalization: TextCapitalization.sentences,
                       controller: _bodyController,
                       maxLines: null,
                       minLines: 8,
@@ -2478,6 +2480,7 @@ class _SuggestQuestionSheetState extends State<_SuggestQuestionSheet> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _questionController,
                     maxLines: 3,
                     style: GoogleFonts.nunitoSans(
@@ -3007,6 +3010,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
             decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: _cardBorder, width: 1)),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             child: TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _titleController,
               style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w600, color: _textPrimary),
               decoration: InputDecoration(
@@ -3534,6 +3538,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
             decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: _cardBorder, width: 1)),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             child: TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _titleController,
               style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w600, color: _textPrimary),
               decoration: InputDecoration(
@@ -4357,6 +4362,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                             children: [
                               Expanded(
                                 child: TextField(
+                                  textCapitalization: TextCapitalization.sentences,
                                   controller: _replyController,
                                   autofocus: true,
                                   style: GoogleFonts.nunitoSans(fontSize: 13, color: _textPrimary),

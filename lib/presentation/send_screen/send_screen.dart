@@ -2068,6 +2068,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
 
   Widget _buildTextComposer() {
     return TextField(
+      textCapitalization: TextCapitalization.sentences,
       controller: _messageController,
       focusNode: _textFocusNode,
       maxLines: 5,
@@ -2146,6 +2147,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         ),
         const SizedBox(height: 12),
         TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: _messageController,
           maxLines: 2,
           style: GoogleFonts.nunitoSans(fontSize: 15, color: _textPrimary),
@@ -2638,6 +2640,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         ),
         const SizedBox(height: 12),
         TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: _messageController,
           maxLines: 2,
           style: GoogleFonts.nunitoSans(fontSize: 15, color: _textPrimary),
@@ -2971,6 +2974,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         ),
         const SizedBox(height: 12),
         TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: _messageController,
           maxLines: 2,
           style: GoogleFonts.nunitoSans(fontSize: 15, color: _textPrimary),
