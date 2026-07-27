@@ -806,9 +806,11 @@ class _EmailAuthSheetState extends State<_EmailAuthSheet> {
   late bool _isSignIn;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
   String? _error;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void initState() {
@@ -820,6 +822,7 @@ class _EmailAuthSheetState extends State<_EmailAuthSheet> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -837,6 +840,10 @@ class _EmailAuthSheetState extends State<_EmailAuthSheet> {
     }
     if (password.length < 6) {
       setState(() => _error = 'Password must be at least 6 characters.');
+      return;
+    }
+    if (!_isSignIn && password != _confirmPasswordController.text) {
+      setState(() => _error = 'Passwords do not match.');
       return;
     }
 
@@ -1032,6 +1039,83 @@ class _EmailAuthSheetState extends State<_EmailAuthSheet> {
                 ),
               ),
             ),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text(
+                'Minimum 6 characters',
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 12,
+                  color: const Color(0xFF9E8E7E),
+                ),
+              ),
+            ),
+            if (!_isSignIn) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _confirmPasswordController,
+                obscureText: _obscureConfirmPassword,
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 15,
+                  color: const Color(0xFF2C2417),
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Confirm password',
+                  hintStyle: GoogleFonts.nunitoSans(
+                    fontSize: 15,
+                    color: const Color(0xFFBBAA99),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFDDD5C8)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFDDD5C8)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF5DA399),
+                      width: 2,
+                    ),
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.lock_outline_rounded,
+                    color: Color(0xFF9E8E7E),
+                    size: 20,
+                  ),
+                  suffixIcon: GestureDetector(
+                    onTap: () => setState(() =>
+                        _obscureConfirmPassword = !_obscureConfirmPassword),
+                    child: Icon(
+                      _obscureConfirmPassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      color: const Color(0xFF9E8E7E),
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Text(
+                  'Minimum 6 characters',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 12,
+                    color: const Color(0xFF9E8E7E),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             // Submit button
             SizedBox(
