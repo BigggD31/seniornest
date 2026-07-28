@@ -123,6 +123,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   String _displayName = 'Eleanor';
   String _nestName = '';
   bool _isGoodTodaySent = false;
+  bool _justCheckedIn = false; // true only briefly right after tapping, to show the "Sent!" confirmation
   bool _showMedsReminder = true;
   bool _showWelcomeToast = false;
   bool _isLoading = true;
@@ -557,7 +558,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     if (_isGoodTodaySent) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('good_today_${_todayKey()}', true);
-    setState(() => _isGoodTodaySent = true);
+    setState(() {
+      _isGoodTodaySent = true;
+      _justCheckedIn = true;
+    });
+
+    // Show the "Sent!" confirmation briefly, then hide the FAB until tomorrow
+    Future.delayed(const Duration(seconds: 8), () {
+      if (mounted) {
+        setState(() => _justCheckedIn = false);
+      }
+    });
 
     try {
       final supabase = Supabase.instance.client;
@@ -884,7 +895,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           ],
         ),
       ),
-      floatingActionButton: _isSenior
+      floatingActionButton: (_isSenior && (!_isGoodTodaySent || _justCheckedIn))
           ? ImGoodTodayOrbWidget(
               isSent: _isGoodTodaySent,
               onTap: _handleGoodToday,
