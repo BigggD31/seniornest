@@ -208,7 +208,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
 
   Widget _buildFavsSampleBanner(bool isTablet) {
     return Container(
-      margin: EdgeInsets.fromLTRB(isTablet ? 28 : 20, 0, isTablet ? 28 : 20, 12),
+      margin: EdgeInsets.fromLTRB(isTablet ? 28 : 20, 10, isTablet ? 28 : 20, 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFFD4AA00).withAlpha(20),
