@@ -33,6 +33,7 @@ class _LegacyScreenState extends State<LegacyScreen>
   bool _isLoading = true;
   int _selectedCategory = 0;
   bool _hasSentStories = false; // hides placeholder once first story saved
+  bool _sampleBannerDismissed = false;
 
   // Family-submitted story prompts (persisted via SharedPreferences)
   List<String> _submittedPrompts = [];
@@ -63,6 +64,7 @@ class _LegacyScreenState extends State<LegacyScreen>
       'heartCount': 12,
       'isHearted': true,
       'isOwn': true,
+      'isSample': true,
     },
     {
       'id': 's2',
@@ -76,6 +78,7 @@ class _LegacyScreenState extends State<LegacyScreen>
       'heartCount': 8,
       'isHearted': false,
       'isOwn': true,
+      'isSample': true,
     },
     {
       'id': 's3',
@@ -91,6 +94,7 @@ class _LegacyScreenState extends State<LegacyScreen>
       'heartCount': 15,
       'isHearted': true,
       'isOwn': true,
+      'isSample': true,
     },
     {
       'id': 's4',
@@ -104,6 +108,7 @@ class _LegacyScreenState extends State<LegacyScreen>
       'heartCount': 6,
       'isHearted': false,
       'isOwn': true,
+      'isSample': true,
     },
   ];
 
@@ -273,6 +278,7 @@ class _LegacyScreenState extends State<LegacyScreen>
       _isSenior = (prefs.getString('user_role') ?? 'senior') == 'senior';
       _isDarkMode = prefs.getBool('dark_mode') ?? false;
       _hasSentStories = prefs.getBool('has_sent_stories') ?? false;
+      _sampleBannerDismissed = prefs.getBool('legacy_sample_banner_dismissed') ?? false;
 
       // Show real stories if any exist, otherwise show mock placeholders
       _stories = realStories.isNotEmpty
@@ -527,6 +533,14 @@ class _LegacyScreenState extends State<LegacyScreen>
                             SliverToBoxAdapter(
                               child: _buildSeniorWriteHero(isTablet),
                             ),
+                          // Sample content explainer banner (senior, only while sample stories are showing)
+                          if (_isSenior &&
+                              !_sampleBannerDismissed &&
+                              _stories.isNotEmpty &&
+                              _stories.every((s) => s['isSample'] == true))
+                            SliverToBoxAdapter(
+                              child: _buildLegacySampleBanner(isTablet),
+                            ),
                           // Family: read-only banner + suggest question button
                           if (!_isSenior)
                             SliverToBoxAdapter(
@@ -678,6 +692,54 @@ class _LegacyScreenState extends State<LegacyScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ── Sample content explainer banner ─────────────────────────────────────
+  Future<void> _dismissLegacySampleBanner() async {
+    setState(() => _sampleBannerDismissed = true);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('legacy_sample_banner_dismissed', true);
+  }
+
+  Widget _buildLegacySampleBanner(bool isTablet) {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: isTablet ? 28 : 20, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD4AA00).withAlpha(20),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFD4AA00).withAlpha(60), width: 1),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.info_outline_rounded, color: Color(0xFFB8860B), size: 17),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'These are sample stories to show you what Legacy looks like. They\'ll disappear once you write your first one.',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+                color: _isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _dismissLegacySampleBanner,
+            child: const Padding(
+              padding: EdgeInsets.all(2),
+              child: Icon(Icons.close_rounded, color: Color(0xFFB8860B), size: 16),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -4247,20 +4309,40 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                widget.displayName.isNotEmpty ? widget.displayName : 'My Story',
+                                (story['isSample'] == true)
+                                    ? 'My Story'
+                                    : (widget.displayName.isNotEmpty ? widget.displayName : 'My Story'),
                                 style: GoogleFonts.nunitoSans(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary),
                               ),
                               const SizedBox(height: 2),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF5DA399).withAlpha(25),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  story['category'] as String? ?? 'Memories',
-                                  style: GoogleFonts.nunitoSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF5DA399)),
-                                ),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF5DA399).withAlpha(25),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      story['category'] as String? ?? 'Memories',
+                                      style: GoogleFonts.nunitoSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF5DA399)),
+                                    ),
+                                  ),
+                                  if (story['isSample'] == true) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFD4AA00).withAlpha(31),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        'Sample',
+                                        style: GoogleFonts.nunitoSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFFB8860B)),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ],
                           ),
