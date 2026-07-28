@@ -538,6 +538,64 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   // ── Avatar row: fetch everyone else in the Nest ─────────────────────────
+  // Placeholder avatars shown until real family members join — same pattern
+  // as the sample banners on Home/Legacy/Favs. Disappear the moment the
+  // first real member is found; real members always take full priority.
+  static final List<Map<String, dynamic>> _sampleNestMembers = [
+    {
+      'id': 'sample_sarah',
+      'name': 'Sarah',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1707362257505-184cd67f1855',
+      'avatarLabel': 'Smiling woman with brown hair in casual blue top, outdoors',
+      'role': 'family',
+      'isSample': true,
+    },
+    {
+      'id': 'sample_michael',
+      'name': 'Michael',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1735181094336-7fa757df9622',
+      'avatarLabel': 'Middle-aged man with short dark hair smiling, light background',
+      'role': 'family',
+      'isSample': true,
+    },
+    {
+      'id': 'sample_priya',
+      'name': 'Priya',
+      'avatarUrl':
+          'https://img.rocket.new/generatedImages/rocket_gen_img_115ec4756-1776378820432.png',
+      'avatarLabel': 'Young woman with long dark hair and bright smile, warm background',
+      'role': 'family',
+      'isSample': true,
+    },
+    {
+      'id': 'sample_david',
+      'name': 'David',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1627646580365-35950e51cd95',
+      'avatarLabel': 'Young man with curly hair and glasses smiling in casual wear',
+      'role': 'family',
+      'isSample': true,
+    },
+    {
+      'id': 'sample_emma',
+      'name': 'Emma',
+      'avatarUrl': '',
+      'avatarLabel': '',
+      'role': 'family',
+      'isSample': true,
+    },
+    {
+      'id': 'sample_james',
+      'name': 'James',
+      'avatarUrl': '',
+      'avatarLabel': '',
+      'role': 'family',
+      'isSample': true,
+    },
+  ];
+
   Future<void> _loadNestMembers() async {
     try {
       final supabase = Supabase.instance.client;
@@ -568,11 +626,16 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           'avatarUrl': profile?['avatar_url'] as String? ?? '',
           'avatarLabel': '$name profile photo',
           'role': profile?['role'] as String? ?? 'family',
+          'isSample': false,
         });
       }
 
+      // Real members always fully replace samples — even just one real
+      // member is enough to drop every placeholder.
+      final membersToShow = loaded.isNotEmpty ? loaded : _sampleNestMembers;
+
       if (mounted) {
-        setState(() => _nestMembers = loaded);
+        setState(() => _nestMembers = membersToShow);
       }
     } catch (e) {
       debugPrint('NEST_MEMBERS_LOAD_ERROR: $e');
@@ -580,6 +643,18 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   void _onAvatarRowMemberTap(Map<String, dynamic> member) {
+    if (member['isSample'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${member['name']} is a sample — real messaging opens once your family joins.',
+          ),
+          backgroundColor: const Color(0xFF5DA399),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     // TODO: once private message threads exist, navigate straight into the
     // thread with this member pre-selected as recipient. For now, open the
     // compose screen so the feature is visible/testable end to end.
