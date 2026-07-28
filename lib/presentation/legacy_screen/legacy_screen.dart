@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/app_navigation.dart';
 import '../../widgets/share_preview_widget.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
+import '../../widgets/custom_image_widget.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 class LegacyScreen extends StatefulWidget {
@@ -65,7 +66,11 @@ class _LegacyScreenState extends State<LegacyScreen>
       'isHearted': true,
       'isOwn': true,
       'isSample': true,
-      'authorName': 'Eleanor',
+      'authorName': 'Sarah',
+      'authorAvatarUrl':
+          'https://images.unsplash.com/photo-1707362257505-184cd67f1855',
+      'authorAvatarLabel':
+          'Smiling woman with brown hair in casual blue top, outdoors',
     },
     {
       'id': 's2',
@@ -80,7 +85,11 @@ class _LegacyScreenState extends State<LegacyScreen>
       'isHearted': false,
       'isOwn': true,
       'isSample': true,
-      'authorName': 'Eleanor',
+      'authorName': 'Michael',
+      'authorAvatarUrl':
+          'https://images.unsplash.com/photo-1735181094336-7fa757df9622',
+      'authorAvatarLabel':
+          'Middle-aged man with short dark hair smiling, light background',
     },
     {
       'id': 's3',
@@ -97,7 +106,11 @@ class _LegacyScreenState extends State<LegacyScreen>
       'isHearted': true,
       'isOwn': true,
       'isSample': true,
-      'authorName': 'Eleanor',
+      'authorName': 'Priya',
+      'authorAvatarUrl':
+          'https://img.rocket.new/generatedImages/rocket_gen_img_115ec4756-1776378820432.png',
+      'authorAvatarLabel':
+          'Young woman with long dark hair and bright smile, warm background',
     },
     {
       'id': 's4',
@@ -112,7 +125,11 @@ class _LegacyScreenState extends State<LegacyScreen>
       'isHearted': false,
       'isOwn': true,
       'isSample': true,
-      'authorName': 'Eleanor',
+      'authorName': 'David',
+      'authorAvatarUrl':
+          'https://images.unsplash.com/photo-1627646580365-35950e51cd95',
+      'authorAvatarLabel':
+          'Young man with curly hair and glasses smiling in casual wear',
     },
   ];
 
@@ -4301,15 +4318,33 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                     children: [
                       Row(
                         children: [
-                          ProfileAvatarWidget(
-                            profileData: (story['isSample'] == true) ? null : widget.profileData,
-                            displayName: (story['isSample'] == true)
-                                ? (story['authorName'] as String? ?? 'Eleanor')
-                                : widget.displayName,
-                            size: 36,
-                            borderColor: const Color(0xFF5DA399),
-                            borderWidth: 1.5,
-                          ),
+                          (story['isSample'] == true && (story['authorAvatarUrl'] as String? ?? '').isNotEmpty)
+                              ? Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: const Color(0xFF5DA399), width: 1.5),
+                                  ),
+                                  child: ClipOval(
+                                    child: CustomImageWidget(
+                                      imageUrl: story['authorAvatarUrl'] as String,
+                                      width: 36,
+                                      height: 36,
+                                      fit: BoxFit.cover,
+                                      semanticLabel: story['authorAvatarLabel'] as String? ?? '',
+                                    ),
+                                  ),
+                                )
+                              : ProfileAvatarWidget(
+                                  profileData: (story['isSample'] == true) ? null : widget.profileData,
+                                  displayName: (story['isSample'] == true)
+                                      ? (story['authorName'] as String? ?? 'Eleanor')
+                                      : widget.displayName,
+                                  size: 36,
+                                  borderColor: const Color(0xFF5DA399),
+                                  borderWidth: 1.5,
+                                ),
                           const SizedBox(width: 10),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
