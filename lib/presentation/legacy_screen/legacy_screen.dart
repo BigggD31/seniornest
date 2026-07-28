@@ -256,7 +256,7 @@ class _LegacyScreenState extends State<LegacyScreen>
           'id': e['id'],
           'title': e['prompt'] ?? 'My Story',
           'excerpt': e['content'] ?? '',
-          'category': 'Memories',
+          'category': e['category'] ?? 'Memories',
           'date': e['created_at']?.toString().substring(0, 10) ?? '',
           'entry_type': e['entry_type'] ?? 'text',
           'media_url': e['media_url'] ?? '',
@@ -444,10 +444,59 @@ class _LegacyScreenState extends State<LegacyScreen>
       };
       allItems.removeWhere((e) => (e as Map<String, dynamic>)['id'] == id);
       allItems.add(item);
+      await prefs.setString('bookmarked_items', jsonEncode(allItems));
+
+      // Write to Supabase so this bookmark actually shows up on the Favs page
+      try {
+        final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
+        if (bookmarkUserId != null) {
+          await Supabase.instance.client.from('user_favourites').upsert({
+            'user_id': bookmarkUserId,
+            'item_id': id,
+            'item_data': item,
+          });
+        }
+      } catch (e) {
+        debugPrint('LEGACY BOOKMARK SUPABASE SYNC ERROR: $e');
+      }
     } else {
       allItems.removeWhere((e) => (e as Map<String, dynamic>)['id'] == id);
+      await prefs.setString('bookmarked_items', jsonEncode(allItems));
+
+      // Remove from Supabase too so it disappears from the Favs page
+      try {
+        final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
+        if (bookmarkUserId != null) {
+          await Supabase.instance.client
+              .from('user_favourites')
+              .delete()
+              .eq('user_id', bookmarkUserId)
+              .eq('item_id', id);
+        }
+      } catch (e) {
+        debugPrint('LEGACY BOOKMARK SUPABASE SYNC ERROR: $e');
+      }
     }
-    await prefs.setString('bookmarked_items', jsonEncode(allItems));
+  }
+            'entry_type': story['entry_type'] as String? ?? 'text',
+            'media_url': story['media_url'] as String? ?? '',
+          };
+          await Supabase.instance.client.from('user_favourites').upsert({
+            'user_id': bookmarkUserId,
+            'item_id': id,
+            'item_data': item,
+          });
+        } else {
+          await Supabase.instance.client
+              .from('user_favourites')
+              .delete()
+              .eq('user_id', bookmarkUserId)
+              .eq('item_id', id);
+        }
+      }
+    } catch (e) {
+      debugPrint('LEGACY BOOKMARK SUPABASE SYNC ERROR: $e');
+    }
   }
 
   void _onNavTap(int index) {
@@ -1877,6 +1926,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
           'prompt': title,
           'content': _bodyController.text.trim(),
           'entry_type': 'text',
+          'category': _selectedCategory,
           'is_custom': true,
         });
         await prefs.setBool('has_sent_stories', true);
@@ -2969,6 +3019,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
           'content': 'Voice story',
           'entry_type': 'audio',
           'media_url': mediaUrl,
+          'category': _selectedCategory,
           'is_custom': true,
         });
         await prefs.setBool('has_sent_stories', true);
@@ -3536,6 +3587,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
           'content': 'Video story',
           'entry_type': 'video',
           'media_url': mediaUrl,
+          'category': _selectedCategory,
           'is_custom': true,
         });
         await prefs.setBool('has_sent_stories', true);
