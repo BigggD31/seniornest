@@ -10,6 +10,7 @@ import '../../routes/app_routes.dart';
 import './widgets/feed_empty_state_widget.dart';
 import './widgets/feed_top_bar_widget.dart';
 import './widgets/im_good_today_orb_widget.dart';
+import './widgets/daily_checkin_card_widget.dart';
 import './widgets/legacy_prompt_card_widget.dart';
 import './widgets/meds_reminder_card_widget.dart';
 import './widgets/message_card_widget.dart';
@@ -128,6 +129,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   bool _isDarkMode = false;
   bool _hasRealPost = false; // tracks if user has made their first real post
   bool _sampleBannerDismissed = false; // tracks if user closed the sample-content explainer banner
+  String _seniorName = ''; // display name of the senior in this nest (for the pinned check-in card)
+  String _seniorUserId = '';
+  bool _seniorCheckedInToday = false;
+  DateTime? _seniorCheckinTime;
   bool _inviteCodeShared =
       true; // tracks if family owner has shared invite code
   bool _isGuest = false;
@@ -443,6 +448,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
     // Load real feed from Supabase
     await _loadFeedFromSupabase();
+    // Load pinned daily check-in status
+    await _loadCheckinStatus();
   }
 
   void _setupItemAnimations() {
@@ -464,6 +471,65 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   String _todayKey() {
     final now = DateTime.now();
     return '${now.year}_${now.month}_${now.day}';
+  }
+
+  String _todayDateString() {
+    final now = DateTime.now();
+    final m = now.month.toString().padLeft(2, '0');
+    final d = now.day.toString().padLeft(2, '0');
+    return '${now.year}-$m-$d';
+  }
+
+  Future<void> _loadCheckinStatus() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isEmpty) return;
+
+      // Find the senior in this nest
+      final membersResponse = await supabase
+          .from('nest_members')
+          .select('user_id, user_profiles(display_name, preferred_name, role)')
+          .eq('nest_id', nestId);
+      final members = membersResponse as List<dynamic>;
+
+      String seniorId = '';
+      String seniorName = '';
+      for (final m in members) {
+        final profile = m['user_profiles'] as Map<String, dynamic>?;
+        if (profile?['role'] == 'senior') {
+          seniorId = m['user_id'] as String? ?? '';
+          final preferred = profile?['preferred_name'] as String? ?? '';
+          final first = profile?['display_name'] as String? ?? '';
+          seniorName = preferred.isNotEmpty ? preferred : first;
+          break;
+        }
+      }
+      if (seniorId.isEmpty) return;
+      if (seniorName.isEmpty) seniorName = 'Your senior';
+
+      // Check if that senior has checked in today
+      final checkinResponse = await supabase
+          .from('daily_checkins')
+          .select('created_at')
+          .eq('user_id', seniorId)
+          .eq('checkin_date', _todayDateString())
+          .maybeSingle();
+
+      if (mounted) {
+        setState(() {
+          _seniorUserId = seniorId;
+          _seniorName = seniorName;
+          _seniorCheckedInToday = checkinResponse != null;
+          _seniorCheckinTime = checkinResponse != null
+              ? DateTime.parse(checkinResponse['created_at'] as String)
+              : null;
+        });
+      }
+    } catch (e) {
+      debugPrint('CHECKIN_STATUS_LOAD_ERROR: $e');
+    }
   }
 
   void _showWelcomeMessage() {
@@ -498,15 +564,16 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       final nestId = prefs.getString('nest_id') ?? '';
       final userId = supabase.auth.currentUser?.id;
       if (nestId.isNotEmpty && userId != null) {
-        await supabase.from('feed_posts').insert({
-          'nest_id': nestId,
-          'author_id': userId,
-          'post_type': 'text',
-          'content': "\u2764\ufe0f I'm doing good today!",
-          'media_url': null,
-        });
+        await supabase.from('daily_checkins').upsert(
+          {
+            'nest_id': nestId,
+            'user_id': userId,
+            'checkin_date': _todayDateString(),
+          },
+          onConflict: 'user_id,checkin_date',
+        );
         if (mounted) {
-          await _loadFeedFromSupabase();
+          await _loadCheckinStatus();
         }
       }
     } catch (e) {
@@ -850,6 +917,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                // Pinned daily check-in status card (shown once we know who the senior is)
+                if (_seniorUserId.isNotEmpty) ...[
+                  DailyCheckinCardWidget(
+                    isDarkMode: _isDarkMode,
+                    isSenior: _isSenior,
+                    seniorName: _seniorName,
+                    checkedIn: _seniorCheckedInToday,
+                    checkinTime: _seniorCheckinTime,
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 // Meds reminder (senior only)
                 if (_isSenior && _showMedsReminder) ...[
                   MedsReminderCardWidget(
