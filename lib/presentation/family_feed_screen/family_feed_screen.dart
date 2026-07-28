@@ -121,7 +121,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // TODO: Replace with Riverpod/Bloc for production — feed state, user state
   int _currentNavIndex = 0;
   bool _isSenior = false;
-  String _displayName = 'Eleanor';
+  String _displayName = '';
   String _nestName = '';
   bool _isGoodTodaySent = false;
   bool _justCheckedIn = false; // true only briefly right after tapping, to show the "Sent!" confirmation
@@ -289,7 +289,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // TODO: Replace with Supabase realtime subscription for production
     final prefs = await SharedPreferences.getInstance();
     final role = prefs.getString('user_role') ?? 'senior';
-    final firstName = prefs.getString('display_name') ?? 'Eleanor';
+    final firstName = prefs.getString('display_name') ?? '';
     final preferredNameVal = prefs.getString('preferred_name') ?? '';
     final name = preferredNameVal.isNotEmpty ? preferredNameVal : firstName;
     final nestName = prefs.getString('nest_name') ?? '';
@@ -663,10 +663,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
   void _showWelcomeMessage() {
     if (!mounted) return;
+    final greeting = _displayName.isNotEmpty
+        ? 'Welcome back, $_displayName! Your family is thinking of you 💛'
+        : 'Welcome back! Your family is thinking of you 💛';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Welcome back, $_displayName! Your family is thinking of you 💛',
+          greeting,
           style: GoogleFonts.nunitoSans(
             fontSize: 14,
             fontWeight: FontWeight.w500,

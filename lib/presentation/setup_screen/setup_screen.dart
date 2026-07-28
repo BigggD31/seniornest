@@ -121,7 +121,7 @@ class _SetupScreenState extends State<SetupScreen>
       _isNestOwner = isNestOwner;
       _displayName = savedName;
       _preferredName = savedPreferredName;
-      _nestName = prefs.getString('nest_name') ?? "Eleanor's Nest";
+      _nestName = prefs.getString('nest_name') ?? 'Your Nest';
       _relationship = prefs.getString('relationship') ?? '';
       _isDarkMode = prefs.getBool('dark_mode') ?? false;
       _medsReminders = prefs.getBool('meds_reminders') ?? true;

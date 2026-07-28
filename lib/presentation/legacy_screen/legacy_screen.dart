@@ -4339,7 +4339,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                               : ProfileAvatarWidget(
                                   profileData: (story['isSample'] == true) ? null : widget.profileData,
                                   displayName: (story['isSample'] == true)
-                                      ? (story['authorName'] as String? ?? 'Eleanor')
+                                      ? (story['authorName'] as String? ?? 'A Family Member')
                                       : widget.displayName,
                                   size: 36,
                                   borderColor: const Color(0xFF5DA399),
@@ -4351,7 +4351,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                             children: [
                               Text(
                                 (story['isSample'] == true)
-                                    ? (story['authorName'] as String? ?? 'Eleanor')
+                                    ? (story['authorName'] as String? ?? 'A Family Member')
                                     : (widget.displayName.isNotEmpty ? widget.displayName : 'My Story'),
                                 style: GoogleFonts.nunitoSans(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary),
                               ),
