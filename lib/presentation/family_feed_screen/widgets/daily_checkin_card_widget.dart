@@ -45,9 +45,7 @@ class DailyCheckinCardWidget extends StatelessWidget {
               ? 'Tap the heart button below when you\'re ready.'
               : 'No news is usually good news — check back later.');
 
-    final Color accentColor = checkedIn
-        ? const Color(0xFFD4AA00)
-        : const Color(0xFF5DA399);
+    final Color accentColor = const Color(0xFF5DA399);
 
     return Container(
       width: double.infinity,
