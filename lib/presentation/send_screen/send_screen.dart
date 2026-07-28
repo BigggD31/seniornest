@@ -33,6 +33,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   bool _isDarkMode = false;
   bool _isSending = false;
   bool _hasSentMessages = false; // hides placeholder once first message sent
+  bool _sampleBannerDismissed = false;
   Map<String, dynamic>? _profileData;
 
   final TextEditingController _messageController = TextEditingController();
@@ -138,6 +139,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           : (prefs.getString('display_name') ?? 'You');
       _isDarkMode = prefs.getBool('dark_mode') ?? false;
       _hasSentMessages = prefs.getBool('has_sent_messages') ?? false;
+      _sampleBannerDismissed = prefs.getBool('messages_sample_banner_dismissed') ?? false;
       _profileData = profileData;
     });
     _entranceController.forward();
@@ -1483,6 +1485,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (!_hasSentMessages && !_sampleBannerDismissed)
+                            _buildMessagesSampleBanner(),
                           if (!_hasSentMessages)
                             _buildFirstMessagePlaceholder(),
                           _buildMessageTypeBoxes(),
@@ -1616,6 +1620,53 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
             size: 40,
             borderColor: const Color(0xFF5DA399),
             borderWidth: 2,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _dismissMessagesSampleBanner() async {
+    setState(() => _sampleBannerDismissed = true);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('messages_sample_banner_dismissed', true);
+  }
+
+  Widget _buildMessagesSampleBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD4AA00).withAlpha(20),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFD4AA00).withAlpha(60), width: 1),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.info_outline_rounded, color: Color(0xFFB8860B), size: 17),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'This is where your messages will appear once you start sending them.',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+                color: _isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _dismissMessagesSampleBanner,
+            child: const Padding(
+              padding: EdgeInsets.all(2),
+              child: Icon(Icons.close_rounded, color: Color(0xFFB8860B), size: 16),
+            ),
           ),
         ],
       ),

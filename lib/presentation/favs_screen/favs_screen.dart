@@ -25,6 +25,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
   Map<String, dynamic>? _profileData;
   String _displayName = '';
   List<Map<String, dynamic>> _bookmarkedItems = [];
+  bool _sampleBannerDismissed = false;
 
   late AnimationController _entranceController;
 
@@ -96,6 +97,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
           ? prefs.getString('preferred_name')!
           : (prefs.getString('display_name') ?? '');
       _bookmarkedItems = items.reversed.toList(); // most recent first
+      _sampleBannerDismissed = prefs.getBool('favs_sample_banner_dismissed') ?? false;
     });
     _entranceController.forward();
   }
@@ -177,6 +179,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
           children: [
             _buildTopBar(isTablet),
             _buildCategoryFilter(isTablet),
+            if (!_sampleBannerDismissed) _buildFavsSampleBanner(isTablet),
             Expanded(
               child: _isLoading
                   ? _buildLoadingState()
@@ -193,6 +196,53 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
+      ),
+    );
+  }
+
+  Future<void> _dismissFavsSampleBanner() async {
+    setState(() => _sampleBannerDismissed = true);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('favs_sample_banner_dismissed', true);
+  }
+
+  Widget _buildFavsSampleBanner(bool isTablet) {
+    return Container(
+      margin: EdgeInsets.fromLTRB(isTablet ? 28 : 20, 0, isTablet ? 28 : 20, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD4AA00).withAlpha(20),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFD4AA00).withAlpha(60), width: 1),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.info_outline_rounded, color: Color(0xFFB8860B), size: 17),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Cards labeled "Preview" are examples. Once you bookmark something, it\'ll show up here for real.',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+                color: _isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _dismissFavsSampleBanner,
+            child: const Padding(
+              padding: EdgeInsets.all(2),
+              child: Icon(Icons.close_rounded, color: Color(0xFFB8860B), size: 16),
+            ),
+          ),
+        ],
       ),
     );
   }

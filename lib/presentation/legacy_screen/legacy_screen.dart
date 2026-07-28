@@ -65,6 +65,7 @@ class _LegacyScreenState extends State<LegacyScreen>
       'isHearted': true,
       'isOwn': true,
       'isSample': true,
+      'authorName': 'Eleanor',
     },
     {
       'id': 's2',
@@ -79,6 +80,7 @@ class _LegacyScreenState extends State<LegacyScreen>
       'isHearted': false,
       'isOwn': true,
       'isSample': true,
+      'authorName': 'Eleanor',
     },
     {
       'id': 's3',
@@ -95,6 +97,7 @@ class _LegacyScreenState extends State<LegacyScreen>
       'isHearted': true,
       'isOwn': true,
       'isSample': true,
+      'authorName': 'Eleanor',
     },
     {
       'id': 's4',
@@ -109,6 +112,7 @@ class _LegacyScreenState extends State<LegacyScreen>
       'isHearted': false,
       'isOwn': true,
       'isSample': true,
+      'authorName': 'Eleanor',
     },
   ];
 
@@ -4298,8 +4302,10 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                       Row(
                         children: [
                           ProfileAvatarWidget(
-                            profileData: widget.profileData,
-                            displayName: widget.displayName,
+                            profileData: (story['isSample'] == true) ? null : widget.profileData,
+                            displayName: (story['isSample'] == true)
+                                ? (story['authorName'] as String? ?? 'Eleanor')
+                                : widget.displayName,
                             size: 36,
                             borderColor: const Color(0xFF5DA399),
                             borderWidth: 1.5,
@@ -4310,7 +4316,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                             children: [
                               Text(
                                 (story['isSample'] == true)
-                                    ? 'My Story'
+                                    ? (story['authorName'] as String? ?? 'Eleanor')
                                     : (widget.displayName.isNotEmpty ? widget.displayName : 'My Story'),
                                 style: GoogleFonts.nunitoSans(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary),
                               ),
