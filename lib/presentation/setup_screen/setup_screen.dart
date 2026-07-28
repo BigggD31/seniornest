@@ -1799,7 +1799,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
             textCapitalization: TextCapitalization.words,
             style: GoogleFonts.nunitoSans(fontSize: 18, color: _textPrimary),
             decoration: InputDecoration(
-              labelText: 'What would you like to be called? (optional)',
+              labelText: 'Preferred name (optional)',
               labelStyle: GoogleFonts.nunitoSans(
                 fontSize: 13,
                 color: _textSecondary,

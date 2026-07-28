@@ -703,8 +703,9 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           ),
           decoration: InputDecoration(
             hintText: 'What would you like to be called? (optional)',
+            hintMaxLines: 2,
             hintStyle: GoogleFonts.nunitoSans(
-              fontSize: 16,
+              fontSize: 15,
               color: borderColor,
             ),
             enabledBorder: const UnderlineInputBorder(

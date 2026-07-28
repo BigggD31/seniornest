@@ -629,8 +629,9 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
           ),
           decoration: InputDecoration(
             hintText: 'What would you like to be called? (optional)',
+            hintMaxLines: 2,
             hintStyle: GoogleFonts.nunitoSans(
-              fontSize: isTablet ? 18 : 16,
+              fontSize: isTablet ? 17 : 15,
               color: const Color(0xFFB8AA96),
             ),
             enabledBorder: const UnderlineInputBorder(
