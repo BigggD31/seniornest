@@ -283,6 +283,27 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                               ),
                             ),
                           ),
+                          if (msg.isSample) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFD4AA00).withAlpha(31),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'Sample',
+                                style: GoogleFonts.nunitoSans(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFFB8860B),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 2),

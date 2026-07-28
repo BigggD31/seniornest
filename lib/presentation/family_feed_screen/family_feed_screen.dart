@@ -36,6 +36,7 @@ class MessageModel {
     required this.timestamp,
     required this.heartCount,
     required this.isHearted,
+    this.isSample = false,
   });
 
   final String id;
@@ -52,6 +53,7 @@ class MessageModel {
   final DateTime timestamp;
   int heartCount;
   bool isHearted;
+  final bool isSample; // true for demo/sample cards shown before real posts exist
 
   factory MessageModel.fromMap(Map<String, dynamic> map) {
     return MessageModel(
@@ -68,6 +70,7 @@ class MessageModel {
       timestamp: DateTime.parse(map['timestamp'] as String),
       heartCount: map['heartCount'] as int,
       isHearted: map['isHearted'] as bool,
+      isSample: map['isSample'] as bool? ?? false,
     );
   }
 
@@ -98,6 +101,7 @@ class MessageModel {
     'timestamp': timestamp.toIso8601String(),
     'heartCount': heartCount,
     'isHearted': isHearted,
+    'isSample': isSample,
   };
 }
 
@@ -123,6 +127,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   bool _isLoading = true;
   bool _isDarkMode = false;
   bool _hasRealPost = false; // tracks if user has made their first real post
+  bool _sampleBannerDismissed = false; // tracks if user closed the sample-content explainer banner
   bool _inviteCodeShared =
       true; // tracks if family owner has shared invite code
   bool _isGuest = false;
@@ -154,6 +159,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       'timestamp': '2026-03-24T14:32:00.000Z',
       'heartCount': 4,
       'isHearted': true,
+      'isSample': true,
     },
     {
       'id': 'msg_002',
@@ -171,6 +177,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       'timestamp': '2026-03-24T09:15:00.000Z',
       'heartCount': 2,
       'isHearted': false,
+      'isSample': true,
     },
     {
       'id': 'msg_003',
@@ -187,6 +194,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       'timestamp': '2026-03-23T20:44:00.000Z',
       'heartCount': 1,
       'isHearted': false,
+      'isSample': true,
     },
     {
       'id': 'msg_004',
@@ -206,6 +214,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       'timestamp': '2026-03-23T17:10:00.000Z',
       'heartCount': 6,
       'isHearted': true,
+      'isSample': true,
     },
     {
       'id': 'msg_005',
@@ -223,6 +232,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       'timestamp': '2026-03-22T19:05:00.000Z',
       'heartCount': 3,
       'isHearted': false,
+      'isSample': true,
     },
   ];
 
@@ -280,6 +290,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     final firstLoad = prefs.getBool('first_load') ?? true;
     final darkMode = prefs.getBool('dark_mode') ?? false;
     final hasRealPost = prefs.getBool('has_real_post') ?? false;
+    final sampleBannerDismissed = prefs.getBool('sample_banner_dismissed') ?? false;
     final inviteCodeShared = prefs.getBool('invite_code_shared') ?? false;
     final isGuest = prefs.getBool('is_guest') ?? false;
     final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
@@ -388,6 +399,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       _showWelcomeToast = firstLoad;
       _isDarkMode = darkMode;
       _hasRealPost = hasRealPost;
+      _sampleBannerDismissed = sampleBannerDismissed;
       _inviteCodeShared = inviteCodeShared;
       _isGuest = isGuest;
       _isNestOwner = !joinedViaInvite;
@@ -873,6 +885,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                     },
                   ),
                 const SizedBox(height: 20),
+                // Sample content explainer banner (shown once, while sample cards are visible)
+                if (!_hasRealPost && !_sampleBannerDismissed) ...[
+                  _buildSampleContentBanner(),
+                  const SizedBox(height: 14),
+                ],
                 // Feed header
                 _buildFeedHeader(),
                 const SizedBox(height: 12),
@@ -930,6 +947,67 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             ),
           ),
       ],
+    );
+  }
+
+  Future<void> _dismissSampleBanner() async {
+    setState(() {
+      _sampleBannerDismissed = true;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('sample_banner_dismissed', true);
+  }
+
+  Widget _buildSampleContentBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD4AA00).withAlpha(20),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFD4AA00).withAlpha(60),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(
+              Icons.info_outline_rounded,
+              color: Color(0xFFB8860B),
+              size: 17,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'This is what your Nest will look like. These examples disappear once your family starts posting.',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+                color: _isDarkMode
+                    ? const Color(0xFFB8A888)
+                    : const Color(0xFF6B5E4E),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _dismissSampleBanner,
+            child: const Padding(
+              padding: EdgeInsets.all(2),
+              child: Icon(
+                Icons.close_rounded,
+                color: Color(0xFFB8860B),
+                size: 16,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
