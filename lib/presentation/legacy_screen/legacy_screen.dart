@@ -478,26 +478,6 @@ class _LegacyScreenState extends State<LegacyScreen>
       }
     }
   }
-            'entry_type': story['entry_type'] as String? ?? 'text',
-            'media_url': story['media_url'] as String? ?? '',
-          };
-          await Supabase.instance.client.from('user_favourites').upsert({
-            'user_id': bookmarkUserId,
-            'item_id': id,
-            'item_data': item,
-          });
-        } else {
-          await Supabase.instance.client
-              .from('user_favourites')
-              .delete()
-              .eq('user_id', bookmarkUserId)
-              .eq('item_id', id);
-        }
-      }
-    } catch (e) {
-      debugPrint('LEGACY BOOKMARK SUPABASE SYNC ERROR: $e');
-    }
-  }
 
   void _onNavTap(int index) {
     if (index == _currentNavIndex) return;
