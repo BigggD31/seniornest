@@ -15,6 +15,7 @@ import './widgets/legacy_prompt_card_widget.dart';
 import './widgets/meds_reminder_card_widget.dart';
 import './widgets/message_card_widget.dart';
 import './widgets/celebrations_card_widget.dart';
+import './widgets/nest_avatar_row_widget.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 // ── Data Models ────────────────────────────────────────────────
@@ -140,6 +141,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   bool _isNestOwner = false;
   List<CelebrationEvent> _todayCelebrations = [];
   List<CelebrationEvent> _upcomingCelebrations = [];
+  List<Map<String, dynamic>> _nestMembers = []; // for avatar row (excludes current user)
 
   late AnimationController _listEntranceController;
   final List<Animation<double>> _itemAnimations = [];
@@ -451,6 +453,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     await _loadFeedFromSupabase();
     // Load pinned daily check-in status
     await _loadCheckinStatus();
+    // Load nest members for the avatar row
+    await _loadNestMembers();
   }
 
   void _setupItemAnimations() {
@@ -531,6 +535,55 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     } catch (e) {
       debugPrint('CHECKIN_STATUS_LOAD_ERROR: $e');
     }
+  }
+
+  // ── Avatar row: fetch everyone else in the Nest ─────────────────────────
+  Future<void> _loadNestMembers() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      final currentUserId = supabase.auth.currentUser?.id ?? '';
+      if (nestId.isEmpty) return;
+
+      final membersResponse = await supabase
+          .from('nest_members')
+          .select(
+              'user_id, user_profiles(display_name, preferred_name, avatar_url, role)')
+          .eq('nest_id', nestId);
+      final rows = membersResponse as List<dynamic>;
+
+      final loaded = <Map<String, dynamic>>[];
+      for (final row in rows) {
+        final userId = row['user_id'] as String? ?? '';
+        if (userId.isEmpty || userId == currentUserId) continue;
+        final profile = row['user_profiles'] as Map<String, dynamic>?;
+        final preferred = profile?['preferred_name'] as String? ?? '';
+        final display = profile?['display_name'] as String? ?? '';
+        final name = preferred.isNotEmpty ? preferred : display;
+        if (name.isEmpty) continue;
+        loaded.add({
+          'id': userId,
+          'name': name,
+          'avatarUrl': profile?['avatar_url'] as String? ?? '',
+          'avatarLabel': '$name profile photo',
+          'role': profile?['role'] as String? ?? 'family',
+        });
+      }
+
+      if (mounted) {
+        setState(() => _nestMembers = loaded);
+      }
+    } catch (e) {
+      debugPrint('NEST_MEMBERS_LOAD_ERROR: $e');
+    }
+  }
+
+  void _onAvatarRowMemberTap(Map<String, dynamic> member) {
+    // TODO: once private message threads exist, navigate straight into the
+    // thread with this member pre-selected as recipient. For now, open the
+    // compose screen so the feature is visible/testable end to end.
+    Navigator.pushNamed(context, AppRoutes.sendScreen);
   }
 
   void _showWelcomeMessage() {
@@ -928,6 +981,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                // Nest avatar row — everyone in the Nest, tap to message them
+                if (_nestMembers.isNotEmpty) ...[
+                  NestAvatarRowWidget(
+                    members: _nestMembers,
+                    isDarkMode: _isDarkMode,
+                    onMemberTap: _onAvatarRowMemberTap,
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 // Pinned daily check-in status card (shown once we know who the senior is)
                 if (_seniorUserId.isNotEmpty) ...[
                   DailyCheckinCardWidget(
