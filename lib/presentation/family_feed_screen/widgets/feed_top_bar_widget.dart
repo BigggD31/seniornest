@@ -38,7 +38,9 @@ class _FeedTopBarWidgetState extends State<FeedTopBarWidget> {
   Future<void> _loadProfileData() async {
     final prefs = await SharedPreferences.getInstance();
     final profileJson = prefs.getString(kProfilePhotoKey);
-    final name = prefs.getString('display_name') ?? '';
+    final firstName = prefs.getString('display_name') ?? '';
+    final preferredName = prefs.getString('preferred_name') ?? '';
+    final name = preferredName.isNotEmpty ? preferredName : firstName;
     if (mounted) {
       setState(() {
         _displayName = name;

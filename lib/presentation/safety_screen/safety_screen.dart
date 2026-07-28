@@ -125,9 +125,11 @@ class _SafetyScreenState extends State<SafetyScreen>
           (prefs.getString('user_role') ?? 'senior') == 'senior';
       if (isSeniorRole) {
         _seniorName =
-            prefs.getString('display_name') ??
-            prefs.getString('user_name') ??
-            '';
+            (prefs.getString('preferred_name') ?? '').isNotEmpty
+            ? prefs.getString('preferred_name')!
+            : (prefs.getString('display_name') ??
+                  prefs.getString('user_name') ??
+                  '');
       } else {
         _seniorName = prefs.getString('senior_name') ?? '';
       }
@@ -135,7 +137,9 @@ class _SafetyScreenState extends State<SafetyScreen>
       _nestName = prefs.getString('nest_name') ?? '';
       _isLoading = false;
       _profileData = profileData;
-      _displayName = prefs.getString('display_name') ?? '';
+      _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
+          ? prefs.getString('preferred_name')!
+          : (prefs.getString('display_name') ?? '');
     });
     _setupAnimations();
     _entranceController.forward();

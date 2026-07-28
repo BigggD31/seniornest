@@ -26,6 +26,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
   bool _isLoading = false;
 
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _preferredNameController = TextEditingController();
   final TextEditingController _nestNameController = TextEditingController();
   String _selectedFontSize = 'Large';
   bool _medsReminders = true;
@@ -92,6 +93,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
   Future<void> _loadSavedName() async {
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString('display_name') ?? '';
+    final preferredName = prefs.getString('preferred_name') ?? '';
     final savedNestName = prefs.getString('nest_name') ?? '';
     final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
     final profileJson = prefs.getString(kProfilePhotoKey);
@@ -102,6 +104,9 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
     if (mounted) {
       setState(() {
         if (name.isNotEmpty) _savedName = name;
+        if (preferredName.isNotEmpty && _preferredNameController.text.isEmpty) {
+          _preferredNameController.text = preferredName;
+        }
         // Restore nest name into controller so _finishOnboarding saves it correctly
         if (savedNestName.isNotEmpty && _nestNameController.text.isEmpty) {
           _nestNameController.text = savedNestName;
@@ -132,6 +137,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
     _entranceController.dispose();
     _stepController.dispose();
     _nameController.dispose();
+    _preferredNameController.dispose();
     _nestNameController.dispose();
     super.dispose();
   }
@@ -146,6 +152,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
       // Save name and nest name to SharedPreferences immediately so they persist
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('display_name', _nameController.text.trim());
+      await prefs.setString('preferred_name', _preferredNameController.text.trim());
       await prefs.setString('nest_name', _nestNameController.text.trim());
       // Save birthday/anniversary now so they survive the pushReplacementNamed detour
       if (_birthday != null) {
@@ -233,10 +240,12 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         ? _nameController.text.trim()
         : _savedName;
     final nestName = _nestNameController.text.trim();
+    final preferredName = _preferredNameController.text.trim();
 
     // Save to SharedPreferences
     await prefs.setString('user_role', 'senior');
     await prefs.setString('display_name', name);
+    await prefs.setString('preferred_name', preferredName);
     await prefs.setString('nest_name', nestName);
     await prefs.setString('text_size', _selectedFontSize);
     await prefs.setBool('meds_reminders', _medsReminders);
@@ -287,6 +296,9 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         if (name.isNotEmpty) {
           profileData['display_name'] = name;
           profileData['full_name'] = name;
+        }
+        if (preferredName.isNotEmpty) {
+          profileData['preferred_name'] = preferredName;
         }
         await supabase.from('user_profiles').upsert(profileData);
         print('NEST_DEBUG: profile upsert done');
@@ -605,6 +617,29 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
             const SizedBox(width: 16),
             _buildProfilePhotoCircle(),
           ],
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _preferredNameController,
+          textCapitalization: TextCapitalization.words,
+          style: GoogleFonts.nunitoSans(
+            fontSize: isTablet ? 20 : 18,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF2C2417),
+          ),
+          decoration: InputDecoration(
+            hintText: 'What would you like to be called? (optional)',
+            hintStyle: GoogleFonts.nunitoSans(
+              fontSize: isTablet ? 18 : 16,
+              color: const Color(0xFFB8AA96),
+            ),
+            enabledBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFFE8E0D0), width: 1.5),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFF5DA399), width: 2),
+            ),
+          ),
         ),
         const SizedBox(height: 16),
         _buildDateField(
@@ -1184,7 +1219,9 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
                 ? ClipOval(
                     child: ProfileAvatarWidget(
                       profileData: _profilePhotoData,
-                      displayName: _nameController.text,
+                      displayName: _preferredNameController.text.trim().isNotEmpty
+                          ? _preferredNameController.text
+                          : _nameController.text,
                       size: 64,
                       borderWidth: 0,
                     ),

@@ -89,7 +89,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
       final supabase = Supabase.instance.client;
       final response = await supabase
           .from('feed_posts')
-          .select('*, user_profiles(display_name, avatar_url)')
+          .select('*, user_profiles(display_name, preferred_name, avatar_url)')
           .eq('parent_post_id', widget.message.id)
           .order('created_at', ascending: true);
       if (mounted) {
@@ -559,7 +559,9 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
             if (_showReplies)
               ..._replies.map((reply) {
                 final profile = reply['user_profiles'] as Map<String, dynamic>?;
-                final name = profile?['display_name'] as String? ?? 'Family';
+                final preferredReplyName = profile?['preferred_name'] as String? ?? '';
+                final firstReplyName = profile?['display_name'] as String? ?? 'Family';
+                final name = preferredReplyName.isNotEmpty ? preferredReplyName : firstReplyName;
                 final text = reply['content'] as String? ?? '';
                 final ts = DateTime.tryParse(reply['created_at'] as String? ?? '') ?? DateTime.now();
                 return Container(

@@ -271,7 +271,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // TODO: Replace with Supabase realtime subscription for production
     final prefs = await SharedPreferences.getInstance();
     final role = prefs.getString('user_role') ?? 'senior';
-    final name = prefs.getString('display_name') ?? 'Eleanor';
+    final firstName = prefs.getString('display_name') ?? 'Eleanor';
+    final preferredNameVal = prefs.getString('preferred_name') ?? '';
+    final name = preferredNameVal.isNotEmpty ? preferredNameVal : firstName;
     final nestName = prefs.getString('nest_name') ?? '';
     final goodToday = prefs.getBool('good_today_${_todayKey()}') ?? false;
     final medsReminder = prefs.getBool('meds_reminder_${_todayKey()}') ?? true;
@@ -313,7 +315,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       final nextYear = DateTime(today.year + 1, date.month, date.day);
       final candidate = thisYear.isBefore(todayDate) ? nextYear : thisYear;
       final diff = candidate.difference(todayDate).inDays;
-      final displayName = prefs.getString('display_name') ?? 'You';
+      final displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
+          ? prefs.getString('preferred_name')!
+          : (prefs.getString('display_name') ?? 'You');
       final monthNames = [
         'Jan',
         'Feb',
@@ -586,13 +590,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
       final response = await supabase
           .from('feed_posts')
-          .select('*, user_profiles(display_name, avatar_url, relation_type, role)')
+          .select('*, user_profiles(display_name, preferred_name, avatar_url, relation_type, role)')
           .eq('nest_id', nestId)
           .isFilter('parent_post_id', null)
           .order('created_at', ascending: false)
           .limit(50);
 
-      final localName = prefs.getString('display_name') ?? '';
+      final localPreferredName = prefs.getString('preferred_name') ?? '';
+      final localFirstName = prefs.getString('display_name') ?? '';
+      final localName = localPreferredName.isNotEmpty ? localPreferredName : localFirstName;
       final posts = response as List<dynamic>;
       final postIds = posts.map((p) => p['id'] as String).toList();
 
@@ -618,7 +624,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       final List<MessageModel> loaded = posts.map((post) {
         final profile = post['user_profiles'] as Map<String, dynamic>?;
         final authorId = post['author_id'] as String? ?? '';
-        final supabaseName = profile?['display_name'] as String? ?? '';
+        final supabasePreferredName = profile?['preferred_name'] as String? ?? '';
+        final supabaseFirstName = profile?['display_name'] as String? ?? '';
+        final supabaseName = supabasePreferredName.isNotEmpty
+            ? supabasePreferredName
+            : supabaseFirstName;
         final senderName = supabaseName.isNotEmpty
             ? supabaseName
             : (authorId == userId && localName.isNotEmpty ? localName : 'Family');

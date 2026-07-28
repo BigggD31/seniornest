@@ -133,7 +133,9 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       _isSenior = (prefs.getString('user_role') ?? 'senior') == 'senior';
       final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
       _isNestOwner = !joinedViaInvite;
-      _displayName = prefs.getString('display_name') ?? 'You';
+      _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
+          ? prefs.getString('preferred_name')!
+          : (prefs.getString('display_name') ?? 'You');
       _isDarkMode = prefs.getBool('dark_mode') ?? false;
       _hasSentMessages = prefs.getBool('has_sent_messages') ?? false;
       _profileData = profileData;

@@ -108,22 +108,28 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
         // This prevents stale SharedPreferences from overwriting Supabase
         final existingProfile = await supabaseClient
             .from('user_profiles')
-            .select('display_name, role, relation_type, avatar_url')
+            .select('display_name, preferred_name, role, relation_type, avatar_url')
             .eq('id', checkUserId)
             .maybeSingle();
 
         String name = prefs.getString('display_name') ?? '';
+        String preferredName = prefs.getString('preferred_name') ?? '';
         String role = prefs.getString('user_role') ?? 'senior';
         String relationshipType = prefs.getString('relationship') ?? '';
 
         if (existingProfile != null) {
           final supabaseName = existingProfile['display_name'] as String? ?? '';
+          final supabasePreferredName = existingProfile['preferred_name'] as String? ?? '';
           final supabaseRole = existingProfile['role'] as String? ?? '';
           final supabaseRelation = existingProfile['relation_type'] as String? ?? '';
           // If Supabase already has real data, use it (returning user)
           if (supabaseName.isNotEmpty) {
             name = supabaseName;
             await prefs.setString('display_name', name);
+          }
+          if (supabasePreferredName.isNotEmpty) {
+            preferredName = supabasePreferredName;
+            await prefs.setString('preferred_name', preferredName);
           }
           if (supabaseRole.isNotEmpty && supabaseRole != 'senior') {
             role = supabaseRole;
@@ -149,6 +155,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             'full_name': name,
             'role': role,
           };
+          if (preferredName.isNotEmpty) {
+            updateData['preferred_name'] = preferredName;
+          }
           if (relationshipType.isNotEmpty) {
             updateData['relation_type'] = relationshipType.toLowerCase();
           }
@@ -207,16 +216,21 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           final inviteCode = prefs.getString('invite_code') ?? '';
           final nestName = prefs.getString('nest_name') ?? 'My Family';
           final name = prefs.getString('display_name') ?? '';
+          final preferredNestName = prefs.getString('preferred_name') ?? '';
           final role = prefs.getString('user_role') ?? 'senior';
 
           // Upsert profile first
           final relationshipType = prefs.getString('relationship') ?? 'Family';
-          await supabase.from('user_profiles').update({
+          final nestProfileUpdate = <String, dynamic>{
             'display_name': name,
             'full_name': name,
             'role': role,
             'relation_type': relationshipType.toLowerCase(),
-          }).eq('id', effectiveUserId);
+          };
+          if (preferredNestName.isNotEmpty) {
+            nestProfileUpdate['preferred_name'] = preferredNestName;
+          }
+          await supabase.from('user_profiles').update(nestProfileUpdate).eq('id', effectiveUserId);
           print('NEST_DEBUG: profile updated');
 
           // Create nest

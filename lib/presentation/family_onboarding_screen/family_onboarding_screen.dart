@@ -24,6 +24,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
   bool _isLoading = false;
 
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _preferredNameController = TextEditingController();
   final TextEditingController _inviteCodeController = TextEditingController();
   final TextEditingController _nestNameController = TextEditingController();
   String? _selectedRelationship;
@@ -140,6 +141,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
   void dispose() {
     _entranceController.dispose();
     _nameController.dispose();
+    _preferredNameController.dispose();
     _inviteCodeController.dispose();
     _nestNameController.dispose();
     super.dispose();
@@ -177,6 +179,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       // Save name immediately so it persists through the subscribe detour
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('display_name', _nameController.text.trim());
+      await prefs.setString('preferred_name', _preferredNameController.text.trim());
       setState(() => _savedName = _nameController.text.trim());
       // Save birthday/anniversary now so they survive the pushReplacementNamed detour
       if (_birthday != null) {
@@ -240,6 +243,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         ? _savedName
         : nameFromPrefs;
     await prefs.setString('display_name', name);
+    await prefs.setString('preferred_name', _preferredNameController.text.trim());
     await prefs.setString('relationship', _selectedRelationship ?? 'Family');
     await prefs.setBool('notify_check_in', _notifyOnCheckIn);
     await prefs.setBool('notify_messages', _notifyOnMessages);
@@ -278,16 +282,21 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
       final name = prefs.getString('display_name') ?? '';
+      final preferredName = prefs.getString('preferred_name') ?? '';
       final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
       final inviteCode = prefs.getString('invite_code') ?? '';
 
       if (userId != null) {
-        await supabase.from('user_profiles').update({
+        final updateData = <String, dynamic>{
           'display_name': name,
           'full_name': name,
           'role': 'family',
           'relation_type': (_selectedRelationship ?? 'Other').toLowerCase(),
-        }).eq('id', userId);
+        };
+        if (preferredName.isNotEmpty) {
+          updateData['preferred_name'] = preferredName;
+        }
+        await supabase.from('user_profiles').update(updateData).eq('id', userId);
 
         final profileCheck = await supabase
             .from('user_profiles')
@@ -684,6 +693,29 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           ],
         ),
         const SizedBox(height: 16),
+        TextField(
+          controller: _preferredNameController,
+          textCapitalization: TextCapitalization.words,
+          style: GoogleFonts.nunitoSans(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: textPrimary,
+          ),
+          decoration: InputDecoration(
+            hintText: 'What would you like to be called? (optional)',
+            hintStyle: GoogleFonts.nunitoSans(
+              fontSize: 16,
+              color: borderColor,
+            ),
+            enabledBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFFE8E0D0), width: 1.5),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFF5DA399), width: 2),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
         _buildDateField(
           label: 'Birthday (optional)',
           icon: Icons.cake_rounded,
@@ -817,7 +849,9 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
                 ? ClipOval(
                     child: ProfileAvatarWidget(
                       profileData: _profilePhotoData,
-                      displayName: _nameController.text,
+                      displayName: _preferredNameController.text.trim().isNotEmpty
+                          ? _preferredNameController.text
+                          : _nameController.text,
                       size: 64,
                       borderWidth: 0,
                     ),

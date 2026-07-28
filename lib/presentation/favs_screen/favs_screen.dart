@@ -92,7 +92,9 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
       _isDarkMode = prefs.getBool('dark_mode') ?? false;
       _isLoading = false;
       _profileData = profileData;
-      _displayName = prefs.getString('display_name') ?? '';
+      _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
+          ? prefs.getString('preferred_name')!
+          : (prefs.getString('display_name') ?? '');
       _bookmarkedItems = items.reversed.toList(); // most recent first
     });
     _entranceController.forward();

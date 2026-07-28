@@ -27,6 +27,10 @@ class _SetupScreenState extends State<SetupScreen>
   bool _isLoading = true;
   bool _isNestOwner = false;
   String _displayName = '';
+  String _preferredName = '';
+  // If a preferred name has been set, show that everywhere; otherwise fall back to first name.
+  String get _effectiveName =>
+      _preferredName.trim().isNotEmpty ? _preferredName.trim() : _displayName;
   String _nestName = '';
   String _relationship = '';
   bool _medsReminders = true;
@@ -67,6 +71,7 @@ class _SetupScreenState extends State<SetupScreen>
     final defaultSize = isSenior ? 'Large' : 'Normal';
 
     String savedName = prefs.getString('display_name') ?? '';
+    final savedPreferredName = prefs.getString('preferred_name') ?? '';
     if (savedName.isEmpty) {
       try {
         final user = Supabase.instance.client.auth.currentUser;
@@ -115,6 +120,7 @@ class _SetupScreenState extends State<SetupScreen>
       _isSenior = isSenior;
       _isNestOwner = isNestOwner;
       _displayName = savedName;
+      _preferredName = savedPreferredName;
       _nestName = prefs.getString('nest_name') ?? "Eleanor's Nest";
       _relationship = prefs.getString('relationship') ?? '';
       _isDarkMode = prefs.getBool('dark_mode') ?? false;
@@ -303,7 +309,7 @@ class _SetupScreenState extends State<SetupScreen>
           const Spacer(),
           ProfileAvatarWidget(
             profileData: _profileData,
-            displayName: _displayName,
+            displayName: _effectiveName,
             size: 40,
             borderColor: const Color(0xFF5DA399),
             borderWidth: 2,
@@ -353,8 +359,8 @@ class _SetupScreenState extends State<SetupScreen>
                 ),
                 child: Center(
                   child: Text(
-                    _displayName.isNotEmpty
-                        ? _displayName[0].toUpperCase()
+                    _effectiveName.isNotEmpty
+                        ? _effectiveName[0].toUpperCase()
                         : '?',
                     style: GoogleFonts.nunitoSans(
                       fontSize: 26,
@@ -370,7 +376,7 @@ class _SetupScreenState extends State<SetupScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _displayName,
+                      _effectiveName,
                       style: GoogleFonts.nunitoSans(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
@@ -390,7 +396,7 @@ class _SetupScreenState extends State<SetupScreen>
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          '${_displayName.isNotEmpty ? _displayName : 'You'} — ${_isNestOwner ? 'Nest Owner 🏠' : 'Member'}',
+                          '${_effectiveName.isNotEmpty ? _effectiveName : 'You'} — ${_isNestOwner ? 'Nest Owner 🏠' : 'Member'}',
                           style: GoogleFonts.nunitoSans(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -410,7 +416,7 @@ class _SetupScreenState extends State<SetupScreen>
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          '${_displayName.isNotEmpty ? _displayName : 'You'} — ${_isNestOwner ? 'Nest Owner 🏠' : 'Member'}',
+                          '${_effectiveName.isNotEmpty ? _effectiveName : 'You'} — ${_isNestOwner ? 'Nest Owner 🏠' : 'Member'}',
                           style: GoogleFonts.nunitoSans(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -1230,12 +1236,14 @@ class _SetupScreenState extends State<SetupScreen>
       backgroundColor: Colors.transparent,
       builder: (ctx) => _EditProfileSheet(
         displayName: _displayName,
+        preferredName: _preferredName,
         birthday: _birthday,
         anniversary: _anniversary,
         isDarkMode: _isDarkMode,
-        onSave: (name, birthday, anniversary) async {
+        onSave: (name, preferredName, birthday, anniversary) async {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('display_name', name);
+          await prefs.setString('preferred_name', preferredName);
           if (birthday != null) {
             await prefs.setString('birthday', birthday.toIso8601String());
           } else {
@@ -1246,8 +1254,19 @@ class _SetupScreenState extends State<SetupScreen>
           } else {
             await prefs.remove('anniversary');
           }
+          try {
+            final supabase = Supabase.instance.client;
+            final userId = supabase.auth.currentUser?.id;
+            if (userId != null) {
+              await supabase.from('user_profiles').update({
+                'display_name': name,
+                'preferred_name': preferredName,
+              }).eq('id', userId);
+            }
+          } catch (_) {}
           setState(() {
             _displayName = name;
+            _preferredName = preferredName;
             _birthday = birthday;
             _anniversary = anniversary;
           });
@@ -1632,6 +1651,7 @@ class _SetupScreenState extends State<SetupScreen>
               final prefs = await SharedPreferences.getInstance();
               // Clear all user-specific cached data on sign-out
               await prefs.remove('display_name');
+              await prefs.remove('preferred_name');
               await prefs.remove('user_role');
               await prefs.remove('relationship');
               await prefs.remove('relation_type');
@@ -1669,16 +1689,18 @@ class _SetupScreenState extends State<SetupScreen>
 class _EditProfileSheet extends StatefulWidget {
   const _EditProfileSheet({
     required this.displayName,
+    required this.preferredName,
     required this.isDarkMode,
     required this.onSave,
     this.birthday,
     this.anniversary,
   });
   final String displayName;
+  final String preferredName;
   final bool isDarkMode;
   final DateTime? birthday;
   final DateTime? anniversary;
-  final Future<void> Function(String, DateTime?, DateTime?) onSave;
+  final Future<void> Function(String, String, DateTime?, DateTime?) onSave;
 
   @override
   State<_EditProfileSheet> createState() => _EditProfileSheetState();
@@ -1686,6 +1708,7 @@ class _EditProfileSheet extends StatefulWidget {
 
 class _EditProfileSheetState extends State<_EditProfileSheet> {
   late TextEditingController _nameController;
+  late TextEditingController _preferredNameController;
   bool _isSaving = false;
   DateTime? _birthday;
   DateTime? _anniversary;
@@ -1694,6 +1717,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.displayName);
+    _preferredNameController = TextEditingController(text: widget.preferredName);
     _birthday = widget.birthday;
     _anniversary = widget.anniversary;
   }
@@ -1701,6 +1725,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   @override
   void dispose() {
     _nameController.dispose();
+    _preferredNameController.dispose();
     super.dispose();
   }
 
@@ -1769,6 +1794,25 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
             ),
           ),
           const SizedBox(height: 16),
+          TextField(
+            controller: _preferredNameController,
+            textCapitalization: TextCapitalization.words,
+            style: GoogleFonts.nunitoSans(fontSize: 18, color: _textPrimary),
+            decoration: InputDecoration(
+              labelText: 'What would you like to be called? (optional)',
+              labelStyle: GoogleFonts.nunitoSans(
+                fontSize: 13,
+                color: _textSecondary,
+              ),
+              enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Color(0xFFE8E0D0), width: 1.5),
+              ),
+              focusedBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Color(0xFF5DA399), width: 2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           _buildDateField(
             label: 'Birthday (optional)',
             icon: Icons.cake_rounded,
@@ -1796,6 +1840,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                       setState(() => _isSaving = true);
                       await widget.onSave(
                         _nameController.text.trim(),
+                        _preferredNameController.text.trim(),
                         _birthday,
                         _anniversary,
                       );

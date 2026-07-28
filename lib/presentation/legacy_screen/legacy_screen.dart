@@ -287,7 +287,9 @@ class _LegacyScreenState extends State<LegacyScreen>
       _submittedPrompts = loadedPrompts;
       _isLoading = false;
       _profileData = profileData;
-      _displayName = prefs.getString('display_name') ?? '';
+      _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
+          ? prefs.getString('preferred_name')!
+          : (prefs.getString('display_name') ?? '');
     });
     _setupAnimations();
     _entranceController.forward();
@@ -4075,7 +4077,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
       if (storyId.isEmpty) return;
       final response = await supabase
           .from('feed_posts')
-          .select('*, user_profiles(display_name)')
+          .select('*, user_profiles(display_name, preferred_name)')
           .eq('legacy_entry_id', storyId)
           .order('created_at', ascending: true);
       if (mounted) {
@@ -4358,7 +4360,9 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                         if (_showReplies)
                           ..._replies.map((reply) {
                             final profile = reply['user_profiles'] as Map<String, dynamic>?;
-                            final name = profile?['display_name'] as String? ?? 'Family';
+                            final preferredReplyName = profile?['preferred_name'] as String? ?? '';
+                            final firstReplyName = profile?['display_name'] as String? ?? 'Family';
+                            final name = preferredReplyName.isNotEmpty ? preferredReplyName : firstReplyName;
                             final text = reply['content'] as String? ?? '';
                             final ts = DateTime.tryParse(reply['created_at'] as String? ?? '') ?? DateTime.now();
                             final replyId = reply['id'] as String? ?? '';
