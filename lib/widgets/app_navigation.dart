@@ -43,7 +43,7 @@ class _AppNavigationState extends State<AppNavigation>
     _NavItem(
       icon: Icons.chat_bubble_outline_rounded,
       activeIcon: Icons.chat_bubble_rounded,
-      label: 'Messages',
+      label: 'Share',
     ),
     _NavItem(
       icon: Icons.auto_stories_outlined,

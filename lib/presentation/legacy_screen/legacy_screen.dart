@@ -250,13 +250,51 @@ class _LegacyScreenState extends State<LegacyScreen>
       String? userId = supabase.auth.currentUser?.id;
       if (userId == null) userId = supabase.auth.currentSession?.user.id;
       if (userId != null) {
+        // Load every story in this nest, not just the current user's.
+        // Own entries are always included as a fallback so that any story
+        // saved without a nest_id can never disappear from its author's view.
+        final nestId = prefs.getString('nest_id') ?? '';
+        final storyFilter = nestId.isNotEmpty
+            ? 'nest_id.eq.$nestId,user_id.eq.$userId'
+            : 'user_id.eq.$userId';
         final response = await supabase
             .from('legacy_entries')
             .select()
-            .eq('user_id', userId)
+            .or(storyFilter)
             .order('created_at', ascending: false);
         final entries = response as List<dynamic>;
         final entryIds = entries.map((e) => e['id'] as String).toList();
+
+        // Look up author names/avatars so other members' stories are
+        // attributed correctly instead of showing the viewer's own name.
+        final authorIds = entries
+            .map((e) => e['user_id'] as String?)
+            .whereType<String>()
+            .toSet()
+            .toList();
+        final Map<String, String> authorNames = {};
+        final Map<String, String> authorAvatars = {};
+        if (authorIds.isNotEmpty) {
+          try {
+            final profilesResponse = await supabase
+                .from('user_profiles')
+                .select('id, display_name, preferred_name, full_name, avatar_url')
+                .inFilter('id', authorIds);
+            for (final p in (profilesResponse as List<dynamic>)) {
+              final pid = p['id'] as String;
+              final name = (p['preferred_name'] as String?)?.trim().isNotEmpty == true
+                  ? p['preferred_name'] as String
+                  : (p['display_name'] as String?)?.trim().isNotEmpty == true
+                      ? p['display_name'] as String
+                      : (p['full_name'] as String? ?? '');
+              if (name.trim().isNotEmpty) authorNames[pid] = name.trim();
+              final avatar = p['avatar_url'] as String? ?? '';
+              if (avatar.isNotEmpty) authorAvatars[pid] = avatar;
+            }
+          } catch (e) {
+            debugPrint('LEGACY AUTHOR LOAD ERROR: $e');
+          }
+        }
 
         // Load heart data for these entries: counts + whether current user hearted each
         Map<String, int> heartCounts = {};
@@ -289,6 +327,9 @@ class _LegacyScreenState extends State<LegacyScreen>
           'isBookmarked': bookmarkedIds.contains(e['id'] as String),
           'heartCount': heartCounts[e['id']] ?? 0,
           'isHearted': heartedByMe.contains(e['id']),
+          'isMine': e['user_id'] == userId,
+          'authorName': authorNames[e['user_id']] ?? '',
+          'authorAvatarUrl': authorAvatars[e['user_id']] ?? '',
         }).toList();
       }
     } catch (e) {
@@ -4318,7 +4359,8 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                     children: [
                       Row(
                         children: [
-                          (story['isSample'] == true && (story['authorAvatarUrl'] as String? ?? '').isNotEmpty)
+                          ((story['authorAvatarUrl'] as String? ?? '').isNotEmpty &&
+                                  (story['isSample'] == true || story['isMine'] != true))
                               ? Container(
                                   width: 36,
                                   height: 36,
@@ -4337,9 +4379,13 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                                   ),
                                 )
                               : ProfileAvatarWidget(
-                                  profileData: (story['isSample'] == true) ? null : widget.profileData,
-                                  displayName: (story['isSample'] == true)
-                                      ? (story['authorName'] as String? ?? 'A Family Member')
+                                  profileData: (story['isSample'] == true || story['isMine'] != true)
+                                      ? null
+                                      : widget.profileData,
+                                  displayName: (story['isSample'] == true || story['isMine'] != true)
+                                      ? ((story['authorName'] as String? ?? '').isNotEmpty
+                                          ? story['authorName'] as String
+                                          : 'A Family Member')
                                       : widget.displayName,
                                   size: 36,
                                   borderColor: const Color(0xFF5DA399),
@@ -4350,8 +4396,10 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                (story['isSample'] == true)
-                                    ? (story['authorName'] as String? ?? 'A Family Member')
+                                (story['isSample'] == true || story['isMine'] != true)
+                                    ? ((story['authorName'] as String? ?? '').isNotEmpty
+                                        ? story['authorName'] as String
+                                        : 'A Family Member')
                                     : (widget.displayName.isNotEmpty ? widget.displayName : 'My Story'),
                                 style: GoogleFonts.nunitoSans(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary),
                               ),

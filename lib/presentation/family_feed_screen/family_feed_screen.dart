@@ -449,12 +449,14 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       }
     }
 
-    // Load real feed from Supabase
-    await _loadFeedFromSupabase();
-    // Load pinned daily check-in status
-    await _loadCheckinStatus();
-    // Load nest members for the avatar row
-    await _loadNestMembers();
+    // These three loads are independent of each other, so run them
+    // concurrently. Previously they ran in sequence, which made the avatar
+    // row (loaded last) visibly pop in after everything else.
+    await Future.wait([
+      _loadFeedFromSupabase(),
+      _loadCheckinStatus(),
+      _loadNestMembers(),
+    ]);
   }
 
   void _setupItemAnimations() {

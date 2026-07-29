@@ -151,7 +151,7 @@ class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
         backgroundColor: _bg,
         elevation: 0,
         title: Text(
-          'Messages',
+          'Direct',
           style: GoogleFonts.nunitoSans(fontWeight: FontWeight.w800, color: _textPrimary),
         ),
       ),

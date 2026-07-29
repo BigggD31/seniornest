@@ -1571,8 +1571,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       ),
       child: Row(
         children: [
-          Expanded(child: _buildTopTabButton('Messages', 0)),
-          Expanded(child: _buildTopTabButton('For You', 1)),
+          Expanded(child: _buildTopTabButton('Everyone', 0)),
+          Expanded(child: _buildTopTabButton('Direct', 1)),
         ],
       ),
     );
@@ -1628,7 +1628,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
               Row(
                 children: [
                   Text(
-                    'Messages',
+                    'Share',
                     style: GoogleFonts.nunitoSans(
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
