@@ -141,6 +141,19 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
     widget.onHeart();
   }
 
+  void _openPreview(BuildContext context) {
+    final msg = widget.message;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _MessagePreviewSheet(
+        message: msg,
+        isDarkMode: widget.isDarkMode,
+      ),
+    );
+  }
+
   static final RegExp _urlPattern = RegExp(
     r'((https?:\/\/)|(www\.))[^\s]+',
     caseSensitive: false,
@@ -199,7 +212,10 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
     final isDark = widget.isDarkMode;
     final msg = widget.message;
 
-    return Container(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: msg.type == MessageType.photo ? null : () => _openPreview(context),
+      child: Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF242018) : const Color(0xFFFAF7F2),
         borderRadius: BorderRadius.circular(16),
@@ -406,7 +422,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
           if (msg.type == MessageType.video && msg.imageUrl.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: _VideoPlayer(isDarkMode: isDark, videoUrl: msg.imageUrl),
+              child: _VideoPlayer(isDarkMode: isDark, videoUrl: msg.imageUrl, enableTap: false),
             ),
           // Text content
           if (msg.content.isNotEmpty)
@@ -718,6 +734,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
             ),
         ],
       ),
+      ),
     );
   }
 }
@@ -988,9 +1005,16 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
 }
 
 class _VideoPlayer extends StatefulWidget {
-  const _VideoPlayer({required this.isDarkMode, required this.videoUrl});
+  const _VideoPlayer({
+    required this.isDarkMode,
+    required this.videoUrl,
+    this.enableTap = true,
+  });
   final bool isDarkMode;
   final String videoUrl;
+  // When false, tapping the thumbnail does nothing here so the tap falls
+  // through to an ancestor GestureDetector (e.g. the card's tap-to-preview).
+  final bool enableTap;
 
   @override
   State<_VideoPlayer> createState() => _VideoPlayerState();
@@ -1000,11 +1024,13 @@ class _VideoPlayerState extends State<_VideoPlayer> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => openFullscreenVideo(
-        context: context,
-        videoUrl: widget.videoUrl,
-        isDarkMode: widget.isDarkMode,
-      ),
+      onTap: widget.enableTap
+          ? () => openFullscreenVideo(
+              context: context,
+              videoUrl: widget.videoUrl,
+              isDarkMode: widget.isDarkMode,
+            )
+          : null,
       child: Container(
         height: 180,
         width: double.infinity,
@@ -1068,6 +1094,124 @@ class _VideoPlayerState extends State<_VideoPlayer> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Whole-card preview popup ────────────────────────────────────────────
+// Opened by tapping anywhere on a Home card (audio, video, or text).
+// Photo cards keep their existing direct-to-fullscreen tap behavior.
+class _MessagePreviewSheet extends StatelessWidget {
+  const _MessagePreviewSheet({required this.message, required this.isDarkMode});
+
+  final MessageModel message;
+  final bool isDarkMode;
+
+  Color get _textPrimary =>
+      isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417);
+  Color get _textSecondary =>
+      isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E);
+  Color get _sheetBg =>
+      isDarkMode ? const Color(0xFF242018) : const Color(0xFFFDFDFD);
+
+  @override
+  Widget build(BuildContext context) {
+    final msg = message;
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: _sheetBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    msg.senderName,
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: _textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                // Share button
+                GestureDetector(
+                  onTap: () => SharePreviewWidget.show(
+                    context,
+                    title: '${msg.senderName} shared a moment',
+                    body: msg.content.isNotEmpty
+                        ? msg.content
+                        : '${msg.senderName} sent a ${msg.type.name}',
+                    imageUrl: msg.imageUrl.isNotEmpty ? msg.imageUrl : null,
+                    isDarkMode: isDarkMode,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(
+                      Icons.ios_share_rounded,
+                      color: _textSecondary,
+                      size: 22,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // Close button — top-right
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(
+                      Icons.close_rounded,
+                      color: _textSecondary,
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (msg.type == MessageType.voice)
+                    _VoiceNotePlayer(isDarkMode: isDarkMode, audioUrl: msg.imageUrl)
+                  else if (msg.type == MessageType.video && msg.imageUrl.isNotEmpty)
+                    _VideoPlayer(isDarkMode: isDarkMode, videoUrl: msg.imageUrl),
+                  if (msg.content.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        top: msg.type == MessageType.text ? 0 : 16,
+                      ),
+                      child: Text(
+                        msg.content,
+                        style: GoogleFonts.nunitoSans(
+                          fontSize: 16,
+                          color: _textPrimary,
+                          height: 1.7,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
