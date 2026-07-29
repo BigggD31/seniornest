@@ -1572,14 +1572,17 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       child: Row(
         children: [
           Expanded(child: _buildTopTabButton('Everyone', 0)),
-          Expanded(child: _buildTopTabButton('Direct', 1)),
+          Expanded(child: _buildTopTabButton('Direct', 1, icon: Icons.mail_outline_rounded)),
         ],
       ),
     );
   }
 
-  Widget _buildTopTabButton(String label, int index) {
+  Widget _buildTopTabButton(String label, int index, {IconData? icon}) {
     final isSelected = _topTabIndex == index;
+    final color = isSelected
+        ? Colors.white
+        : (_isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E));
     return GestureDetector(
       onTap: () => setState(() => _topTabIndex = index),
       child: AnimatedContainer(
@@ -1590,15 +1593,22 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           borderRadius: BorderRadius.circular(11),
         ),
         alignment: Alignment.center,
-        child: Text(
-          label,
-          style: GoogleFonts.nunitoSans(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: isSelected
-                ? Colors.white
-                : (_isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E)),
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: GoogleFonts.nunitoSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
         ),
       ),
     );
