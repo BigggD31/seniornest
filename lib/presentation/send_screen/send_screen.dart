@@ -1572,7 +1572,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       child: Row(
         children: [
           Expanded(child: _buildTopTabButton('Everyone', 0)),
-          Expanded(child: _buildTopTabButton('Direct', 1, icon: Icons.mail_outline_rounded)),
+          Expanded(child: _buildTopTabButton('My Messages', 1, icon: Icons.mail_outline_rounded)),
         ],
       ),
     );

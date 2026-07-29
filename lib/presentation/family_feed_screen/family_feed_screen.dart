@@ -905,6 +905,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             _hasRealPost = true;
             _messages = loaded;
           });
+          // Rebuild the per-item animations for the new list and replay the
+          // entrance so real content animates in cleanly instead of popping
+          // in underneath the cached-content animation that was already running.
+          _setupItemAnimations();
+          _listEntranceController
+            ..reset()
+            ..forward();
         }
       }
     } catch (e) {
