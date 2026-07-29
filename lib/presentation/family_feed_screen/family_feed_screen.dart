@@ -655,10 +655,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       );
       return;
     }
-    // TODO: once private message threads exist, navigate straight into the
-    // thread with this member pre-selected as recipient. For now, open the
-    // compose screen so the feature is visible/testable end to end.
-    Navigator.pushNamed(context, AppRoutes.sendScreen);
+    Navigator.pushNamed(
+      context,
+      AppRoutes.messageThreadScreen,
+      arguments: {
+        'recipientId': member['id'] as String? ?? '',
+        'recipientName': member['name'] as String? ?? 'Nest Member',
+        'recipientAvatarUrl': member['avatarUrl'] as String?,
+      },
+    );
   }
 
   void _showWelcomeMessage() {

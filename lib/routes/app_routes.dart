@@ -17,6 +17,8 @@ import '../presentation/privacy_policy_screen/privacy_policy_screen.dart';
 import '../presentation/save_messages_prompt_screen/save_messages_prompt_screen.dart';
 import '../presentation/profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../presentation/notifications_screen/notifications_screen.dart';
+import '../presentation/messages_inbox_screen/messages_inbox_screen.dart';
+import '../presentation/message_thread_screen/message_thread_screen.dart';
 
 class AppRoutes {
   static const String initial = '/';
@@ -38,6 +40,8 @@ class AppRoutes {
   static const String saveMessagesPromptScreen = '/save-messages-prompt-screen';
   static const String profilePhotoPickerScreen = '/profile-photo-picker-screen';
   static const String notificationsScreen = '/notifications-screen';
+  static const String messagesInboxScreen = '/messages-inbox-screen';
+  static const String messageThreadScreen = '/message-thread-screen';
 
   static Map<String, WidgetBuilder> routes = {
     initial: (context) => const SplashScreen(),
@@ -47,6 +51,16 @@ class AppRoutes {
     seniorOnboardingScreen: (context) => const SeniorOnboardingScreen(),
     familyOnboardingScreen: (context) => const FamilyOnboardingScreen(),
     sendScreen: (context) => const SendScreen(),
+    messagesInboxScreen: (context) => const MessagesInboxScreen(),
+    messageThreadScreen: (context) {
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      return MessageThreadScreen(
+        recipientId: args?['recipientId'] as String? ?? '',
+        recipientName: args?['recipientName'] as String? ?? 'Nest Member',
+        recipientAvatarUrl: args?['recipientAvatarUrl'] as String?,
+      );
+    },
     legacyScreen: (context) => const LegacyScreen(),
     favsScreen: (context) => const FavsScreen(),
     safetyScreen: (context) => const SafetyScreen(),
