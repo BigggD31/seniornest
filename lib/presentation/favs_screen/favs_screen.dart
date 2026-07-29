@@ -135,7 +135,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
         Navigator.pushReplacementNamed(context, '/family-feed-screen');
         break;
       case 1:
-        Navigator.pushReplacementNamed(context, '/messages-inbox-screen');
+        Navigator.pushReplacementNamed(context, '/send-screen');
         break;
       case 2:
         Navigator.pushReplacementNamed(context, '/legacy-screen');

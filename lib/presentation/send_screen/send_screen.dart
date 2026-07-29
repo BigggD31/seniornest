@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
+import 'widgets/private_inbox_list_widget.dart';
 
 class SendScreen extends StatefulWidget {
   const SendScreen({super.key});
@@ -34,6 +35,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   bool _isSending = false;
   bool _hasSentMessages = false; // hides placeholder once first message sent
   bool _sampleBannerDismissed = false;
+  int _topTabIndex = 0; // 0 = Messages (broadcast composer), 1 = For You (private threads)
   Map<String, dynamic>? _profileData;
 
   final TextEditingController _messageController = TextEditingController();
@@ -1474,8 +1476,19 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   _buildTopBar(isTablet),
+                  _buildTopTabSelector(isTablet),
                   Expanded(
-                    child: SingleChildScrollView(
+                    child: _topTabIndex == 1
+                        ? SingleChildScrollView(
+                            padding: EdgeInsets.only(
+                              left: isTablet ? 28 : 20,
+                              right: isTablet ? 28 : 20,
+                              top: 16,
+                              bottom: kBottomNavigationBarHeight + 24,
+                            ),
+                            child: PrivateInboxListWidget(isDarkMode: _isDarkMode),
+                          )
+                        : SingleChildScrollView(
                       padding: EdgeInsets.only(
                         left: isTablet ? 28 : 20,
                         right: isTablet ? 28 : 20,
@@ -1545,6 +1558,49 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         ],
       ),
       floatingActionButton: null,
+    );
+  }
+
+  Widget _buildTopTabSelector(bool isTablet) {
+    return Container(
+      margin: EdgeInsets.fromLTRB(isTablet ? 28 : 20, 12, isTablet ? 28 : 20, 4),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF242018) : const Color(0xFFF0E9DC),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _buildTopTabButton('Messages', 0)),
+          Expanded(child: _buildTopTabButton('For You', 1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopTabButton(String label, int index) {
+    final isSelected = _topTabIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _topTabIndex = index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF5DA399) : Colors.transparent,
+          borderRadius: BorderRadius.circular(11),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: GoogleFonts.nunitoSans(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: isSelected
+                ? Colors.white
+                : (_isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E)),
+          ),
+        ),
+      ),
     );
   }
 
