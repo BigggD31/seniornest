@@ -979,7 +979,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     setState(() => _currentNavIndex = index);
     switch (index) {
       case 1:
-        Navigator.pushReplacementNamed(context, '/send-screen');
+        Navigator.pushReplacementNamed(context, '/messages-inbox-screen');
         break;
       case 2:
         Navigator.pushReplacementNamed(context, '/legacy-screen');

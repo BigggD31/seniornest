@@ -514,7 +514,7 @@ class _LegacyScreenState extends State<LegacyScreen>
         Navigator.pushReplacementNamed(context, '/family-feed-screen');
         break;
       case 1:
-        Navigator.pushReplacementNamed(context, '/send-screen');
+        Navigator.pushReplacementNamed(context, '/messages-inbox-screen');
         break;
       case 3:
         Navigator.pushReplacementNamed(context, '/safety-screen');

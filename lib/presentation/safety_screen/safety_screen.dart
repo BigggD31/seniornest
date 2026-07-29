@@ -382,7 +382,7 @@ class _SafetyScreenState extends State<SafetyScreen>
         Navigator.pushReplacementNamed(context, '/family-feed-screen');
         break;
       case 1:
-        Navigator.pushReplacementNamed(context, '/send-screen');
+        Navigator.pushReplacementNamed(context, '/messages-inbox-screen');
         break;
       case 2:
         Navigator.pushReplacementNamed(context, '/legacy-screen');
