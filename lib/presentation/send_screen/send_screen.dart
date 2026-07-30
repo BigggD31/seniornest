@@ -39,6 +39,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   Map<String, dynamic>? _profileData;
 
   final TextEditingController _messageController = TextEditingController();
+  final TextEditingController _voiceCaptionController = TextEditingController();
+  final TextEditingController _videoCaptionController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
   String _selectedType = 'text';
   String? _selectedPhotoBase64;
@@ -158,6 +160,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     _videoPlayerController?.dispose();
     _entranceController.dispose();
     _messageController.dispose();
+    _voiceCaptionController.dispose();
+    _videoCaptionController.dispose();
     _textFocusNode.dispose();
     super.dispose();
   }
@@ -572,7 +576,35 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: cardBorder, width: 1.5),
+                        ),
+                        child: TextField(
+                          textCapitalization: TextCapitalization.sentences,
+                          controller: _voiceCaptionController,
+                          maxLines: 3,
+                          minLines: 1,
+                          style: GoogleFonts.nunitoSans(fontSize: 15, color: textPrimary),
+                          decoration: InputDecoration(
+                            hintText: 'Add a note (optional)...',
+                            hintStyle: GoogleFonts.nunitoSans(
+                              fontSize: 15,
+                              color: textSecondary,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
@@ -618,8 +650,9 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                               onTap: () async {
                                 _voicePlayTimer?.cancel();
                                 final path = _voiceFilePath;
+                                final caption = _voiceCaptionController.text.trim();
                                 Navigator.pop(ctx);
-                                await _sendMessage(overrideType: 'voice', overridePath: path);
+                                await _sendMessage(overrideType: 'voice', overridePath: path, overrideContent: caption);
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
@@ -1079,7 +1112,35 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                         ),
                       ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: cardBorder, width: 1.5),
+                        ),
+                        child: TextField(
+                          textCapitalization: TextCapitalization.sentences,
+                          controller: _videoCaptionController,
+                          maxLines: 3,
+                          minLines: 1,
+                          style: GoogleFonts.nunitoSans(fontSize: 15, color: textPrimary),
+                          decoration: InputDecoration(
+                            hintText: 'Add a note (optional)...',
+                            hintStyle: GoogleFonts.nunitoSans(
+                              fontSize: 15,
+                              color: textSecondary,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
@@ -1125,8 +1186,9 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                               onTap: () async {
                                 _videoPlayTimer?.cancel();
                                 final path = _videoFilePath;
+                                final caption = _videoCaptionController.text.trim();
                                 Navigator.pop(ctx);
-                                await _sendMessage(overrideType: 'video', overridePath: path);
+                                await _sendMessage(overrideType: 'video', overridePath: path, overrideContent: caption);
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
@@ -3228,7 +3290,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     );
   }
 
-  Future<void> _sendMessage({String? overrideType, String? overridePath}) async {
+  Future<void> _sendMessage({String? overrideType, String? overridePath, String? overrideContent}) async {
     if (_isSending) return;
     setState(() => _isSending = true);
 
@@ -3298,7 +3360,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         'nest_id': nestId,
         'author_id': userId,
         'post_type': effectiveType,
-        'content': _messageController.text.trim(),
+        'content': overrideContent ?? _messageController.text.trim(),
         'media_url': mediaUrl,
       });
 
@@ -3310,6 +3372,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         _isSending = false;
         _hasSentMessages = true;
         _messageController.clear();
+        _voiceCaptionController.clear();
+        _videoCaptionController.clear();
         _selectedPhotoBase64 = null;
         _selectedType = 'text';
         _voiceIsRecording = false;

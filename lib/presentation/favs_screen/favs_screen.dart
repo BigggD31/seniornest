@@ -659,7 +659,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                     ),
                     Icon(
                       Icons.bookmark_rounded,
-                      color: catColor.withAlpha(80),
+                      color: const Color(0xFF5DA399).withAlpha(160),
                       size: 18,
                     ),
                   ],
@@ -843,7 +843,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                 ),
                 Icon(
                   Icons.bookmark_rounded,
-                  color: catColor.withAlpha(80),
+                  color: const Color(0xFF5DA399).withAlpha(160),
                   size: 18,
                 ),
               ],
@@ -1147,7 +1147,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                         const Spacer(),
                         GestureDetector(
                           onTap: () => _removeBookmark(item),
-                          child: Icon(Icons.bookmark_rounded, color: catColor, size: 20),
+                          child: Icon(Icons.bookmark_rounded, color: const Color(0xFF5DA399), size: 20),
                         ),
                       ],
                     ),

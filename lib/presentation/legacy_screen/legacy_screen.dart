@@ -2889,18 +2889,46 @@ class _StoryDetailSheet extends StatelessWidget {
                     ),
                   if (hasImage) const SizedBox(height: 20),
                   if ((story['entry_type'] as String? ?? 'text') == 'audio' &&
-                      (story['media_url'] as String? ?? '').isNotEmpty)
+                      (story['media_url'] as String? ?? '').isNotEmpty) ...[
                     _LegacyAudioPlayer(
                       audioUrl: story['media_url'] as String,
                       isDarkMode: isDarkMode,
-                    )
-                  else if ((story['entry_type'] as String? ?? 'text') == 'video' &&
-                      (story['media_url'] as String? ?? '').isNotEmpty)
+                    ),
+                    if ((story['excerpt'] as String? ?? '').isNotEmpty &&
+                        story['excerpt'] != 'Voice story' &&
+                        story['excerpt'] != 'Video story')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Text(
+                          story['excerpt'] as String,
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 16,
+                            color: _textPrimary,
+                            height: 1.7,
+                          ),
+                        ),
+                      ),
+                  ] else if ((story['entry_type'] as String? ?? 'text') == 'video' &&
+                      (story['media_url'] as String? ?? '').isNotEmpty) ...[
                     _LegacyVideoCardPlayer(
                       videoUrl: story['media_url'] as String,
                       isDarkMode: isDarkMode,
-                    )
-                  else
+                    ),
+                    if ((story['excerpt'] as String? ?? '').isNotEmpty &&
+                        story['excerpt'] != 'Voice story' &&
+                        story['excerpt'] != 'Video story')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Text(
+                          story['excerpt'] as String,
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 16,
+                            color: _textPrimary,
+                            height: 1.7,
+                          ),
+                        ),
+                      ),
+                  ] else
                     Text(
                       story['excerpt'] as String? ?? '',
                       style: GoogleFonts.nunitoSans(
@@ -2948,6 +2976,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
   String? _audioFilePath;
   bool _isSaving = false;
   final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _captionController = TextEditingController();
   String _selectedCategory = 'Memories';
   static const List<String> _categories = ['Memories', 'Wisdom', 'Family', 'Life Lessons'];
 
@@ -2986,6 +3015,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
     _timer?.cancel();
     _playTimer?.cancel();
     _titleController.dispose();
+    _captionController.dispose();
     super.dispose();
   }
 
@@ -3104,7 +3134,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
           'user_id': userId,
           'nest_id': nestId.isEmpty ? null : nestId,
           'prompt': title,
-          'content': 'Voice story',
+          'content': _captionController.text.trim().isNotEmpty ? _captionController.text.trim() : 'Voice story',
           'entry_type': 'audio',
           'media_url': mediaUrl,
           'category': _selectedCategory,
@@ -3444,6 +3474,29 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
                 ],
               ),
             ),
+            const SizedBox(height: 14),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Caption (optional)', style: GoogleFonts.nunitoSans(fontSize: 12, fontWeight: FontWeight.w600, color: _textSecondary, letterSpacing: 0.5)),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: _cardBorder, width: 1)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              child: TextField(
+                textCapitalization: TextCapitalization.sentences,
+                controller: _captionController,
+                maxLines: 3,
+                minLines: 1,
+                style: GoogleFonts.nunitoSans(fontSize: 15, color: _textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Add a note about this story...',
+                  hintStyle: GoogleFonts.nunitoSans(fontSize: 15, color: _textSecondary, fontStyle: FontStyle.italic),
+                  border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none,
+                  isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -3568,6 +3621,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
   VideoPlayerController? _videoPlayerController;
   String? _videoFilePath;
   final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _captionController = TextEditingController();
   String _selectedCategory = 'Memories';
   static const List<String> _categories = ['Memories', 'Wisdom', 'Family', 'Life Lessons'];
 
@@ -3582,6 +3636,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
     _cameraController?.dispose();
     _videoPlayerController?.dispose();
     _titleController.dispose();
+    _captionController.dispose();
     super.dispose();
   }
 
@@ -3672,7 +3727,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
           'user_id': userId,
           'nest_id': nestId.isEmpty ? null : nestId,
           'prompt': title,
-          'content': 'Video story',
+          'content': _captionController.text.trim().isNotEmpty ? _captionController.text.trim() : 'Video story',
           'entry_type': 'video',
           'media_url': mediaUrl,
           'category': _selectedCategory,
@@ -3905,6 +3960,29 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
                 ),
               ),
             ] else if (_hasRecording) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Caption (optional)', style: GoogleFonts.nunitoSans(fontSize: 12, fontWeight: FontWeight.w600, color: _textSecondary, letterSpacing: 0.5)),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: _cardBorder, width: 1)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                child: TextField(
+                  textCapitalization: TextCapitalization.sentences,
+                  controller: _captionController,
+                  maxLines: 3,
+                  minLines: 1,
+                  style: GoogleFonts.nunitoSans(fontSize: 15, color: _textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'Add a note about this story...',
+                    hintStyle: GoogleFonts.nunitoSans(fontSize: 15, color: _textSecondary, fontStyle: FontStyle.italic),
+                    border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none,
+                    isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               Row(children: [
                 Expanded(
                   child: GestureDetector(
