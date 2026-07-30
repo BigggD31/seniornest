@@ -424,26 +424,48 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: _VideoPlayer(isDarkMode: isDark, videoUrl: msg.imageUrl, enableTap: false),
             ),
-          // Text content
+          // Text content — truncated to 4 lines; tapping opens the full popup
           if (msg.content.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                14,
-                msg.type == MessageType.photo || msg.type == MessageType.voice
-                    ? 10
-                    : 0,
-                14,
-                0,
-              ),
-              child: _buildLinkifiedText(
-                msg.content,
-                GoogleFonts.nunitoSans(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: isDark
-                      ? const Color(0xFFD8C8A8)
-                      : const Color(0xFF3D3020),
-                  height: 1.55,
+            GestureDetector(
+              onTap: () => _openPreview(context),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  14,
+                  msg.type == MessageType.photo || msg.type == MessageType.voice
+                      ? 10
+                      : 0,
+                  14,
+                  0,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      msg.content,
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
+                        color: isDark
+                            ? const Color(0xFFD8C8A8)
+                            : const Color(0xFF3D3020),
+                        height: 1.55,
+                      ),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (msg.content.length > 160)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Tap to read more',
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF5DA399),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -1189,7 +1211,26 @@ class _MessagePreviewSheet extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (msg.type == MessageType.voice)
+                  if (msg.type == MessageType.photo && msg.imageUrl.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: GestureDetector(
+                        onTap: () => openFullscreenImage(
+                          context: context,
+                          imageUrl: msg.imageUrl,
+                          semanticLabel: msg.imageSemanticLabel,
+                          isDarkMode: isDarkMode,
+                        ),
+                        child: CustomImageWidget(
+                          imageUrl: msg.imageUrl,
+                          width: double.infinity,
+                          height: 200,
+                          fit: BoxFit.cover,
+                          semanticLabel: msg.imageSemanticLabel,
+                        ),
+                      ),
+                    )
+                  else if (msg.type == MessageType.voice)
                     _VoiceNotePlayer(isDarkMode: isDarkMode, audioUrl: msg.imageUrl)
                   else if (msg.type == MessageType.video && msg.imageUrl.isNotEmpty)
                     _VideoPlayer(isDarkMode: isDarkMode, videoUrl: msg.imageUrl),

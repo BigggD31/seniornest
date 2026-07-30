@@ -9,6 +9,7 @@ import '../../widgets/app_navigation.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
+import '../../widgets/share_preview_widget.dart';
 
 class FavsScreen extends StatefulWidget {
   const FavsScreen({super.key});
@@ -179,7 +180,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
           children: [
             _buildTopBar(isTablet),
             _buildCategoryFilter(isTablet),
-            if (!_sampleBannerDismissed) _buildFavsSampleBanner(isTablet),
+            if (!_sampleBannerDismissed && _bookmarkedItems.isEmpty) _buildFavsSampleBanner(isTablet),
             Expanded(
               child: _isLoading
                   ? _buildLoadingState()
@@ -963,7 +964,34 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => SharePreviewWidget.show(
+                      context,
+                      title: title,
+                      body: content2.isNotEmpty ? content2 : 'A shared memory',
+                      imageUrl: imageUrl.isNotEmpty ? imageUrl : null,
+                      isDarkMode: _isDarkMode,
+                    ),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD4AA00).withAlpha(18),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0xFFD4AA00).withAlpha(60),
+                          width: 1,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.ios_share_rounded,
+                        size: 16,
+                        color: Color(0xFFD4AA00),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   GestureDetector(
                     onTap: () => Navigator.pop(ctx),
                     child: Icon(Icons.close_rounded, color: _textSecondary, size: 24),
