@@ -45,12 +45,11 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   String _selectedType = 'text';
   String? _selectedPhotoBase64;
   final List<String> _selectedRecipients = [];
+  List<Map<String, dynamic>> _nestRecipients = []; // real nest members (excludes current user)
 
   late AnimationController _entranceController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
-
-  static const List<Map<String, dynamic>> _mockRecipients = [];
 
   static const List<Map<String, String>> _quickMessages = [
     {'text': 'Thinking of you today! 💛'},
@@ -123,6 +122,56 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           ),
         );
     _loadPrefs();
+    _loadNestRecipients();
+  }
+
+  Future<void> _loadNestRecipients() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      final currentUserId = supabase.auth.currentUser?.id ?? '';
+      if (nestId.isEmpty) return;
+
+      final membersResponse = await supabase
+          .from('nest_members')
+          .select(
+              'user_id, user_profiles(display_name, preferred_name, avatar_url, relation_type)')
+          .eq('nest_id', nestId);
+      final rows = membersResponse as List<dynamic>;
+
+      final loaded = <Map<String, dynamic>>[];
+      for (final row in rows) {
+        final userId = row['user_id'] as String? ?? '';
+        if (userId.isEmpty || userId == currentUserId) continue;
+        final profile = row['user_profiles'] as Map<String, dynamic>?;
+        final preferred = profile?['preferred_name'] as String? ?? '';
+        final display = profile?['display_name'] as String? ?? '';
+        final name = preferred.isNotEmpty ? preferred : display;
+        if (name.isEmpty) continue;
+        final rawRelation = profile?['relation_type'] as String? ?? 'family';
+        final relationship = rawRelation.isNotEmpty
+            ? rawRelation[0].toUpperCase() + rawRelation.substring(1)
+            : 'Family';
+        loaded.add({
+          'id': userId,
+          'name': name,
+          'avatarUrl': profile?['avatar_url'] as String? ?? '',
+          'relationship': relationship,
+        });
+      }
+
+      if (mounted) {
+        setState(() {
+          _nestRecipients = loaded;
+          // Drop any selected recipients who are no longer valid nest members.
+          _selectedRecipients.removeWhere(
+              (id) => !loaded.any((m) => m['id'] == id));
+        });
+      }
+    } catch (e) {
+      debugPrint('SEND_NEST_RECIPIENTS_LOAD_ERROR: $e');
+    }
   }
 
   Future<void> _loadPrefs() async {
@@ -2125,21 +2174,22 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
 
         const SizedBox(height: 10),
 
-        // Individual recipients in a horizontal scroll
-        if (_mockRecipients.isNotEmpty) SizedBox(
+        // Individual recipients in a horizontal scroll — real nest members only.
+        // Nobody to pick from yet (solo nest) shows nothing here; Everyone still works.
+        if (_nestRecipients.isNotEmpty) SizedBox(
           height: 90,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            itemCount: _mockRecipients.length,
+            itemCount: _nestRecipients.length,
             itemBuilder: (context, index) {
-              final r = _mockRecipients[index];
+              final r = _nestRecipients[index];
               final isSelected = _selectedRecipients.contains(r['id']);
               return GestureDetector(
                 onTap: () => _toggleRecipient(r['id'] as String),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   margin: EdgeInsets.only(
-                    right: index < _mockRecipients.length - 1 ? 10 : 0,
+                    right: index < _nestRecipients.length - 1 ? 10 : 0,
                   ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
@@ -2171,13 +2221,32 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                     children: [
                       Stack(
                         children: [
-                          CircleAvatar(
-                            radius: 22,
-                            backgroundImage: NetworkImage(
-                              r['avatar'] as String,
-                            ),
-                            backgroundColor: _surface,
-                          ),
+                          Builder(builder: (context) {
+                            final avatarUrl = r['avatarUrl'] as String? ?? '';
+                            final name = r['name'] as String? ?? '';
+                            final initial =
+                                name.isNotEmpty ? name[0].toUpperCase() : '?';
+                            if (avatarUrl.isNotEmpty) {
+                              return CircleAvatar(
+                                radius: 22,
+                                backgroundImage: NetworkImage(avatarUrl),
+                                backgroundColor: _surface,
+                              );
+                            }
+                            return CircleAvatar(
+                              radius: 22,
+                              backgroundColor:
+                                  const Color(0xFF5DA399).withAlpha(40),
+                              child: Text(
+                                initial,
+                                style: GoogleFonts.nunitoSans(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF5DA399),
+                                ),
+                              ),
+                            );
+                          }),
                           if (isSelected)
                             Positioned(
                               right: 0,
@@ -3356,12 +3425,16 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       }
 
       // Insert post into feed_posts
+      // visible_to_ids: null/empty = visible to everyone in the nest (default).
+      // Non-empty = only the sender + selected recipients can see this card.
       await supabase.from('feed_posts').insert({
         'nest_id': nestId,
         'author_id': userId,
         'post_type': effectiveType,
         'content': overrideContent ?? _messageController.text.trim(),
         'media_url': mediaUrl,
+        'visible_to_ids':
+            _selectedRecipients.isEmpty ? null : _selectedRecipients,
       });
 
       // Mark has_sent_messages
@@ -3371,6 +3444,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       setState(() {
         _isSending = false;
         _hasSentMessages = true;
+        _selectedRecipients.clear();
         _messageController.clear();
         _voiceCaptionController.clear();
         _videoCaptionController.clear();
