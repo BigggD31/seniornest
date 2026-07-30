@@ -1438,6 +1438,34 @@ class _LegacyScreenState extends State<LegacyScreen>
                             ],
                           ),
                           const Spacer(),
+                          // Share icon (icon-only, gold) — matches Home/Favs style
+                          GestureDetector(
+                            onTap: () => SharePreviewWidget.show(
+                              context,
+                              title: story['title'] as String,
+                              body: story['excerpt'] as String,
+                              imageUrl: story['imageUrl'] as String?,
+                              isDarkMode: _isDarkMode,
+                            ),
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFD4AA00).withAlpha(18),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: const Color(0xFFD4AA00).withAlpha(50),
+                                  width: 1,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.ios_share_rounded,
+                                size: 15,
+                                color: Color(0xFFD4AA00),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
                           // Bookmark button
                           GestureDetector(
                             onTap: () => _toggleStoryBookmark(story),
@@ -1449,50 +1477,6 @@ class _LegacyScreenState extends State<LegacyScreen>
                               color: (story['isBookmarked'] as bool? ?? false)
                                   ? const Color(0xFF5DA399)
                                   : _textSecondary,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Share Story button
-                          GestureDetector(
-                            onTap: () => SharePreviewWidget.show(
-                              context,
-                              title: story['title'] as String,
-                              body: story['excerpt'] as String,
-                              imageUrl: story['imageUrl'] as String?,
-                              isDarkMode: _isDarkMode,
-                            ),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFD4AA00).withAlpha(18),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: const Color(0xFFD4AA00).withAlpha(60),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.ios_share_rounded,
-                                    size: 14,
-                                    color: Color(0xFFD4AA00),
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    'Share Story',
-                                    style: GoogleFonts.nunitoSans(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFFD4AA00),
-                                    ),
-                                  ),
-                                ],
-                              ),
                             ),
                           ),
                         ],
@@ -4513,32 +4497,27 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                             ),
                           ),
                           const Spacer(),
+                          // Share icon (icon-only, gold) — matches Home/Favs style
+                          GestureDetector(
+                            onTap: widget.onShare,
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFD4AA00).withAlpha(18),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFD4AA00).withAlpha(50), width: 1),
+                              ),
+                              child: const Icon(Icons.ios_share_rounded, size: 15, color: Color(0xFFD4AA00)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
                           GestureDetector(
                             onTap: widget.onBookmark,
                             child: Icon(
                               (story['isBookmarked'] as bool? ?? false) ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
                               size: 22,
                               color: (story['isBookmarked'] as bool? ?? false) ? const Color(0xFF5DA399) : _textSecondary,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: widget.onShare,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFD4AA00).withAlpha(18),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFFD4AA00).withAlpha(60), width: 1),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.ios_share_rounded, size: 14, color: Color(0xFFD4AA00)),
-                                  const SizedBox(width: 5),
-                                  Text('Share Story', style: GoogleFonts.nunitoSans(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFFD4AA00))),
-                                ],
-                              ),
                             ),
                           ),
                         ],

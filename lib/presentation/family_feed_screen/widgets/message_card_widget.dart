@@ -1179,12 +1179,21 @@ class _MessagePreviewSheet extends StatelessWidget {
                     imageUrl: msg.imageUrl.isNotEmpty ? msg.imageUrl : null,
                     isDarkMode: isDarkMode,
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: Icon(
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD4AA00).withAlpha(18),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: const Color(0xFFD4AA00).withAlpha(60),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Icon(
                       Icons.ios_share_rounded,
-                      color: _textSecondary,
-                      size: 22,
+                      size: 16,
+                      color: Color(0xFFD4AA00),
                     ),
                   ),
                 ),
