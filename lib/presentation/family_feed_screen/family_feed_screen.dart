@@ -252,7 +252,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     super.initState();
     _listEntranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 260),
     );
     _loadData();
   }
@@ -462,13 +462,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   void _setupItemAnimations() {
     _itemAnimations.clear();
     for (int i = 0; i < _messages.length; i++) {
-      final start = (i * 0.12).clamp(0.0, 0.7);
-      final end = (start + 0.4).clamp(0.0, 1.0);
+      final start = (i * 0.04).clamp(0.0, 0.5);
+      final end = (start + 0.6).clamp(0.0, 1.0);
       _itemAnimations.add(
         Tween<double>(begin: 0.0, end: 1.0).animate(
           CurvedAnimation(
             parent: _listEntranceController,
-            curve: Interval(start, end, curve: Curves.easeOutCubic),
+            curve: Interval(start, end, curve: Curves.easeOut),
           ),
         ),
       );
@@ -905,13 +905,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             _hasRealPost = true;
             _messages = loaded;
           });
-          // Rebuild the per-item animations for the new list and replay the
-          // entrance so real content animates in cleanly instead of popping
-          // in underneath the cached-content animation that was already running.
+          // The entrance animation already played once on first load — just
+          // rebuild the per-item animations to match the new list length so
+          // any additional cards render at full opacity immediately, with no
+          // replay. Real data should update quietly, not restart the reveal.
           _setupItemAnimations();
-          _listEntranceController
-            ..reset()
-            ..forward();
         }
       }
     } catch (e) {
@@ -1054,11 +1052,21 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   Widget _buildBody(bool isTablet) {
-    if (_isLoading) {
-      return _buildLoadingState();
-    }
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeOut,
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: _isLoading
+          ? _buildLoadingState()
+          : _buildFeedContent(isTablet),
+    );
+  }
 
+  Widget _buildFeedContent(bool isTablet) {
     return RefreshIndicator(
+      key: const ValueKey('feedContent'),
       onRefresh: _onRefresh,
       color: const Color(0xFF5DA399),
       backgroundColor: const Color(0xFFFDFDFD),
@@ -1317,7 +1325,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           return AnimatedBuilder(
             animation: anim,
             builder: (context, child) => Transform.translate(
-              offset: Offset(0, 24 * (1 - anim.value)),
+              offset: Offset(0, 8 * (1 - anim.value)),
               child: Opacity(opacity: anim.value, child: child),
             ),
             child: Padding(
@@ -1354,7 +1362,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           return AnimatedBuilder(
             animation: anim,
             builder: (context, child) => Transform.translate(
-              offset: Offset(0, 24 * (1 - anim.value)),
+              offset: Offset(0, 8 * (1 - anim.value)),
               child: Opacity(opacity: anim.value, child: child),
             ),
             child: MessageCardWidget(
@@ -1373,6 +1381,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
   Widget _buildLoadingState() {
     return ListView.builder(
+      key: const ValueKey('feedLoading'),
       padding: const EdgeInsets.all(20),
       itemCount: 4,
       itemBuilder: (_, __) => Padding(
