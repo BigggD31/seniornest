@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
+import '../../widgets/keyboard_done_bar.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 class SafetyScreen extends StatefulWidget {
@@ -403,7 +404,9 @@ class _SafetyScreenState extends State<SafetyScreen>
 
     return Scaffold(
       backgroundColor: _bg,
-      body: SafeArea(
+      body: Stack(
+        children: [
+          SafeArea(
         bottom: false,
         child: _isLoading
             ? _buildLoadingState()
@@ -430,6 +433,9 @@ class _SafetyScreenState extends State<SafetyScreen>
                   const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
                 ],
               ),
+          ),
+          const KeyboardDoneBarOverlay(),
+        ],
       ),
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,

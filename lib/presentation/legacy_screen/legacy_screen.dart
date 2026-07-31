@@ -14,6 +14,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
+import '../../widgets/keyboard_done_bar.dart';
 import '../../widgets/share_preview_widget.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
 import '../../widgets/custom_image_widget.dart';
@@ -576,9 +577,11 @@ class _LegacyScreenState extends State<LegacyScreen>
 
     return Scaffold(
       backgroundColor: _bg,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Column(
           children: [
             _buildTopBar(isTablet),
             Expanded(
@@ -670,6 +673,9 @@ class _LegacyScreenState extends State<LegacyScreen>
             ),
           ],
         ),
+      ),
+          const KeyboardDoneBarOverlay(),
+        ],
       ),
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,
@@ -1397,6 +1403,18 @@ class _LegacyScreenState extends State<LegacyScreen>
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
+                      if ((story['excerpt'] as String? ?? '').length > 100)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Tap to read more',
+                            style: GoogleFonts.nunitoSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF5DA399),
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
@@ -2071,7 +2089,8 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
         ? const Color(0xFF9A8A72)
         : const Color(0xFF8A7A6A);
 
-    return GestureDetector(
+    return KeyboardDoneBar(
+      child: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
         height: MediaQuery.of(context).size.height * 0.85,
@@ -2322,7 +2341,8 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
         ],
       ),
     ),
-  );
+  ),
+    );
   }
 }
 
@@ -2579,7 +2599,8 @@ class _SuggestQuestionSheetState extends State<_SuggestQuestionSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    return Container(
+    return KeyboardDoneBar(
+      child: Container(
       height: MediaQuery.of(context).size.height * 0.75,
       margin: const EdgeInsets.symmetric(horizontal: 8),
       padding: EdgeInsets.only(bottom: bottomPadding),
@@ -2745,6 +2766,7 @@ class _SuggestQuestionSheetState extends State<_SuggestQuestionSheet> {
           ),
         ],
       ),
+      ),
     );
   }
 }
@@ -2773,13 +2795,16 @@ class _StoryDetailSheet extends StatelessWidget {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
-        height: MediaQuery.of(context).size.height * 0.85,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         margin: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: _bg,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
@@ -2869,11 +2894,12 @@ class _StoryDetailSheet extends StatelessWidget {
                 ),
               ),
             ),
-          Expanded(
+          Flexible(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   if (hasImage)
                     ClipRRect(
@@ -3178,7 +3204,8 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
-    return Container(
+    return KeyboardDoneBar(
+      child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 8),
       padding: EdgeInsets.fromLTRB(24, 20, 24, 36 + bottomPadding),
       decoration: BoxDecoration(
@@ -3593,6 +3620,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
         ],
       ),
       ),
+      ),
     );
   }
 }
@@ -3763,7 +3791,8 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
-    return SafeArea(
+    return KeyboardDoneBar(
+      child: SafeArea(
       top: false,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8),
@@ -4032,6 +4061,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
           ],
         ),
         ),
+      ),
       ),
     );
   }
@@ -4535,6 +4565,18 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                           style: GoogleFonts.nunitoSans(fontSize: 14, color: _textSecondary, height: 1.5),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
+                        ),
+                      if ((story['excerpt'] as String? ?? '').length > 100)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Tap to read more',
+                            style: GoogleFonts.nunitoSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF5DA399),
+                            ),
+                          ),
                         ),
                       const SizedBox(height: 12),
                       Row(

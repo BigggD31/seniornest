@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/custom_image_widget.dart';
+import '../../widgets/keyboard_done_bar.dart';
 
 /// Private 1:1 conversation between the current user and [recipientId].
 /// Reads/writes public.private_messages (RLS: sender/recipient only).
@@ -222,7 +223,9 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
           ],
         ),
       ),
-      body: SafeArea(
+      body: Stack(
+        children: [
+          SafeArea(
         child: Column(
           children: [
             Expanded(
@@ -251,6 +254,9 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
             _buildComposer(),
           ],
         ),
+          ),
+          const KeyboardDoneBarOverlay(),
+        ],
       ),
     );
   }

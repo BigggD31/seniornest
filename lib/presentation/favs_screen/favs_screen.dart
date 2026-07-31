@@ -940,13 +940,16 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+        ),
         margin: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
           color: _isDarkMode ? const Color(0xFF242018) : const Color(0xFFFDFDFD),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
@@ -1000,11 +1003,12 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(height: 16),
-            Expanded(
+            Flexible(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     if ((category == 'Audio' || entryType == 'audio') && mediaUrl.isNotEmpty)
                       _FavsAudioPlayer(audioUrl: mediaUrl, isDarkMode: _isDarkMode)
@@ -1022,7 +1026,6 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                               fontSize: 16,
                               color: _isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417),
                               height: 1.7)),
-                    const SizedBox(height: 24),
                   ],
                 ),
               ),

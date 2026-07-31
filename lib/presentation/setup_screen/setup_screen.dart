@@ -10,6 +10,7 @@ import '../../core/app_state.dart';
 import '../../services/auth_service.dart';
 import '../../services/share_service.dart';
 import '../../widgets/app_navigation.dart';
+import '../../widgets/keyboard_done_bar.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -243,7 +244,9 @@ class _SetupScreenState extends State<SetupScreen>
 
     return Scaffold(
       backgroundColor: _bg,
-      body: SafeArea(
+      body: Stack(
+        children: [
+          SafeArea(
         bottom: false,
         child: _isLoading
             ? _buildLoadingState()
@@ -270,6 +273,9 @@ class _SetupScreenState extends State<SetupScreen>
                   const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
                 ],
               ),
+          ),
+          const KeyboardDoneBarOverlay(),
+        ],
       ),
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,

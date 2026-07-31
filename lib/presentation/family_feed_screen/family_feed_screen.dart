@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
+import '../../widgets/keyboard_done_bar.dart';
 import '../../routes/app_routes.dart';
 import './widgets/feed_empty_state_widget.dart';
 import './widgets/feed_top_bar_widget.dart';
@@ -460,21 +461,14 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   void _setupItemAnimations() {
-    // Previously staggered each card's fade/slide-in with an Interval per index,
-    // which combined with the page-level entrance animation and concurrent
-    // Supabase loads made Home feel jittery on entry. Every card now shares
-    // one simple fade tied directly to the entrance controller, matching the
-    // lighter-weight page-level fade used on Legacy/Share.
+    // Quick fix (see tech doc for the real fix): no entrance animation at
+    // all. Because Home is torn down and rebuilt from scratch every time
+    // the user taps into it from bottom nav, this animation was replaying
+    // every single visit -- that's the jitter. Cards now render at full
+    // opacity immediately, every time, with nothing to animate.
     _itemAnimations.clear();
     for (int i = 0; i < _messages.length; i++) {
-      _itemAnimations.add(
-        Tween<double>(begin: 0.0, end: 1.0).animate(
-          CurvedAnimation(
-            parent: _listEntranceController,
-            curve: Curves.easeOut,
-          ),
-        ),
-      );
+      _itemAnimations.add(const AlwaysStoppedAnimation<double>(1.0));
     }
   }
 
@@ -1022,24 +1016,29 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       backgroundColor: _isDarkMode
           ? const Color(0xFF1A1612)
           : const Color(0xFFFDFDFD),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            // Top bar
-            FeedTopBarWidget(
-              nestName: _nestName,
-              isDarkMode: _isDarkMode,
-              onNestTap: _showNestSwitcher,
-              onNotificationTap: () {
-                Navigator.pushNamed(context, AppRoutes.notificationsScreen);
-              },
-              onProfileTap: () {},
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                // Top bar
+                FeedTopBarWidget(
+                  nestName: _nestName,
+                  isDarkMode: _isDarkMode,
+                  onNestTap: _showNestSwitcher,
+                  onNotificationTap: () {
+                    Navigator.pushNamed(context, AppRoutes.notificationsScreen);
+                  },
+                  onProfileTap: () {},
+                ),
+                // Content
+                Expanded(child: _buildBody(isTablet)),
+              ],
             ),
-            // Content
-            Expanded(child: _buildBody(isTablet)),
-          ],
-        ),
+          ),
+          const KeyboardDoneBarOverlay(),
+        ],
       ),
       floatingActionButton: (_isSenior && (!_isGoodTodaySent || _justCheckedIn))
           ? ImGoodTodayOrbWidget(
@@ -1055,16 +1054,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   Widget _buildBody(bool isTablet) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 280),
-      switchInCurve: Curves.easeOut,
-      switchOutCurve: Curves.easeOut,
-      transitionBuilder: (child, animation) =>
-          FadeTransition(opacity: animation, child: child),
-      child: _isLoading
-          ? _buildLoadingState()
-          : _buildFeedContent(isTablet),
-    );
+    // Quick fix (see tech doc for the real fix): no fade/switch animation
+    // here at all. Because this screen is fully rebuilt from scratch every
+    // time the user taps into Home from bottom nav, any transition here
+    // was replaying on every visit, which is what caused the "double
+    // flash" / jitter. Home now just appears immediately, fully formed.
+    return _isLoading ? _buildLoadingState() : _buildFeedContent(isTablet);
   }
 
   Widget _buildFeedContent(bool isTablet) {

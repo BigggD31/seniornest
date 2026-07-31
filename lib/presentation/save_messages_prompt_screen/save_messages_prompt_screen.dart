@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'dart:convert';
 import '../splash_screen/widgets/nest_logo_widget.dart';
+import '../../widgets/keyboard_done_bar.dart';
 
 class SaveMessagesPromptScreen extends StatefulWidget {
   const SaveMessagesPromptScreen({super.key});
@@ -366,7 +367,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDFDFD),
-      body: Container(
+      body: Stack(
+        children: [
+          Container(
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
@@ -579,6 +582,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             ),
           ),
         ),
+      ),
+          const KeyboardDoneBarOverlay(),
+        ],
       ),
     );
   }

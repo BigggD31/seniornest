@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../routes/app_routes.dart';
 import '../../services/share_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
+import '../../widgets/keyboard_done_bar.dart';
 
 class FamilyOnboardingScreen extends StatefulWidget {
   const FamilyOnboardingScreen({super.key});
@@ -393,7 +394,9 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: Container(
+      body: Stack(
+        children: [
+          Container(
         width: double.infinity,
         height: double.infinity,
         decoration: BoxDecoration(
@@ -434,7 +437,10 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           ),
         ),
       ),
-    );
+          ),
+          const KeyboardDoneBarOverlay(),
+        ],
+      ),
   }
 
   Widget _buildHeader(bool isTablet, bool isDark) {

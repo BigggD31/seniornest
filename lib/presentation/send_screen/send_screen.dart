@@ -16,6 +16,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
+import '../../widgets/keyboard_done_bar.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'widgets/private_inbox_list_widget.dart';
 
@@ -323,7 +324,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ? const Color(0xFFB8A888)
                 : const Color(0xFF6B5E4E);
 
-            return Container(
+            return KeyboardDoneBar(
+              child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               decoration: BoxDecoration(
                 color: bg,
@@ -751,6 +753,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ),
                 ),
               ),
+              ),
             );
           },
         );
@@ -845,7 +848,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ? const Color(0xFFB8A888)
                 : const Color(0xFF6B5E4E);
 
-            return Container(
+            return KeyboardDoneBar(
+              child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               decoration: BoxDecoration(
                 color: bg,
@@ -1289,6 +1293,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ),
                 ),
               ),
+              ),
             );
           },
         );
@@ -1580,6 +1585,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
               behavior: HitTestBehavior.translucent,
             ),
           ),
+          const KeyboardDoneBarOverlay(),
           SafeArea(
             bottom: false,
             child: AnimatedBuilder(

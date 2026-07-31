@@ -12,6 +12,7 @@ import '../splash_screen/widgets/nest_logo_widget.dart';
 import '../../core/app_state.dart';
 import '../../services/share_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
+import '../../widgets/keyboard_done_bar.dart';
 
 class SeniorOnboardingScreen extends StatefulWidget {
   const SeniorOnboardingScreen({super.key});
@@ -379,7 +380,9 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDFDFD),
-      body: Container(
+      body: Stack(
+        children: [
+          Container(
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
@@ -422,7 +425,10 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
           ),
         ),
       ),
-    );
+          ),
+          const KeyboardDoneBarOverlay(),
+        ],
+      ),
   }
 
   Widget _buildHeader(bool isTablet) {

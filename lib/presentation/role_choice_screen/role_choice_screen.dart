@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../routes/app_routes.dart';
 import '../splash_screen/widgets/nest_logo_widget.dart';
 import './widgets/role_button_widget.dart';
+import '../../widgets/keyboard_done_bar.dart';
 
 class RoleChoiceScreen extends StatefulWidget {
   const RoleChoiceScreen({super.key});
@@ -127,7 +128,9 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDFDFD),
-      body: Container(
+      body: Stack(
+        children: [
+          Container(
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
@@ -309,6 +312,9 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen>
             ),
           ),
         ),
+      ),
+          const KeyboardDoneBarOverlay(),
+        ],
       ),
     );
   }

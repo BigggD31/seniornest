@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../routes/app_routes.dart';
 import './widgets/heartbeat_painter_widget.dart';
 import './widgets/nest_logo_widget.dart';
+import '../../widgets/keyboard_done_bar.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -304,7 +305,9 @@ class _SplashScreenState extends State<SplashScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDF9F4),
-      body: Container(
+      body: Stack(
+        children: [
+          Container(
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
@@ -608,6 +611,9 @@ class _SplashScreenState extends State<SplashScreen>
             ),
           ),
         ),
+      ),
+          const KeyboardDoneBarOverlay(),
+        ],
       ),
     );
   }
