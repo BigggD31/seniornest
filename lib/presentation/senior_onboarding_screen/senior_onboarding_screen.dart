@@ -425,10 +425,10 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
           ),
         ),
       ),
-          ),
           const KeyboardDoneBarOverlay(),
         ],
       ),
+    );
   }
 
   Widget _buildHeader(bool isTablet) {

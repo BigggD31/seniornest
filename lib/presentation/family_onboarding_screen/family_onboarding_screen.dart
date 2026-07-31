@@ -437,10 +437,10 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           ),
         ),
       ),
-          ),
           const KeyboardDoneBarOverlay(),
         ],
       ),
+    );
   }
 
   Widget _buildHeader(bool isTablet, bool isDark) {
