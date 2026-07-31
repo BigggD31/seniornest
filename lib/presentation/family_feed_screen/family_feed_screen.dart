@@ -460,15 +460,18 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   void _setupItemAnimations() {
+    // Previously staggered each card's fade/slide-in with an Interval per index,
+    // which combined with the page-level entrance animation and concurrent
+    // Supabase loads made Home feel jittery on entry. Every card now shares
+    // one simple fade tied directly to the entrance controller, matching the
+    // lighter-weight page-level fade used on Legacy/Share.
     _itemAnimations.clear();
     for (int i = 0; i < _messages.length; i++) {
-      final start = (i * 0.04).clamp(0.0, 0.5);
-      final end = (start + 0.6).clamp(0.0, 1.0);
       _itemAnimations.add(
         Tween<double>(begin: 0.0, end: 1.0).animate(
           CurvedAnimation(
             parent: _listEntranceController,
-            curve: Interval(start, end, curve: Curves.easeOut),
+            curve: Curves.easeOut,
           ),
         ),
       );

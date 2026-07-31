@@ -3762,7 +3762,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final bottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
     return SafeArea(
       top: false,
       child: Container(
@@ -3772,7 +3772,8 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
           color: _bg,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(width: 40, height: 4,
@@ -4029,6 +4030,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
             ],
             const SizedBox(height: 8),
           ],
+        ),
         ),
       ),
     );

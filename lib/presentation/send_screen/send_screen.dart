@@ -337,7 +337,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ],
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+                padding: EdgeInsets.fromLTRB(24, 20, 24, 32 + MediaQuery.of(ctx).viewInsets.bottom),
+                child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -748,6 +749,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                     const SizedBox(height: 8),
                   ],
                 ),
+                ),
               ),
             );
           },
@@ -857,7 +859,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ],
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+                padding: EdgeInsets.fromLTRB(24, 20, 24, 32 + MediaQuery.of(ctx).viewInsets.bottom),
+                child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1283,6 +1286,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                     ],
                     const SizedBox(height: 8),
                   ],
+                ),
                 ),
               ),
             );
