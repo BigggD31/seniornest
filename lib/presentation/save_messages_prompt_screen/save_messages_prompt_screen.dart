@@ -151,8 +151,15 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
 
         // Only write to Supabase if we have real data
         if (name.isNotEmpty) {
+          // email is a NOT NULL column. Postgres validates NOT NULL on the
+          // candidate row for INSERT ... ON CONFLICT DO UPDATE *before* it
+          // checks for a conflict, even when a matching row already exists —
+          // so upsert() fails without this regardless of whether the profile
+          // row was already created by the signup trigger.
+          final userEmail = supabaseClient.auth.currentUser?.email ?? '';
           final updateData = <String, dynamic>{
             'id': checkUserId,
+            if (userEmail.isNotEmpty) 'email': userEmail,
             'display_name': name,
             'full_name': name,
             'role': role,
@@ -228,6 +235,11 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           // since nests.created_by has a foreign key into user_profiles.id.
           // Using update() here silently no-ops on a missing row (no error),
           // which was letting the nest insert fail on the FK constraint.
+          // email is a NOT NULL column, and Postgres validates NOT NULL on
+          // the candidate row for INSERT ... ON CONFLICT DO UPDATE *before*
+          // checking for a conflict — so upsert() fails without it even when
+          // a matching row already exists.
+          final userEmail = supabase.auth.currentUser?.email ?? '';
           // relation_type is a Postgres enum (son/daughter/spouse/etc.) —
           // it describes a MEMBER's relation to the senior and does not
           // apply to a nest OWNER, who never sees a relationship picker.
@@ -236,6 +248,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           final relationshipType = prefs.getString('relationship') ?? '';
           final nestProfileUpdate = <String, dynamic>{
             'id': effectiveUserId,
+            if (userEmail.isNotEmpty) 'email': userEmail,
             'display_name': name,
             'full_name': name,
             'role': role,
