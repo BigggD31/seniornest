@@ -859,6 +859,16 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             ? supabaseName
             : (authorId == userId && localName.isNotEmpty ? localName : 'Family');
         String avatarUrl = profile?['avatar_url'] as String? ?? '';
+        // The raw Supabase value is a JSON blob ({"type":"emoji"/"photo","value":...}),
+        // not a usable plain URL/emoji. It must be decoded for ANY author, not just
+        // the current device's own user — using it undecoded here silently breaks
+        // rendering for every other person's posts.
+        String? avatarJson = profile?['avatar_url'] as String?;
+        if ((avatarJson == null || avatarJson.isEmpty) && authorId == userId) {
+          // Fall back to local prefs only for the current user's own posts,
+          // e.g. right after picking a new avatar before Supabase has synced.
+          avatarJson = prefs.getString(kProfilePhotoKey);
+        }
         if (avatarUrl.isEmpty && authorId == userId) {
           final profileJson = prefs.getString(kProfilePhotoKey);
           if (profileJson != null) {
@@ -881,7 +891,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           senderRole: senderRole,
           senderAvatarUrl: avatarUrl,
           senderAvatarLabel: senderName,
-          senderAvatarJson: (authorId == userId) ? prefs.getString(kProfilePhotoKey) : null,
+          senderAvatarJson: avatarJson,
           type: MessageModel._messageTypeFromString(type),
           content: post['content'] as String? ?? '',
           imageUrl: post['media_url'] as String? ?? '',

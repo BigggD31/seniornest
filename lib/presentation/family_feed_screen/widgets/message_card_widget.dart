@@ -12,6 +12,19 @@ import '../../../widgets/share_preview_widget.dart';
 import '../../../widgets/fullscreen_media_viewer.dart';
 import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
+/// Safely decodes an avatar JSON string, returning null on any malformed
+/// input instead of throwing — a bad avatar_url value should never crash a
+/// feed card.
+Map<String, dynamic>? _safeDecodeAvatarJson(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  try {
+    final decoded = json.decode(raw);
+    return decoded is Map<String, dynamic> ? decoded : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 class MessageCardWidget extends StatefulWidget {
   const MessageCardWidget({
     super.key,
@@ -243,9 +256,9 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                       width: 2,
                     ),
                   ),
-                  child: widget.senderAvatarJson != null
+                  child: _safeDecodeAvatarJson(widget.senderAvatarJson) != null
                     ? ProfileAvatarWidget(
-                        profileData: json.decode(widget.senderAvatarJson!) as Map<String, dynamic>,
+                        profileData: _safeDecodeAvatarJson(widget.senderAvatarJson),
                         displayName: msg.senderName,
                         size: 44,
                         borderColor: const Color(0xFF5DA399),

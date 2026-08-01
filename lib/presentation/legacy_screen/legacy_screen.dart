@@ -27,6 +27,19 @@ class LegacyScreen extends StatefulWidget {
   State<LegacyScreen> createState() => _LegacyScreenState();
 }
 
+/// Safely decodes an avatar JSON string, returning null on any malformed
+/// input instead of throwing — a bad avatar_url value should never crash a
+/// story card.
+Map<String, dynamic>? _safeDecodeAvatarJsonLegacy(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(raw);
+    return decoded is Map<String, dynamic> ? decoded : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 class _LegacyScreenState extends State<LegacyScreen>
     with TickerProviderStateMixin {
   int _currentNavIndex = 2;
@@ -203,6 +216,7 @@ class _LegacyScreenState extends State<LegacyScreen>
 
   Map<String, dynamic>? _profileData;
   String _displayName = '';
+  String _seniorName = 'Your Loved One';
 
   @override
   void initState() {
@@ -246,11 +260,38 @@ class _LegacyScreenState extends State<LegacyScreen>
 
     // Load real stories from Supabase BEFORE setState
     List<Map<String, dynamic>> realStories = [];
+    String resolvedSeniorName = 'Your Loved One';
     try {
       final supabase = Supabase.instance.client;
       String? userId = supabase.auth.currentUser?.id;
       if (userId == null) userId = supabase.auth.currentSession?.user.id;
       if (userId != null) {
+        // Resolve the real senior's name for this nest (the nest creator is
+        // always the senior owner) instead of the hardcoded "Eleanor" placeholder.
+        try {
+          final nestId = prefs.getString('nest_id') ?? '';
+          if (nestId.isNotEmpty) {
+            final nestRow = await supabase
+                .from('nests')
+                .select('created_by')
+                .eq('id', nestId)
+                .maybeSingle();
+            final seniorId = nestRow?['created_by'] as String?;
+            if (seniorId != null) {
+              final seniorProfile = await supabase
+                  .from('user_profiles')
+                  .select('display_name, preferred_name')
+                  .eq('id', seniorId)
+                  .maybeSingle();
+              final seniorPreferred = seniorProfile?['preferred_name'] as String? ?? '';
+              final seniorDisplay = seniorProfile?['display_name'] as String? ?? '';
+              final name = seniorPreferred.isNotEmpty ? seniorPreferred : seniorDisplay;
+              if (name.isNotEmpty) resolvedSeniorName = name;
+            }
+          }
+        } catch (e) {
+          debugPrint('LEGACY SENIOR NAME LOAD ERROR: $e');
+        }
         // Load every story in this nest, not just the current user's.
         // Own entries are always included as a fallback so that any story
         // saved without a nest_id can never disappear from its author's view.
@@ -359,6 +400,7 @@ class _LegacyScreenState extends State<LegacyScreen>
       _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
           ? prefs.getString('preferred_name')!
           : (prefs.getString('display_name') ?? '');
+      _seniorName = resolvedSeniorName;
     });
     _setupAnimations();
     _entranceController.forward();
@@ -841,7 +883,7 @@ class _LegacyScreenState extends State<LegacyScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Eleanor\'s Legacy Stories',
+                    '$_seniorName\'s Legacy Stories',
                     style: GoogleFonts.nunitoSans(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -1653,6 +1695,7 @@ class _LegacyScreenState extends State<LegacyScreen>
         story: story,
         isDarkMode: _isDarkMode,
         isSenior: _isSenior,
+        seniorName: _seniorName,
       ),
     );
   }
@@ -2777,10 +2820,12 @@ class _StoryDetailSheet extends StatelessWidget {
     required this.story,
     required this.isDarkMode,
     required this.isSenior,
+    this.seniorName = 'Your Loved One',
   });
   final Map<String, dynamic> story;
   final bool isDarkMode;
   final bool isSenior;
+  final String seniorName;
 
   Color get _bg =>
       isDarkMode ? const Color(0xFF242018) : const Color(0xFFFDFDFD);
@@ -2883,7 +2928,7 @@ class _StoryDetailSheet extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'This is Eleanor\'s story — read only',
+                      'This is $seniorName\'s story — read only',
                       style: GoogleFonts.nunitoSans(
                         fontSize: 12,
                         color: const Color(0xFFD4AA00),
@@ -4453,29 +4498,22 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                     children: [
                       Row(
                         children: [
-                          ((story['authorAvatarUrl'] as String? ?? '').isNotEmpty &&
-                                  (story['isSample'] == true || story['isMine'] != true))
-                              ? Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: const Color(0xFF5DA399), width: 1.5),
-                                  ),
-                                  child: ClipOval(
-                                    child: CustomImageWidget(
-                                      imageUrl: story['authorAvatarUrl'] as String,
-                                      width: 36,
-                                      height: 36,
-                                      fit: BoxFit.cover,
-                                      semanticLabel: story['authorAvatarLabel'] as String? ?? '',
-                                    ),
-                                  ),
+                          (story['isSample'] == true || story['isMine'] != true)
+                              ? ProfileAvatarWidget(
+                                  // authorAvatarUrl is a raw JSON blob from Supabase
+                                  // ({"type":...,"value":...}), not a plain image URL —
+                                  // must be decoded, not handed to an image loader.
+                                  profileData: _safeDecodeAvatarJsonLegacy(
+                                      story['authorAvatarUrl'] as String?),
+                                  displayName: (story['authorName'] as String? ?? '').isNotEmpty
+                                      ? story['authorName'] as String
+                                      : 'A Family Member',
+                                  size: 36,
+                                  borderColor: const Color(0xFF5DA399),
+                                  borderWidth: 1.5,
                                 )
                               : ProfileAvatarWidget(
-                                  profileData: (story['isSample'] == true || story['isMine'] != true)
-                                      ? null
-                                      : widget.profileData,
+                                  profileData: widget.profileData,
                                   displayName: (story['isSample'] == true || story['isMine'] != true)
                                       ? ((story['authorName'] as String? ?? '').isNotEmpty
                                           ? story['authorName'] as String

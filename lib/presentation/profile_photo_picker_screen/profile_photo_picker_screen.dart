@@ -129,12 +129,21 @@ class _ProfilePhotoPickerScreenState extends State<ProfilePhotoPickerScreen>
     // Save to Supabase so photo survives sign-out and restores on sign-in
     try {
       final supabaseClient = Supabase.instance.client;
-      final userId = supabaseClient.auth.currentUser?.id;
+      final currentUser = supabaseClient.auth.currentUser;
+      final userId = currentUser?.id;
       if (userId != null) {
-        await supabaseClient
-            .from('user_profiles')
-            .update({'avatar_url': jsonEncode(data)})
-            .eq('id', userId);
+        // Use upsert (not update) so this can never silently no-op if the
+        // profile row hasn't been created yet by the signup trigger or the
+        // onboarding upsert — that race left avatar_url permanently null
+        // for accounts that picked an avatar early in onboarding.
+        // email is a NOT NULL column, so it must be included whenever this
+        // might be the row's first insert.
+        final userEmail = currentUser?.email ?? '';
+        await supabaseClient.from('user_profiles').upsert({
+          'id': userId,
+          if (userEmail.isNotEmpty) 'email': userEmail,
+          'avatar_url': jsonEncode(data),
+        });
         print('PROFILE_PHOTO: saved to Supabase for user $userId');
       }
     } catch (e) {
