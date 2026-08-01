@@ -186,9 +186,9 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         final prefs = await SharedPreferences.getInstance();
         final existingCode = prefs.getString('invite_code') ?? '';
         if (existingCode.isEmpty ||
-            !RegExp(r'^NEST-\d{6}$').hasMatch(existingCode)) {
+            !RegExp(r'^NEST\d{6}$').hasMatch(existingCode)) {
           final digits = (100000 + Random().nextInt(900000)).toString();
-          final code = 'NEST-$digits';
+          final code = 'NEST$digits';
           await prefs.setString('invite_code', code);
           if (mounted) setState(() => _inviteCode = code);
         } else {
@@ -264,9 +264,9 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
     // Generate invite code
     final existingCode = prefs.getString('invite_code') ?? '';
     String inviteCode = existingCode;
-    if (existingCode.isEmpty || !RegExp(r'^NEST-\d{6}$').hasMatch(existingCode)) {
+    if (existingCode.isEmpty || !RegExp(r'^NEST\d{6}$').hasMatch(existingCode)) {
       final digits = (100000 + Random().nextInt(900000)).toString();
-      inviteCode = 'NEST-$digits';
+      inviteCode = 'NEST$digits';
       await prefs.setString('invite_code', inviteCode);
       if (mounted) setState(() => _inviteCode = inviteCode);
     } else {

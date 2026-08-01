@@ -196,9 +196,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
 
     // Generate invite code if not already set
     final existingCode = prefs.getString('invite_code') ?? '';
-    if (existingCode.isEmpty || !RegExp(r'^NEST-[0-9]{6}$').hasMatch(existingCode)) {
+    if (existingCode.isEmpty || !RegExp(r'^NEST[0-9]{6}$').hasMatch(existingCode)) {
       final digits = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
-      await prefs.setString('invite_code', 'NEST-' + digits);
+      await prefs.setString('invite_code', 'NEST' + digits);
     }
 
     // Create nest in Supabase now that auth session is ready

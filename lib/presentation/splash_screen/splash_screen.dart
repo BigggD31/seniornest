@@ -160,7 +160,7 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Type your NEST-XXXXXX or lifetime invite code below.',
+                  'Type your NEST123456 or lifetime invite code below.',
                   style: GoogleFonts.nunitoSans(
                     fontSize: 13,
                     color: const Color(0xFF9E8E7E),
@@ -179,7 +179,7 @@ class _SplashScreenState extends State<SplashScreen>
                     letterSpacing: 1.5,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'e.g. NEST-ABC123',
+                    hintText: 'e.g. NEST123456',
                     hintStyle: GoogleFonts.nunitoSans(
                       fontSize: 15,
                       color: const Color(0xFFBBAA99),

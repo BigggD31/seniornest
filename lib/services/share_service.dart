@@ -15,7 +15,7 @@ class ShareService {
   /// Share invite code — native sheet on mobile, web modal on web.
   static void shareInviteCode(
     BuildContext context, {
-    String inviteCode = 'NEST-000000',
+    String inviteCode = 'NEST000000',
     bool isDarkMode = false,
   }) {
     final shareText =

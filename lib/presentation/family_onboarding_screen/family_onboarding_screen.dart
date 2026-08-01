@@ -32,7 +32,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
   bool _notifyOnCheckIn = true;
   bool _notifyOnMessages = true;
   String _savedName = '';
-  String _inviteCode = 'NEST-7842';
+  String _inviteCode = 'NEST7842';
   bool _joinedViaInvite = false;
   Map<String, dynamic>? _profilePhotoData;
   DateTime? _birthday;
@@ -262,9 +262,9 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     final existingCode = prefs.getString('invite_code');
     if (existingCode == null ||
         existingCode.isEmpty ||
-        !RegExp(r'^NEST-\d{6}$').hasMatch(existingCode)) {
+        !RegExp(r'^NEST\d{6}$').hasMatch(existingCode)) {
       final digits = (100000 + Random().nextInt(900000)).toString();
-      final code = 'NEST-$digits';
+      final code = 'NEST$digits';
       await prefs.setString('invite_code', code);
       setState(() => _inviteCode = code);
     } else {
