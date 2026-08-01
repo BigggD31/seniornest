@@ -657,14 +657,15 @@ class _InviteCodeSubmitButtonState extends State<_InviteCodeSubmitButton> {
   bool _isValidating = false;
   String? _errorText;
 
-  static const String _vipCode = 'VIP-218460';
+  static const String _vipCode = 'VIP218460';
 
   Future<void> _handleContinue() async {
     final rawCode = widget.codeController.text.trim();
     if (rawCode.isEmpty || _isValidating) return;
     final code = rawCode.toUpperCase();
+    final normalizedCode = code.replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
-    if (code == _vipCode) {
+    if (normalizedCode == _vipCode) {
       widget.onVipCode();
       return;
     }
