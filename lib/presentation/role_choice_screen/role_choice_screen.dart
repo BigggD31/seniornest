@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
 import '../splash_screen/widgets/nest_logo_widget.dart';
@@ -337,9 +338,11 @@ class _InviteCodeSheet extends StatefulWidget {
 }
 
 class _InviteCodeSheetState extends State<_InviteCodeSheet> {
-  // TODO: Replace with Riverpod/Bloc for production — invite code validation
   final TextEditingController _codeController = TextEditingController();
   bool _isLoading = false;
+  String? _errorText;
+
+  static const String _vipCode = 'VIP218460';
 
   @override
   void dispose() {
@@ -348,17 +351,55 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
   }
 
   Future<void> _verifyCode() async {
-    if (_codeController.text.trim().length < 4) return;
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (mounted) {
-      final code = _codeController.text.trim();
-      Navigator.pop(context);
-      Navigator.pushNamed(
-        context,
-        AppRoutes.nestRoleAfterInviteScreen,
-        arguments: {'inviteCode': code},
+    final rawCode = _codeController.text.trim();
+    if (rawCode.isEmpty || _isLoading) return;
+    final code = rawCode.toUpperCase();
+    final normalizedCode = code.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+
+    if (normalizedCode == _vipCode) {
+      if (mounted) {
+        Navigator.pop(context);
+        Navigator.pushNamed(context, AppRoutes.roleChoiceScreen);
+      }
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorText = null;
+    });
+
+    try {
+      final supabase = Supabase.instance.client;
+      final result = await supabase.rpc(
+        'lookup_nest_by_invite_code',
+        params: {'p_code': code},
       );
+
+      if (!mounted) return;
+
+      final bool nestFound = result is List && result.isNotEmpty;
+
+      if (nestFound) {
+        Navigator.pop(context);
+        Navigator.pushNamed(
+          context,
+          AppRoutes.nestRoleAfterInviteScreen,
+          arguments: {'inviteCode': code},
+        );
+      } else {
+        setState(() {
+          _isLoading = false;
+          _errorText =
+              "We couldn't find a nest with that code. Double-check and try again.";
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorText = 'Something went wrong checking that code. Please try again.';
+      });
     }
   }
 
@@ -419,7 +460,7 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
               letterSpacing: 8,
             ),
             decoration: InputDecoration(
-              hintText: 'NEST-XXXXXX',
+              hintText: 'NEST123456',
               hintStyle: GoogleFonts.nunitoSans(
                 fontSize: 22,
                 color: const Color(0xFFE8E0D0),
@@ -433,6 +474,17 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
               ),
             ),
           ),
+          if (_errorText != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _errorText!,
+              style: GoogleFonts.nunitoSans(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFC0693E),
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,

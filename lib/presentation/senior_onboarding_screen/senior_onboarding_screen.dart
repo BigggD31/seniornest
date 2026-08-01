@@ -327,21 +327,49 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         }
 
         if (nestId.isEmpty) {
-          // Create new nest with invite code
-          final nestResponse = await supabase.from('nests').insert({
-            'name': nestName,
-            'created_by': userId,
-            'invite_code': inviteCode,
-          }).select().single();
+          if (_joinedViaInvite && _inviteCode.isNotEmpty) {
+            // Senior joining an existing nest via invite code
+            try {
+              final lookupResult = await supabase.rpc(
+                'lookup_nest_by_invite_code',
+                params: {'p_code': _inviteCode.toUpperCase()},
+              );
+              final joinNest =
+                  (lookupResult is List && lookupResult.isNotEmpty)
+                      ? lookupResult.first as Map<String, dynamic>
+                      : null;
 
-          nestId = nestResponse['id'] as String;
-          await prefs.setString('nest_id', nestId);
+              if (joinNest != null) {
+                nestId = joinNest['id'] as String;
+                await prefs.setString('nest_id', nestId);
+                await supabase.from('nest_members').upsert({
+                  'nest_id': nestId,
+                  'user_id': userId,
+                });
+                print('NEST_DEBUG: senior joined nest = $nestId');
+              } else {
+                print('NEST_DEBUG: senior invite lookup found no nest for code $_inviteCode');
+              }
+            } catch (e) {
+              print('NEST_DEBUG: senior invite join error: $e');
+            }
+          } else {
+            // Create new nest with invite code
+            final nestResponse = await supabase.from('nests').insert({
+              'name': nestName,
+              'created_by': userId,
+              'invite_code': inviteCode,
+            }).select().single();
 
-          // Add user as nest member
-          await supabase.from('nest_members').upsert({
-            'nest_id': nestId,
-            'user_id': userId,
-          });
+            nestId = nestResponse['id'] as String;
+            await prefs.setString('nest_id', nestId);
+
+            // Add user as nest member
+            await supabase.from('nest_members').upsert({
+              'nest_id': nestId,
+              'user_id': userId,
+            });
+          }
         }
       }
     } catch (e) {
