@@ -209,44 +209,21 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
                 const SizedBox(height: 20),
-                StatefulBuilder(
-                  builder: (ctx, setSheetState) {
-                    return GestureDetector(
-                      onTap: () {
-                        final code = codeController.text.trim();
-                        if (code.isEmpty) return;
-                        Navigator.pop(sheetContext);
-                        if (code.toUpperCase().contains('VIP')) {
-                          Navigator.pushNamed(
-                            context,
-                            AppRoutes.roleChoiceScreen,
-                          );
-                        } else if (code.toUpperCase().contains('NEST')) {
-                          Navigator.pushNamed(
-                            context,
-                            AppRoutes.nestRoleAfterInviteScreen,
-                            arguments: {'inviteCode': code},
-                          );
-                        }
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF8B6914),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Continue',
-                            style: GoogleFonts.nunitoSans(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
+                _InviteCodeSubmitButton(
+                  codeController: codeController,
+                  onValidCode: (code) {
+                    Navigator.pop(sheetContext);
+                    Navigator.pushNamed(
+                      context,
+                      AppRoutes.nestRoleAfterInviteScreen,
+                      arguments: {'inviteCode': code},
+                    );
+                  },
+                  onVipCode: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.pushNamed(
+                      context,
+                      AppRoutes.roleChoiceScreen,
                     );
                   },
                 ),
@@ -656,6 +633,125 @@ class _BenefitTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _InviteCodeSubmitButton extends StatefulWidget {
+  final TextEditingController codeController;
+  final void Function(String code) onValidCode;
+  final VoidCallback onVipCode;
+
+  const _InviteCodeSubmitButton({
+    required this.codeController,
+    required this.onValidCode,
+    required this.onVipCode,
+  });
+
+  @override
+  State<_InviteCodeSubmitButton> createState() =>
+      _InviteCodeSubmitButtonState();
+}
+
+class _InviteCodeSubmitButtonState extends State<_InviteCodeSubmitButton> {
+  bool _isValidating = false;
+  String? _errorText;
+
+  Future<void> _handleContinue() async {
+    final rawCode = widget.codeController.text.trim();
+    if (rawCode.isEmpty || _isValidating) return;
+    final code = rawCode.toUpperCase();
+
+    if (code.contains('VIP')) {
+      widget.onVipCode();
+      return;
+    }
+
+    setState(() {
+      _isValidating = true;
+      _errorText = null;
+    });
+
+    try {
+      final supabase = Supabase.instance.client;
+      final nestResponse = await supabase
+          .from('nests')
+          .select('id')
+          .eq('invite_code', code)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      if (nestResponse != null) {
+        widget.onValidCode(code);
+      } else {
+        setState(() {
+          _isValidating = false;
+          _errorText =
+              "We couldn't find a nest with that code. Double-check and try again.";
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isValidating = false;
+        _errorText = 'Something went wrong checking that code. Please try again.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_errorText != null) ...[
+          Text(
+            _errorText!,
+            style: GoogleFonts.nunitoSans(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFFC0693E),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        GestureDetector(
+          onTap: _handleContinue,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            decoration: BoxDecoration(
+              color: _isValidating
+                  ? const Color(0xFF8B6914).withOpacity(0.6)
+                  : const Color(0xFF8B6914),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Center(
+              child: _isValidating
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.white,
+                        ),
+                      ),
+                    )
+                  : Text(
+                      'Continue',
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
