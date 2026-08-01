@@ -326,11 +326,14 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
             if (joinedViaInvite && inviteCode.isNotEmpty) {
               // Member joining existing nest via invite code
               try {
-                final nestResponse = await supabase
-                    .from('nests')
-                    .select('id')
-                    .eq('invite_code', inviteCode)
-                    .maybeSingle();
+                final lookupResult = await supabase.rpc(
+                  'lookup_nest_by_invite_code',
+                  params: {'p_code': inviteCode.toUpperCase()},
+                );
+                final nestResponse =
+                    (lookupResult is List && lookupResult.isNotEmpty)
+                        ? lookupResult.first as Map<String, dynamic>
+                        : null;
 
                 if (nestResponse != null) {
                   final nestId = nestResponse['id'] as String;

@@ -657,12 +657,14 @@ class _InviteCodeSubmitButtonState extends State<_InviteCodeSubmitButton> {
   bool _isValidating = false;
   String? _errorText;
 
+  static const String _vipCode = 'VIP-218460';
+
   Future<void> _handleContinue() async {
     final rawCode = widget.codeController.text.trim();
     if (rawCode.isEmpty || _isValidating) return;
     final code = rawCode.toUpperCase();
 
-    if (code.contains('VIP')) {
+    if (code == _vipCode) {
       widget.onVipCode();
       return;
     }
@@ -674,15 +676,16 @@ class _InviteCodeSubmitButtonState extends State<_InviteCodeSubmitButton> {
 
     try {
       final supabase = Supabase.instance.client;
-      final nestResponse = await supabase
-          .from('nests')
-          .select('id')
-          .eq('invite_code', code)
-          .maybeSingle();
+      final result = await supabase.rpc(
+        'lookup_nest_by_invite_code',
+        params: {'p_code': code},
+      );
 
       if (!mounted) return;
 
-      if (nestResponse != null) {
+      final bool nestFound = result is List && result.isNotEmpty;
+
+      if (nestFound) {
         widget.onValidCode(code);
       } else {
         setState(() {
