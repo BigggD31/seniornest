@@ -205,13 +205,6 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       } catch (_) {}
     }
 
-    // Generate invite code if not already set
-    final existingCode = prefs.getString('invite_code') ?? '';
-    if (existingCode.isEmpty || !RegExp(r'^NEST[0-9]{6}$').hasMatch(existingCode)) {
-      final digits = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
-      await prefs.setString('invite_code', 'NEST' + digits);
-    }
-
     // Create nest in Supabase now that auth session is ready
     final supabase = Supabase.instance.client;
     final effectiveUserId = userId ?? supabase.auth.currentUser?.id;
@@ -225,26 +218,10 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       final existingNestId = prefs.getString('nest_id') ?? '';
       if (existingNestId.isEmpty) {
         try {
-          final inviteCode = prefs.getString('invite_code') ?? '';
-          final nestName = prefs.getString('nest_name') ?? 'My Family';
           final name = prefs.getString('display_name') ?? '';
           final preferredNestName = prefs.getString('preferred_name') ?? '';
           final role = prefs.getString('user_role') ?? 'senior';
-
-          // Upsert profile first — must exist before the nests insert below,
-          // since nests.created_by has a foreign key into user_profiles.id.
-          // Using update() here silently no-ops on a missing row (no error),
-          // which was letting the nest insert fail on the FK constraint.
-          // email is a NOT NULL column, and Postgres validates NOT NULL on
-          // the candidate row for INSERT ... ON CONFLICT DO UPDATE *before*
-          // checking for a conflict — so upsert() fails without it even when
-          // a matching row already exists.
           final userEmail = supabase.auth.currentUser?.email ?? '';
-          // relation_type is a Postgres enum (son/daughter/spouse/etc.) —
-          // it describes a MEMBER's relation to the senior and does not
-          // apply to a nest OWNER, who never sees a relationship picker.
-          // Only include it when a real value was actually selected;
-          // never send a fallback string, since it won't match the enum.
           final relationshipType = prefs.getString('relationship') ?? '';
           final nestProfileUpdate = <String, dynamic>{
             'id': effectiveUserId,
@@ -262,31 +239,82 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           await supabase.from('user_profiles').upsert(nestProfileUpdate);
           print('NEST_DEBUG: profile upserted');
 
-          // Create nest
-          await supabase.from('nests').insert({
-            'name': nestName,
-            'created_by': effectiveUserId,
-            'invite_code': inviteCode,
-          });
-          
-          // Now fetch it back — we know it exists
-          final nestResponse = await supabase
-              .from('nests')
-              .select('id')
-              .eq('created_by', effectiveUserId)
-              .eq('invite_code', inviteCode)
-              .single();
+          // A user who came in through an invite code (family member joining
+          // an existing senior's nest) must NEVER hit the "create new nest"
+          // path below — the code in their 'invite_code' pref is the code
+          // they TYPED to find that existing nest, not a fresh code for a
+          // new one. Reusing it in a nests INSERT collides on the
+          // nests_invite_code_key unique constraint, since that code
+          // already belongs to the nest they're trying to join.
+          final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
+          final typedInviteCode = prefs.getString('invite_code') ?? '';
 
-          final nestId = nestResponse['id'] as String;
-          await prefs.setString('nest_id', nestId);
-          print('NEST_DEBUG: nest created = $nestId');
+          if (joinedViaInvite && typedInviteCode.isNotEmpty) {
+            final lookupResult = await supabase.rpc(
+              'lookup_nest_by_invite_code',
+              params: {'p_code': typedInviteCode.toUpperCase()},
+            );
+            final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
+                ? lookupResult.first as Map<String, dynamic>
+                : null;
 
-          // Add as member
-          await supabase.from('nest_members').upsert({
-            'nest_id': nestId,
-            'user_id': effectiveUserId,
-          });
-          print('NEST_DEBUG: nest_member added');
+            if (nestResponse != null) {
+              final nestId = nestResponse['id'] as String;
+              await prefs.setString('nest_id', nestId);
+              await supabase.from('nest_members').upsert({
+                'nest_id': nestId,
+                'user_id': effectiveUserId,
+              });
+              print('NEST_DEBUG: joined existing nest = $nestId');
+            } else {
+              print('NEST_DEBUG: invite code not found = $typedInviteCode');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('DEBUG: could not find nest for invite code $typedInviteCode'),
+                    duration: const Duration(seconds: 10),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          } else {
+            // Owner path — generate a fresh code, never reuse a typed one.
+            final existingCode = prefs.getString('invite_code') ?? '';
+            String inviteCode = existingCode;
+            if (inviteCode.isEmpty || !RegExp(r'^NEST[0-9]{6}$').hasMatch(inviteCode)) {
+              final digits = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
+              inviteCode = 'NEST' + digits;
+              await prefs.setString('invite_code', inviteCode);
+            }
+            final nestName = prefs.getString('nest_name') ?? 'My Family';
+
+            // Create nest
+            await supabase.from('nests').insert({
+              'name': nestName,
+              'created_by': effectiveUserId,
+              'invite_code': inviteCode,
+            });
+
+            // Now fetch it back — we know it exists
+            final nestResponse = await supabase
+                .from('nests')
+                .select('id')
+                .eq('created_by', effectiveUserId)
+                .eq('invite_code', inviteCode)
+                .single();
+
+            final nestId = nestResponse['id'] as String;
+            await prefs.setString('nest_id', nestId);
+            print('NEST_DEBUG: nest created = $nestId');
+
+            // Add as member
+            await supabase.from('nest_members').upsert({
+              'nest_id': nestId,
+              'user_id': effectiveUserId,
+            });
+            print('NEST_DEBUG: nest_member added');
+          }
         } catch (e) {
           print('NEST_DEBUG: error = $e');
           if (mounted) {
