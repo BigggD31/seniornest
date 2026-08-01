@@ -313,16 +313,31 @@ class _SetupScreenState extends State<SetupScreen>
             ],
           ),
           const Spacer(),
-          ProfileAvatarWidget(
-            profileData: _profileData,
-            displayName: _effectiveName,
-            size: 40,
-            borderColor: const Color(0xFF5DA399),
-            borderWidth: 2,
+          GestureDetector(
+            onTap: _openProfilePhotoPicker,
+            child: ProfileAvatarWidget(
+              profileData: _profileData,
+              displayName: _effectiveName,
+              size: 40,
+              borderColor: const Color(0xFF5DA399),
+              borderWidth: 2,
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _openProfilePhotoPicker() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ProfilePhotoPickerScreen()),
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _profileData = result as Map<String, dynamic>;
+      });
+    }
   }
 
   Widget _buildProfileCard(bool isTablet) {
@@ -1246,6 +1261,8 @@ class _SetupScreenState extends State<SetupScreen>
         birthday: _birthday,
         anniversary: _anniversary,
         isDarkMode: _isDarkMode,
+        profileData: _profileData,
+        onAvatarChanged: (data) => setState(() => _profileData = data),
         onSave: (name, preferredName, birthday, anniversary) async {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('display_name', name);
@@ -1700,12 +1717,16 @@ class _EditProfileSheet extends StatefulWidget {
     required this.onSave,
     this.birthday,
     this.anniversary,
+    this.profileData,
+    this.onAvatarChanged,
   });
   final String displayName;
   final String preferredName;
   final bool isDarkMode;
   final DateTime? birthday;
   final DateTime? anniversary;
+  final Map<String, dynamic>? profileData;
+  final void Function(Map<String, dynamic>?)? onAvatarChanged;
   final Future<void> Function(String, String, DateTime?, DateTime?) onSave;
 
   @override
@@ -1718,6 +1739,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   bool _isSaving = false;
   DateTime? _birthday;
   DateTime? _anniversary;
+  Map<String, dynamic>? _profileData;
 
   @override
   void initState() {
@@ -1726,6 +1748,18 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
     _preferredNameController = TextEditingController(text: widget.preferredName);
     _birthday = widget.birthday;
     _anniversary = widget.anniversary;
+    _profileData = widget.profileData;
+  }
+
+  Future<void> _openAvatarPicker() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ProfilePhotoPickerScreen()),
+    );
+    if (result != null && mounted) {
+      setState(() => _profileData = result as Map<String, dynamic>);
+      widget.onAvatarChanged?.call(_profileData);
+    }
   }
 
   @override
@@ -1778,6 +1812,41 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
               fontSize: 20,
               fontWeight: FontWeight.w700,
               color: _textPrimary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: GestureDetector(
+              onTap: _openAvatarPicker,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ProfileAvatarWidget(
+                    profileData: _profileData,
+                    displayName: widget.displayName,
+                    size: 72,
+                    borderColor: const Color(0xFF5DA399),
+                    borderWidth: 2,
+                  ),
+                  Positioned(
+                    bottom: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF5DA399),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: _bg, width: 2),
+                      ),
+                      child: const Icon(
+                        Icons.edit_rounded,
+                        size: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 20),

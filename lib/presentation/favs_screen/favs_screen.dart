@@ -1136,10 +1136,23 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                       _FavsAudioPlayer(audioUrl: mediaUrl, isDarkMode: _isDarkMode)
                     else if ((category == 'Video' || entryType == 'video') && mediaUrl.isNotEmpty)
                       _FavsVideoPlayer(videoUrl: mediaUrl, isDarkMode: _isDarkMode)
-                    else if (subtitle.isNotEmpty)
+                    else if (subtitle.isNotEmpty) ...[
                       Text(subtitle,
                         style: GoogleFonts.nunitoSans(fontSize: 13, color: _textSecondary, height: 1.5),
                         maxLines: 3, overflow: TextOverflow.ellipsis),
+                      if (subtitle.length > 160)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Tap to read more',
+                            style: GoogleFonts.nunitoSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF5DA399),
+                            ),
+                          ),
+                        ),
+                    ],
                     const SizedBox(height: 10),
                     // Footer row
                     Row(

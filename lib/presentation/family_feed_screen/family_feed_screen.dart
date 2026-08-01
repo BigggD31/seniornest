@@ -818,6 +818,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           .select('*, user_profiles(display_name, preferred_name, avatar_url, relation_type, role)')
           .eq('nest_id', nestId)
           .isFilter('parent_post_id', null)
+          .isFilter('legacy_entry_id', null)
           .order('created_at', ascending: false)
           .limit(50);
 
