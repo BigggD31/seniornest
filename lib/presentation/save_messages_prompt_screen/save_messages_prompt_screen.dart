@@ -152,6 +152,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
         // Only write to Supabase if we have real data
         if (name.isNotEmpty) {
           final updateData = <String, dynamic>{
+            'id': checkUserId,
             'display_name': name,
             'full_name': name,
             'role': role,
@@ -162,8 +163,11 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           if (relationshipType.isNotEmpty) {
             updateData['relation_type'] = relationshipType.toLowerCase();
           }
-          await supabaseClient.from('user_profiles').update(updateData).eq('id', checkUserId);
-          print('NEST_DEBUG: profile updated at top of _navigateToHome');
+          // Upsert (not update) — the profile row may not exist yet for a
+          // brand new signup now that the auto-create trigger is removed.
+          // An update() on a nonexistent row silently affects zero rows.
+          await supabaseClient.from('user_profiles').upsert(updateData);
+          print('NEST_DEBUG: profile upserted at top of _navigateToHome');
         }
       } catch (e) {
         print('NEST_DEBUG: profile update error = \$e');
@@ -220,9 +224,13 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           final preferredNestName = prefs.getString('preferred_name') ?? '';
           final role = prefs.getString('user_role') ?? 'senior';
 
-          // Upsert profile first
+          // Upsert profile first — must exist before the nests insert below,
+          // since nests.created_by has a foreign key into user_profiles.id.
+          // Using update() here silently no-ops on a missing row (no error),
+          // which was letting the nest insert fail on the FK constraint.
           final relationshipType = prefs.getString('relationship') ?? 'Family';
           final nestProfileUpdate = <String, dynamic>{
+            'id': effectiveUserId,
             'display_name': name,
             'full_name': name,
             'role': role,
@@ -231,8 +239,8 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           if (preferredNestName.isNotEmpty) {
             nestProfileUpdate['preferred_name'] = preferredNestName;
           }
-          await supabase.from('user_profiles').update(nestProfileUpdate).eq('id', effectiveUserId);
-          print('NEST_DEBUG: profile updated');
+          await supabase.from('user_profiles').upsert(nestProfileUpdate);
+          print('NEST_DEBUG: profile upserted');
 
           // Create nest
           await supabase.from('nests').insert({
@@ -261,6 +269,15 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           print('NEST_DEBUG: nest_member added');
         } catch (e) {
           print('NEST_DEBUG: error = $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('DEBUG: nest creation failed - $e'),
+                duration: const Duration(seconds: 10),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       } else {
         print('NEST_DEBUG: nest already exists = $existingNestId');
