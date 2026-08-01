@@ -228,14 +228,21 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           // since nests.created_by has a foreign key into user_profiles.id.
           // Using update() here silently no-ops on a missing row (no error),
           // which was letting the nest insert fail on the FK constraint.
-          final relationshipType = prefs.getString('relationship') ?? 'Family';
+          // relation_type is a Postgres enum (son/daughter/spouse/etc.) —
+          // it describes a MEMBER's relation to the senior and does not
+          // apply to a nest OWNER, who never sees a relationship picker.
+          // Only include it when a real value was actually selected;
+          // never send a fallback string, since it won't match the enum.
+          final relationshipType = prefs.getString('relationship') ?? '';
           final nestProfileUpdate = <String, dynamic>{
             'id': effectiveUserId,
             'display_name': name,
             'full_name': name,
             'role': role,
-            'relation_type': relationshipType.toLowerCase(),
           };
+          if (relationshipType.isNotEmpty) {
+            nestProfileUpdate['relation_type'] = relationshipType.toLowerCase();
+          }
           if (preferredNestName.isNotEmpty) {
             nestProfileUpdate['preferred_name'] = preferredNestName;
           }

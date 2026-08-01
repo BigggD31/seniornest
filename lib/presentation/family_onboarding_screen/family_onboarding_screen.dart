@@ -245,7 +245,12 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         : nameFromPrefs;
     await prefs.setString('display_name', name);
     await prefs.setString('preferred_name', _preferredNameController.text.trim());
-    await prefs.setString('relationship', _selectedRelationship ?? 'Family');
+    // Guarded by the required-selection check in _nextStep, so this
+    // fallback shouldn't fire in practice — but 'other' is used instead
+    // of 'Family' as defense-in-depth, since 'Family' is not a valid
+    // relation_type enum value and would break signup the same way the
+    // save_messages_prompt_screen.dart bug did.
+    await prefs.setString('relationship', _selectedRelationship ?? 'other');
     await prefs.setBool('notify_check_in', _notifyOnCheckIn);
     await prefs.setBool('notify_messages', _notifyOnMessages);
     await prefs.setBool('onboarding_complete', true);
