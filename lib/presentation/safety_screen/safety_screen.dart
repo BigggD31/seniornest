@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../widgets/app_navigation.dart';
 import '../../widgets/keyboard_done_bar.dart';
@@ -946,7 +947,17 @@ class _SafetyScreenState extends State<SafetyScreen>
                         ),
                       ),
                       GestureDetector(
-                        onTap: () {},
+                        onTap: () async {
+                          final rawPhone = contact['phone'] as String? ?? '';
+                          final digitsOnly = rawPhone.replaceAll(RegExp(r'[^\d+]'), '');
+                          if (digitsOnly.isEmpty) return;
+                          final telUri = Uri(scheme: 'tel', path: digitsOnly);
+                          try {
+                            await launchUrl(telUri);
+                          } catch (e) {
+                            debugPrint('EMERGENCY_CALL_ERROR: $e');
+                          }
+                        },
                         child: Container(
                           width: 40,
                           height: 40,

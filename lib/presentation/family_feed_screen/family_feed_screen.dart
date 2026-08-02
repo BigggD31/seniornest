@@ -1380,6 +1380,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             child: Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: MessageCardWidget(
+                key: ValueKey(_messages[index].id),
                 message: _messages[index],
                 isDarkMode: _isDarkMode,
                 onHeart: () => _toggleHeart(index),
@@ -1415,6 +1416,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               child: Opacity(opacity: anim.value, child: child),
             ),
             child: MessageCardWidget(
+              key: ValueKey(_messages[index].id),
               message: _messages[index],
               isDarkMode: _isDarkMode,
               onHeart: () => _toggleHeart(index),

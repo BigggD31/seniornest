@@ -846,6 +846,7 @@ class _VoiceNotePlayer extends StatefulWidget {
 class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
     with SingleTickerProviderStateMixin {
   bool _isPlaying = false;
+  bool _audioPreloaded = false;
   double _progress = 0.0;
   int _durationSeconds = 0;
   int _positionSeconds = 0;
@@ -885,7 +886,9 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
     });
 
     if (widget.audioUrl.isNotEmpty) {
-      _audioPlayer.setUrl(widget.audioUrl).catchError((e) {
+      _audioPlayer.setUrl(widget.audioUrl).then((_) {
+        if (mounted) _audioPreloaded = true;
+      }).catchError((e) {
         debugPrint('Audio preload error: \$e');
       });
     }
@@ -905,12 +908,14 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
     } else {
       if (widget.audioUrl.isNotEmpty) {
         try {
-          if (_audioPlayer.processingState == ProcessingState.idle ||
-              _audioPlayer.processingState == ProcessingState.completed) {
+          if (!_audioPreloaded &&
+              (_audioPlayer.processingState == ProcessingState.idle ||
+                  _audioPlayer.processingState == ProcessingState.completed)) {
             await _audioPlayer.setUrl(widget.audioUrl);
+            _audioPreloaded = true;
           }
           await _audioPlayer.play();
-          setState(() => _isPlaying = true);
+          if (mounted) setState(() => _isPlaying = true);
         } catch (e) {
           debugPrint('Audio playback error: \$e');
         }
