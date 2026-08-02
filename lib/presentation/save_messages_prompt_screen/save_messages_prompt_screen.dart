@@ -141,11 +141,20 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             await prefs.setString('relation_type', supabaseRelation);
             await prefs.setString('relationship', supabaseRelation);
           }
-          // Restore profile photo from Supabase on sign-in
+          // Avatar cache is unconditionally synced to Supabase (the source
+          // of truth) on every sign-in -- not just when there's a new value
+          // to write. Previously this only ever ADDED a fresh avatar and
+          // never CLEARED a stale one, so switching accounts on the same
+          // device (especially skipping the in-app Sign Out button) could
+          // leave the previous user's avatar cached indefinitely under the
+          // new account.
           final avatarUrl = existingProfile['avatar_url'] as String? ?? '';
           if (avatarUrl.isNotEmpty) {
             await prefs.setString(kProfilePhotoKey, avatarUrl);
             print('PROFILE_PHOTO: restored from Supabase for user $checkUserId');
+          } else {
+            await prefs.remove(kProfilePhotoKey);
+            print('PROFILE_PHOTO: no Supabase avatar for user $checkUserId -- cleared stale local cache');
           }
         }
 
@@ -169,6 +178,18 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           }
           if (relationshipType.isNotEmpty) {
             updateData['relation_type'] = relationshipType.toLowerCase();
+          }
+          // Sync birthday/anniversary to Supabase too -- these used to be
+          // local-device-only, which meant they silently bled across
+          // accounts on a shared test device and never reached other nest
+          // members at all (celebrations are meant to be nest-wide).
+          final localBirthday = prefs.getString('birthday');
+          final localAnniversary = prefs.getString('anniversary');
+          if (localBirthday != null) {
+            updateData['birthday'] = localBirthday;
+          }
+          if (localAnniversary != null) {
+            updateData['anniversary'] = localAnniversary;
           }
           // Upsert (not update) — the profile row may not exist yet for a
           // brand new signup now that the auto-create trigger is removed.
@@ -235,6 +256,14 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           }
           if (preferredNestName.isNotEmpty) {
             nestProfileUpdate['preferred_name'] = preferredNestName;
+          }
+          final localBirthday2 = prefs.getString('birthday');
+          final localAnniversary2 = prefs.getString('anniversary');
+          if (localBirthday2 != null) {
+            nestProfileUpdate['birthday'] = localBirthday2;
+          }
+          if (localAnniversary2 != null) {
+            nestProfileUpdate['anniversary'] = localAnniversary2;
           }
           await supabase.from('user_profiles').upsert(nestProfileUpdate);
           print('NEST_DEBUG: profile upserted');

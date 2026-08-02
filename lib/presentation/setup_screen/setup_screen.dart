@@ -1284,6 +1284,8 @@ class _SetupScreenState extends State<SetupScreen>
               await supabase.from('user_profiles').update({
                 'display_name': name,
                 'preferred_name': preferredName,
+                'birthday': birthday?.toIso8601String(),
+                'anniversary': anniversary?.toIso8601String(),
               }).eq('id', userId);
             }
           } catch (_) {}

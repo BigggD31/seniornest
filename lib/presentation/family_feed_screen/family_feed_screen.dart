@@ -309,74 +309,96 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       await prefs.setBool('first_load', false);
     }
 
-    // Load celebrations
-    final birthdayStr = prefs.getString('birthday');
-    final anniversaryStr = prefs.getString('anniversary');
-    DateTime? birthday;
-    DateTime? anniversary;
-    if (birthdayStr != null) {
-      try {
-        birthday = DateTime.parse(birthdayStr);
-      } catch (_) {}
-    }
-    if (anniversaryStr != null) {
-      try {
-        anniversary = DateTime.parse(anniversaryStr);
-      } catch (_) {}
-    }
-
+    // Load celebrations -- nest-wide: every member's birthday/anniversary
+    // (if they've set one) shows on EVERYONE's Home feed, including their
+    // own, once it's within 30 days. Previously this only ever read the
+    // current device's local cache, so it only ever surfaced one person's
+    // dates and mislabeled them with whoever happened to be signed in on
+    // this device at the time.
     final today = DateTime.now();
     final todayEvents = <CelebrationEvent>[];
     final upcomingEvents = <CelebrationEvent>[];
+    final monthNames = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
 
-    void checkEvent(DateTime? date, CelebrationEventType type) {
+    void checkMemberEvent(
+      DateTime? date,
+      CelebrationEventType type,
+      String memberName,
+      String? memberAvatarJson,
+    ) {
       if (date == null) return;
       final todayDate = DateTime(today.year, today.month, today.day);
       final thisYear = DateTime(today.year, date.month, date.day);
       final nextYear = DateTime(today.year + 1, date.month, date.day);
       final candidate = thisYear.isBefore(todayDate) ? nextYear : thisYear;
       final diff = candidate.difference(todayDate).inDays;
-      final displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
-          ? prefs.getString('preferred_name')!
-          : (prefs.getString('display_name') ?? 'You');
-      final monthNames = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
       final dateLabel = '${monthNames[candidate.month - 1]} ${candidate.day}';
       if (diff == 0) {
         todayEvents.add(
           CelebrationEvent(
-            name: displayName,
+            name: memberName,
             type: type,
             dateLabel: dateLabel,
             daysUntil: 0,
+            avatarJson: memberAvatarJson,
           ),
         );
       } else if (diff > 0 && diff <= 30) {
         upcomingEvents.add(
           CelebrationEvent(
-            name: displayName,
+            name: memberName,
             type: type,
             dateLabel: dateLabel,
             daysUntil: diff,
+            avatarJson: memberAvatarJson,
           ),
         );
       }
     }
 
-    checkEvent(birthday, CelebrationEventType.birthday);
-    checkEvent(anniversary, CelebrationEventType.anniversary);
+    try {
+      final supabase = Supabase.instance.client;
+      final celebrationsNestId = prefs.getString('nest_id') ?? '';
+      if (celebrationsNestId.isNotEmpty) {
+        final memberRows = await supabase
+            .from('nest_members')
+            .select(
+                'user_profiles(display_name, preferred_name, birthday, anniversary, avatar_url)')
+            .eq('nest_id', celebrationsNestId);
+        for (final row in (memberRows as List<dynamic>)) {
+          final memberProfile = row['user_profiles'] as Map<String, dynamic>?;
+          if (memberProfile == null) continue;
+          final memberPreferred = memberProfile['preferred_name'] as String? ?? '';
+          final memberDisplay = memberProfile['display_name'] as String? ?? '';
+          final memberName = memberPreferred.isNotEmpty
+              ? memberPreferred
+              : (memberDisplay.isNotEmpty ? memberDisplay : 'A family member');
+          final memberAvatarJson = memberProfile['avatar_url'] as String?;
+          DateTime? memberBirthday;
+          DateTime? memberAnniversary;
+          final birthdayField = memberProfile['birthday'] as String?;
+          final anniversaryField = memberProfile['anniversary'] as String?;
+          if (birthdayField != null) {
+            try {
+              memberBirthday = DateTime.parse(birthdayField);
+            } catch (_) {}
+          }
+          if (anniversaryField != null) {
+            try {
+              memberAnniversary = DateTime.parse(anniversaryField);
+            } catch (_) {}
+          }
+          checkMemberEvent(memberBirthday, CelebrationEventType.birthday, memberName, memberAvatarJson);
+          checkMemberEvent(memberAnniversary, CelebrationEventType.anniversary, memberName, memberAvatarJson);
+        }
+      }
+    } catch (e) {
+      print('CELEBRATIONS LOAD ERROR: $e');
+    }
+
     upcomingEvents.sort((a, b) => a.daysUntil.compareTo(b.daysUntil));
 
     // Prefer real cached messages over generic demo placeholders — avoids

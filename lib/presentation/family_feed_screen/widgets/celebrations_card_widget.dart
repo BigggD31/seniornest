@@ -1,6 +1,20 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
+
+/// Safely decodes an avatar JSON string, returning null on any malformed
+/// input instead of throwing.
+Map<String, dynamic>? _safeDecodeCelebrationAvatar(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(raw);
+    return decoded is Map<String, dynamic> ? decoded : null;
+  } catch (_) {
+    return null;
+  }
+}
 
 class CelebrationsCardWidget extends StatelessWidget {
   const CelebrationsCardWidget({
@@ -154,16 +168,34 @@ class CelebrationsCardWidget extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: isDarkMode
-                    ? iconColor.withAlpha(50)
-                    : iconColor.withAlpha(30),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: iconColor, size: 16),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                ProfileAvatarWidget(
+                  profileData: _safeDecodeCelebrationAvatar(event.avatarJson),
+                  displayName: event.name,
+                  size: 32,
+                  borderColor: iconColor,
+                  borderWidth: 1.5,
+                ),
+                Positioned(
+                  bottom: -2,
+                  right: -2,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: iconColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isDarkMode ? const Color(0xFF1A1612) : Colors.white,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 9),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -384,10 +416,12 @@ class CelebrationEvent {
     required this.type,
     required this.dateLabel,
     required this.daysUntil,
+    this.avatarJson,
   });
 
   final String name;
   final CelebrationEventType type;
   final String dateLabel;
   final int daysUntil;
+  final String? avatarJson;
 }
