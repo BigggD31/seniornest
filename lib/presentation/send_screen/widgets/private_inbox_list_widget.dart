@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../widgets/custom_image_widget.dart';
 import '../../message_thread_screen/message_thread_screen.dart';
+import '../../family_feed_screen/widgets/nest_avatar_row_widget.dart';
+import '../../../routes/app_routes.dart';
 
 /// The list of private 1:1 conversations. No Scaffold/AppBar of its own —
 /// meant to be embedded inside another screen (e.g. as a tab).
@@ -19,6 +22,7 @@ class PrivateInboxListWidget extends StatefulWidget {
 class _PrivateInboxListWidgetState extends State<PrivateInboxListWidget> {
   final _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _threads = [];
+  List<Map<String, dynamic>> _nestMembers = [];
   bool _isLoading = true;
 
   @override
@@ -34,6 +38,37 @@ class _PrivateInboxListWidgetState extends State<PrivateInboxListWidget> {
       return;
     }
 
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isNotEmpty) {
+        final memberRows = await _supabase
+            .from('nest_members')
+            .select('user_id, user_profiles(display_name, preferred_name, avatar_url, role)')
+            .eq('nest_id', nestId);
+        final loadedMembers = <Map<String, dynamic>>[];
+        for (final row in (memberRows as List<dynamic>)) {
+          final userId = row['user_id'] as String? ?? '';
+          if (userId.isEmpty || userId == myId) continue;
+          final profile = row['user_profiles'] as Map<String, dynamic>?;
+          final preferred = profile?['preferred_name'] as String? ?? '';
+          final display = profile?['display_name'] as String? ?? '';
+          final name = preferred.isNotEmpty ? preferred : display;
+          if (name.isEmpty) continue;
+          loadedMembers.add({
+            'id': userId,
+            'name': name,
+            'avatarUrl': profile?['avatar_url'] as String? ?? '',
+            'avatarLabel': '$name profile photo',
+            'role': profile?['role'] as String? ?? 'family',
+            'isSample': false,
+          });
+        }
+        if (mounted) setState(() => _nestMembers = loadedMembers);
+      }
+    } catch (e) {
+      debugPrint('INBOX_NEST_MEMBERS_LOAD_ERROR: $e');
+    }
     try {
       final rows = await _supabase
           .from('private_messages')
@@ -125,12 +160,24 @@ class _PrivateInboxListWidgetState extends State<PrivateInboxListWidget> {
       );
     }
 
+    final avatarTray = _nestMembers.isEmpty
+        ? const SizedBox.shrink()
+        : Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: NestAvatarRowWidget(
+              members: _nestMembers,
+              isDarkMode: widget.isDarkMode,
+              onMemberTap: _onMemberTap,
+            ),
+          );
+
     if (_threads.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.only(top: 60),
+        padding: const EdgeInsets.only(top: 24),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
+            avatarTray,
+            const SizedBox(height: 36),
             Icon(Icons.chat_bubble_outline_rounded, size: 44, color: _textSecondary),
             const SizedBox(height: 16),
             Text(
@@ -143,7 +190,7 @@ class _PrivateInboxListWidgetState extends State<PrivateInboxListWidget> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Tap someone\'s photo on Home to start a\nprivate conversation.',
+              'Tap someone\'s photo above to start a\nprivate conversation.',
               textAlign: TextAlign.center,
               style: GoogleFonts.nunitoSans(fontSize: 13, color: _textSecondary),
             ),
@@ -153,8 +200,23 @@ class _PrivateInboxListWidgetState extends State<PrivateInboxListWidget> {
     }
 
     return Column(
-      children: _threads.map((thread) => _buildThreadRow(thread)).toList(),
+      children: [
+        avatarTray,
+        ..._threads.map((thread) => _buildThreadRow(thread)),
+      ],
     );
+  }
+
+  void _onMemberTap(Map<String, dynamic> member) {
+    Navigator.pushNamed(
+      context,
+      AppRoutes.messageThreadScreen,
+      arguments: {
+        'recipientId': member['id'] as String? ?? '',
+        'recipientName': member['name'] as String? ?? 'Nest Member',
+        'recipientAvatarUrl': member['avatarUrl'] as String?,
+      },
+    ).then((_) => _load());
   }
 
   Widget _buildThreadRow(Map<String, dynamic> thread) {
