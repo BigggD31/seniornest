@@ -1,7 +1,20 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../widgets/custom_image_widget.dart';
+import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
+
+/// Safely decodes an avatar JSON string, returning null on any malformed
+/// input instead of throwing.
+Map<String, dynamic>? _safeDecodeTrayAvatar(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(raw);
+    return decoded is Map<String, dynamic> ? decoded : null;
+  } catch (_) {
+    return null;
+  }
+}
 
 /// Horizontal row of avatars for everyone in the Nest, shown at the top of
 /// the Home feed. Tapping a member is meant to open a private 1:1 message
@@ -36,8 +49,6 @@ class NestAvatarRowWidget extends StatelessWidget {
           final member = members[index];
           final name = member['name'] as String? ?? '';
           final avatarUrl = member['avatarUrl'] as String? ?? '';
-          final avatarLabel = member['avatarLabel'] as String? ?? '';
-          final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
           return GestureDetector(
             onTap: () => onMemberTap(member),
@@ -54,29 +65,13 @@ class NestAvatarRowWidget extends StatelessWidget {
                       width: 2,
                     ),
                   ),
-                  child: avatarUrl.isNotEmpty
-                      ? ClipOval(
-                          child: CustomImageWidget(
-                            imageUrl: avatarUrl,
-                            width: 56,
-                            height: 56,
-                            fit: BoxFit.cover,
-                            semanticLabel: avatarLabel,
-                          ),
-                        )
-                      : CircleAvatar(
-                          radius: 28,
-                          backgroundColor:
-                              const Color(0xFF5DA399).withAlpha(40),
-                          child: Text(
-                            initial,
-                            style: GoogleFonts.nunitoSans(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF5DA399),
-                            ),
-                          ),
-                        ),
+                  child: ProfileAvatarWidget(
+                    profileData: _safeDecodeTrayAvatar(avatarUrl),
+                    displayName: name,
+                    size: 56,
+                    borderColor: Colors.transparent,
+                    borderWidth: 0,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 SizedBox(

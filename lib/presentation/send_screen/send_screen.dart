@@ -1524,7 +1524,13 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         });
         _videoPlayerController = VideoPlayerController.file(File(picked.path));
         await _videoPlayerController!.initialize();
-        setState(() {});
+        // _videoSeconds is otherwise only ever set by the live-recording
+        // timer -- for an uploaded video it was staying at 0 (or whatever
+        // was left over from a prior recording attempt), which made the
+        // play button think the video was already over almost immediately.
+        setState(() {
+          _videoSeconds = _videoPlayerController!.value.duration.inSeconds;
+        });
       } else {
         final bytes = await picked.readAsBytes();
         setState(() {
@@ -3417,7 +3423,17 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
 
       String? mediaUrl;
       final effectiveType = overrideType ?? _selectedType;
-      final effectivePath = overridePath;
+      // Fall back to the actual picked/recorded file when no override was
+      // passed -- the main Send button calls _sendMessage() with no
+      // arguments at all, so relying only on overridePath meant video and
+      // voice uploads from that button silently never happened. Matched to
+      // effectiveType specifically so a leftover path from switching
+      // between voice/video earlier in the same session can never be
+      // picked up for the wrong content type.
+      final effectivePath = overridePath ??
+          (effectiveType == 'video'
+              ? _videoFilePath
+              : (effectiveType == 'voice' ? _voiceFilePath : null));
 
       // Upload media if present
       if (_selectedPhotoBase64 != null) {
