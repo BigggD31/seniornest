@@ -137,7 +137,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       final membersResponse = await supabase
           .from('nest_members')
           .select(
-              'user_id, user_profiles(display_name, preferred_name, avatar_url, relation_type)')
+              'user_id, user_profiles(display_name, preferred_name, avatar_url, relation_type, role)')
           .eq('nest_id', nestId);
       final rows = membersResponse as List<dynamic>;
 
@@ -150,10 +150,14 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         final display = profile?['display_name'] as String? ?? '';
         final name = preferred.isNotEmpty ? preferred : display;
         if (name.isEmpty) continue;
-        final rawRelation = profile?['relation_type'] as String? ?? 'family';
+        final rawRelation = profile?['relation_type'] as String? ?? '';
+        final memberRole = profile?['role'] as String? ?? '';
+        // relation_type only applies to family members (Son/Daughter/etc.) --
+        // it's legitimately empty for the senior, so don't blindly default
+        // an empty value to "Family" without checking who this actually is.
         final relationship = rawRelation.isNotEmpty
             ? rawRelation[0].toUpperCase() + rawRelation.substring(1)
-            : 'Family';
+            : (memberRole == 'senior' ? 'Senior' : 'Family');
         loaded.add({
           'id': userId,
           'name': name,
@@ -2600,8 +2604,10 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     });
   }
 
-  void _toggleVideoPlayback() {
+  void _toggleVideoPlayback() async {
+    if (_videoPlayerController == null) return;
     if (_videoIsPlaying) {
+      await _videoPlayerController!.pause();
       _videoPlayTimer?.cancel();
       setState(() => _videoIsPlaying = false);
     } else {
@@ -2609,9 +2615,18 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         _videoIsPlaying = true;
         _videoPlayPosition = 0;
       });
+      try {
+        await _videoPlayerController!.seekTo(Duration.zero);
+        await _videoPlayerController!.play();
+      } catch (e) {
+        print('VIDEO PLAYBACK ERROR: $e');
+        setState(() => _videoIsPlaying = false);
+        return;
+      }
       _videoPlayTimer = Timer.periodic(const Duration(seconds: 1), (t) {
         if (_videoPlayPosition >= _videoSeconds - 1) {
           t.cancel();
+          _videoPlayerController?.pause();
           setState(() {
             _videoIsPlaying = false;
             _videoPlayPosition = 0;

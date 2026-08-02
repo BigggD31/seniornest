@@ -302,6 +302,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
               controller: _controller,
               minLines: 1,
               maxLines: 4,
+              textCapitalization: TextCapitalization.sentences,
               style: GoogleFonts.nunitoSans(color: _textPrimary),
               decoration: InputDecoration(
                 hintText: 'Type a message…',
