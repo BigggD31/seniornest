@@ -145,6 +145,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   List<Map<String, dynamic>> _nestMembers = []; // for avatar row (excludes current user)
 
   late AnimationController _listEntranceController;
+  bool _hasPlayedEntranceOnce = false;
   final List<Animation<double>> _itemAnimations = [];
   final ScrollController _scrollController = ScrollController();
 
@@ -436,6 +437,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
     _setupItemAnimations();
     _listEntranceController.forward();
+    _hasPlayedEntranceOnce = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -461,14 +463,30 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   void _setupItemAnimations() {
-    // Quick fix (see tech doc for the real fix): no entrance animation at
-    // all. Because Home is torn down and rebuilt from scratch every time
-    // the user taps into it from bottom nav, this animation was replaying
-    // every single visit -- that's the jitter. Cards now render at full
-    // opacity immediately, every time, with nothing to animate.
+    // Home shows cached/placeholder data immediately so the first paint
+    // isn't blank, then quietly swaps in real Supabase data moments later
+    // once _loadFeedFromSupabase() finishes. The old jitter came from
+    // re-animating that swap on top of an animation that already played --
+    // not from having a staggered reveal in the first place. Every other
+    // screen (Favs/Legacy/Safety/Share/Setup) already uses this same
+    // staggered fade + slide-up pattern; Home now matches them for its
+    // one true first reveal, then updates quietly after that.
     _itemAnimations.clear();
     for (int i = 0; i < _messages.length; i++) {
-      _itemAnimations.add(const AlwaysStoppedAnimation<double>(1.0));
+      if (!_hasPlayedEntranceOnce) {
+        final start = (i * 0.08).clamp(0.0, 0.7);
+        final end = (start + 0.4).clamp(0.0, 1.0);
+        _itemAnimations.add(
+          CurvedAnimation(
+            parent: _listEntranceController,
+            curve: Interval(start, end, curve: Curves.easeOutCubic),
+          ),
+        );
+      } else {
+        // Real data arriving after the first reveal already played updates
+        // quietly -- no replay, no re-animating cards the user has seen.
+        _itemAnimations.add(const AlwaysStoppedAnimation<double>(1.0));
+      }
     }
   }
 
