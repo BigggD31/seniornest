@@ -94,6 +94,45 @@ class _SetupScreenState extends State<SetupScreen>
 
     final removedIds = prefs.getStringList('removed_member_ids') ?? [];
 
+    // Family Members was previously always an empty list -- nothing ever
+    // populated it from real data, so it silently showed "0 members" no
+    // matter how many people had actually joined the nest.
+    List<Map<String, dynamic>> realFamilyMembers = [];
+    try {
+      final supabase = Supabase.instance.client;
+      final currentUserId = supabase.auth.currentUser?.id;
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (currentUserId != null && nestId.isNotEmpty) {
+        final memberRows = await supabase
+            .from('nest_members')
+            .select('user_id, user_profiles(display_name, preferred_name, relation_type, role)')
+            .eq('nest_id', nestId);
+        for (final row in (memberRows as List<dynamic>)) {
+          final memberUserId = row['user_id'] as String?;
+          if (memberUserId == null || memberUserId == currentUserId) continue;
+          final profile = row['user_profiles'] as Map<String, dynamic>?;
+          if (profile == null) continue;
+          final preferred = profile['preferred_name'] as String? ?? '';
+          final display = profile['display_name'] as String? ?? '';
+          final memberName = preferred.isNotEmpty ? preferred : (display.isNotEmpty ? display : 'Family member');
+          final relationType = profile['relation_type'] as String? ?? '';
+          final memberRole = profile['role'] as String? ?? '';
+          final relationshipLabel = relationType.isNotEmpty
+              ? (relationType[0].toUpperCase() + relationType.substring(1))
+              : (memberRole == 'senior' ? 'Senior' : 'Family');
+          final initials = memberName.trim().isNotEmpty ? memberName.trim()[0].toUpperCase() : '?';
+          realFamilyMembers.add({
+            'id': memberUserId,
+            'name': memberName,
+            'relationship': relationshipLabel,
+            'initials': initials,
+          });
+        }
+      }
+    } catch (e) {
+      print('FAMILY_MEMBERS_LOAD_ERROR: $e');
+    }
+
     final profileJson = prefs.getString(kProfilePhotoKey);
     Map<String, dynamic>? profileData;
     if (profileJson != null) {
@@ -137,10 +176,11 @@ class _SetupScreenState extends State<SetupScreen>
       _anniversary = anniversary;
       _inviteCode = prefs.getString('invite_code') ?? '';
       if (removedIds.isNotEmpty) {
-        _familyMembers = _familyMembers
+        realFamilyMembers = realFamilyMembers
             .where((m) => !removedIds.contains(m['id'] as String))
             .toList();
       }
+      _familyMembers = realFamilyMembers;
     });
     _setupAnimations();
     _entranceController.forward();

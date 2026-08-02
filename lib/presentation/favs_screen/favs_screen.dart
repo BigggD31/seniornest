@@ -19,6 +19,18 @@ class FavsScreen extends StatefulWidget {
 }
 
 class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
+  /// Safely decodes an avatar JSON string, returning null on any malformed
+  /// input instead of throwing.
+  Map<String, dynamic>? _safeDecodeFavsAvatar(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   int _currentNavIndex = 4;
   bool _isDarkMode = false;
   bool _isLoading = true;
@@ -1098,8 +1110,8 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                     Row(
                       children: [
                         ProfileAvatarWidget(
-                          profileData: _profileData,
-                          displayName: _displayName,
+                          profileData: _safeDecodeFavsAvatar(item['senderAvatarUrl'] as String?),
+                          displayName: title,
                           size: 36,
                           borderColor: catColor,
                           borderWidth: 1.5,

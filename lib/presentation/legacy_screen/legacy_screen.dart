@@ -539,10 +539,12 @@ class _LegacyScreenState extends State<LegacyScreen>
       final item = {
         'id': id,
         'category': 'Legacy',
-        'senderName': story['title'] as String? ?? 'Legacy Story',
-        'senderRelationship': story['category'] as String? ?? 'Story',
-        'senderAvatarUrl': '',
-        'senderAvatarLabel': '',
+        'senderName': (story['authorName'] as String? ?? '').isNotEmpty
+            ? story['authorName'] as String
+            : 'A Family Member',
+        'senderRelationship': '',
+        'senderAvatarUrl': story['authorAvatarUrl'] as String? ?? '',
+        'senderAvatarLabel': story['authorName'] as String? ?? '',
         'content': story['excerpt'] as String? ?? '',
         'imageUrl': story['imageUrl'] as String? ?? '',
         'imageSemanticLabel': story['imageLabel'] as String? ?? '',
