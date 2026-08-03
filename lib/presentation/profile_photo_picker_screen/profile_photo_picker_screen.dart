@@ -7,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../widgets/custom_image_widget.dart';
+
 /// Key used to persist the profile photo choice across the app.
 /// Value is a JSON string: {"type": "emoji"|"photo", "value": "<emoji char>"|"<base64 bytes>"}
 const String kProfilePhotoKey = 'profile_photo_data';
@@ -149,16 +151,31 @@ class _ProfilePhotoPickerScreenState extends State<ProfilePhotoPickerScreen>
         // for accounts that picked an avatar early in onboarding.
         // email is a NOT NULL column, so it must be included whenever this
         // might be the row's first insert.
-        final userEmail = currentUser?.email ?? '';
-        await supabaseClient.from('user_profiles').upsert({
-          'id': userId,
-          if (userEmail.isNotEmpty) 'email': userEmail,
-          'avatar_url': jsonEncode(data),
-        });
-        print('PROFILE_PHOTO: saved to Supabase for user $userId');
+        //
+        // Confirmed via live Supabase logs (Aug 3, 2026) that an empty
+        // email here causes a hard NOT NULL failure on first insert -- not
+        // a hypothetical. Retry once after a short delay if it's empty
+        // instead of silently omitting the field and losing the whole
+        // upsert (and the avatar with it).
+        String userEmail = currentUser?.email ?? '';
+        if (userEmail.isEmpty) {
+          await Future.delayed(const Duration(milliseconds: 400));
+          userEmail = supabaseClient.auth.currentUser?.email ?? '';
+        }
+        if (userEmail.isEmpty) {
+          print('PROFILE_PHOTO_ERROR: no email available for user $userId after retry -- avatar upsert skipped to avoid NOT NULL violation. Avatar remains local-only until next successful sign-in sync.');
+        } else {
+          await supabaseClient.from('user_profiles').upsert({
+            'id': userId,
+            'email': userEmail,
+            'avatar_url': jsonEncode(data),
+          });
+          print('PROFILE_PHOTO: saved to Supabase for user $userId');
+        }
       }
-    } catch (e) {
-      print('PROFILE_PHOTO: Supabase save error = $e');
+    } catch (e, st) {
+      print('PROFILE_PHOTO_ERROR: Supabase save error = $e');
+      print('PROFILE_PHOTO_ERROR stack = $st');
     }
 
     if (mounted) Navigator.pop(context, data);
@@ -390,28 +407,60 @@ class _ProfilePhotoPickerScreenState extends State<ProfilePhotoPickerScreen>
   }
 }
 
-/// Helper widget that renders a profile avatar from stored SharedPreferences data.
-/// Shows emoji, photo bytes, or initials fallback.
+/// Helper widget that renders a profile avatar from EITHER an already-decoded
+/// {"type","value"} map OR a raw string straight from Supabase/SharedPreferences.
+///
+/// Centralized 3-way fallback (this used to be reimplemented slightly
+/// differently in 3+ separate files, which is exactly why avatars looked
+/// inconsistent across screens):
+///   1. If [profileData] is already a decoded map, use it directly.
+///   2. Else if [avatarUrl] is a JSON string ({"type":...,"value":...}),
+///      decode it.
+///   3. Else if [avatarUrl] is a plain http(s) URL (legacy/sample data
+///      shape), render it as a network image.
+///   4. Else fall back to initials -- never a blank/crashed avatar.
 class ProfileAvatarWidget extends StatelessWidget {
   const ProfileAvatarWidget({
     super.key,
-    required this.profileData,
+    this.profileData,
+    this.avatarUrl,
     required this.displayName,
     this.size = 40.0,
     this.borderColor = const Color(0xFF5DA399),
     this.borderWidth = 2.0,
   });
 
+  /// Already-decoded {"type": "emoji"|"photo", "value": ...} map, if the
+  /// caller already has it on hand (e.g. mid-picker preview state).
   final Map<String, dynamic>? profileData;
+
+  /// Raw value straight from Supabase avatar_url or SharedPreferences --
+  /// may be a JSON string, a plain photo URL, or null. Only used if
+  /// [profileData] wasn't already supplied.
+  final String? avatarUrl;
+
   final String displayName;
   final double size;
   final Color borderColor;
   final double borderWidth;
 
+  /// Safely decodes a raw avatar string into the {"type","value"} shape,
+  /// returning null on any malformed/non-JSON input instead of throwing.
+  static Map<String, dynamic>? _safeDecode(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final type = profileData?['type'] as String?;
-    final value = profileData?['value'] as String?;
+    final resolved = profileData ?? _safeDecode(avatarUrl);
+    final type = resolved?['type'] as String?;
+    final value = resolved?['value'] as String?;
 
     Widget inner;
 
@@ -439,6 +488,20 @@ class ProfileAvatarWidget extends StatelessWidget {
               ),
             )
           : _buildInitials();
+    } else if (resolved == null &&
+        avatarUrl != null &&
+        (avatarUrl!.startsWith('http://') ||
+            avatarUrl!.startsWith('https://'))) {
+      // Legacy/sample-member shape: a plain URL string instead of JSON.
+      inner = ClipOval(
+        child: CustomImageWidget(
+          imageUrl: avatarUrl!,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          semanticLabel: '$displayName profile photo',
+        ),
+      );
     } else {
       inner = _buildInitials();
     }

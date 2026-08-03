@@ -411,25 +411,12 @@ class _SetupScreenState extends State<SetupScreen>
           ),
           child: Row(
             children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(40),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    _effectiveName.isNotEmpty
-                        ? _effectiveName[0].toUpperCase()
-                        : '?',
-                    style: GoogleFonts.nunitoSans(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
+              ProfileAvatarWidget(
+                profileData: _profileData,
+                displayName: _effectiveName,
+                size: 60,
+                borderColor: Colors.white.withAlpha(90),
+                borderWidth: 2,
               ),
               const SizedBox(width: 16),
               Expanded(

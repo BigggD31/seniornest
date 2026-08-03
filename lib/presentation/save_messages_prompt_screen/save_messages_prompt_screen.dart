@@ -117,6 +117,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
         String preferredName = prefs.getString('preferred_name') ?? '';
         String role = prefs.getString('user_role') ?? 'senior';
         String relationshipType = prefs.getString('relationship') ?? '';
+        // Set below if local cache has an avatar Supabase is missing --
+        // see self-heal push logic further down.
+        String? avatarToPush;
 
         if (existingProfile != null) {
           final supabaseName = existingProfile['display_name'] as String? ?? '';
@@ -165,32 +168,61 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
               await prefs.remove(kProfilePhotoKey);
               await prefs.remove(kProfilePhotoOwnerKey);
               print('PROFILE_PHOTO: cached avatar belonged to a different user -- cleared stale cache');
+            } else if (cachedOwnerId == checkUserId) {
+              // Self-heal: local cache has an avatar for this exact user,
+              // but Supabase doesn't. This is the real gap that was causing
+              // avatars to vanish on sign-out -- the picker's write may have
+              // never landed (silent failure, or the picker was never
+              // actually re-opened this session because onboarding restored
+              // the photo from local cache alone). Push it up now instead of
+              // only ever pulling down.
+              final localAvatar = prefs.getString(kProfilePhotoKey);
+              if (localAvatar != null && localAvatar.isNotEmpty) {
+                avatarToPush = localAvatar;
+                print('PROFILE_PHOTO: local cache has an avatar Supabase is missing -- will push it up');
+              } else {
+                print('PROFILE_PHOTO: no Supabase avatar yet for user $checkUserId, and no local cache either');
+              }
             } else {
               print('PROFILE_PHOTO: no Supabase avatar yet for user $checkUserId, but local cache already belongs to them -- keeping it');
             }
           }
         }
 
-        // Only write to Supabase if we have real data
-        if (name.isNotEmpty) {
+        // Only write to Supabase if we have real data to write
+        if (name.isNotEmpty || avatarToPush != null) {
           // email is a NOT NULL column. Postgres validates NOT NULL on the
           // candidate row for INSERT ... ON CONFLICT DO UPDATE *before* it
           // checks for a conflict, even when a matching row already exists —
           // so upsert() fails without this regardless of whether the profile
           // row was already created by the signup trigger.
-          final userEmail = supabaseClient.auth.currentUser?.email ?? '';
+          //
+          // Confirmed via live Supabase logs (Aug 3, 2026) that this raced
+          // and threw "null value in column email ... violates not-null
+          // constraint" at least once -- currentUser?.email can genuinely
+          // be empty for a brief moment right after auth completes. Retry
+          // once after a short delay instead of silently dropping the field
+          // and letting the whole upsert fail.
+          String userEmail = supabaseClient.auth.currentUser?.email ?? '';
+          if (userEmail.isEmpty) {
+            await Future.delayed(const Duration(milliseconds: 400));
+            userEmail = supabaseClient.auth.currentUser?.email ?? '';
+          }
           final updateData = <String, dynamic>{
             'id': checkUserId,
             if (userEmail.isNotEmpty) 'email': userEmail,
-            'display_name': name,
-            'full_name': name,
-            'role': role,
+            if (name.isNotEmpty) 'display_name': name,
+            if (name.isNotEmpty) 'full_name': name,
+            if (name.isNotEmpty) 'role': role,
           };
           if (preferredName.isNotEmpty) {
             updateData['preferred_name'] = preferredName;
           }
           if (relationshipType.isNotEmpty) {
             updateData['relation_type'] = relationshipType.toLowerCase();
+          }
+          if (avatarToPush != null) {
+            updateData['avatar_url'] = avatarToPush;
           }
           // Sync birthday/anniversary to Supabase too -- these used to be
           // local-device-only, which meant they silently bled across
@@ -204,14 +236,22 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           if (localAnniversary != null) {
             updateData['anniversary'] = localAnniversary;
           }
-          // Upsert (not update) — the profile row may not exist yet for a
-          // brand new signup now that the auto-create trigger is removed.
-          // An update() on a nonexistent row silently affects zero rows.
-          await supabaseClient.from('user_profiles').upsert(updateData);
-          print('NEST_DEBUG: profile upserted at top of _navigateToHome');
+          if (userEmail.isEmpty) {
+            // Still empty after the retry. Skip the write entirely rather
+            // than let Postgres reject it -- but log loudly, since a silent
+            // failure here is exactly what hid this bug for a week.
+            print('PROFILE_UPSERT_ERROR: no email available for user $checkUserId after retry -- skipping upsert to avoid NOT NULL violation');
+          } else {
+            // Upsert (not update) — the profile row may not exist yet for a
+            // brand new signup now that the auto-create trigger is removed.
+            // An update() on a nonexistent row silently affects zero rows.
+            await supabaseClient.from('user_profiles').upsert(updateData);
+            print('NEST_DEBUG: profile upserted at top of _navigateToHome${avatarToPush != null ? ' (including self-heal avatar push)' : ''}');
+          }
         }
-      } catch (e) {
-        print('NEST_DEBUG: profile update error = \$e');
+      } catch (e, st) {
+        print('NEST_DEBUG: profile update error = $e');
+        print('NEST_DEBUG: profile update stack = $st');
       }
     }
 

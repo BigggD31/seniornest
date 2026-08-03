@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -12,19 +11,6 @@ import '../../../widgets/custom_image_widget.dart';
 import '../../../widgets/share_preview_widget.dart';
 import '../../../widgets/fullscreen_media_viewer.dart';
 import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
-
-/// Safely decodes an avatar JSON string, returning null on any malformed
-/// input instead of throwing — a bad avatar_url value should never crash a
-/// feed card.
-Map<String, dynamic>? _safeDecodeAvatarJson(String? raw) {
-  if (raw == null || raw.isEmpty) return null;
-  try {
-    final decoded = json.decode(raw);
-    return decoded is Map<String, dynamic> ? decoded : null;
-  } catch (_) {
-    return null;
-  }
-}
 
 class MessageCardWidget extends StatefulWidget {
   const MessageCardWidget({
@@ -257,23 +243,13 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                       width: 2,
                     ),
                   ),
-                  child: _safeDecodeAvatarJson(widget.senderAvatarJson) != null
-                    ? ProfileAvatarWidget(
-                        profileData: _safeDecodeAvatarJson(widget.senderAvatarJson),
-                        displayName: msg.senderName,
-                        size: 44,
-                        borderColor: const Color(0xFF5DA399),
-                        borderWidth: 2,
-                      )
-                    : ClipOval(
-                        child: CustomImageWidget(
-                          imageUrl: msg.senderAvatarUrl,
-                          width: 44,
-                          height: 44,
-                          fit: BoxFit.cover,
-                          semanticLabel: msg.senderAvatarLabel,
-                        ),
-                      ),
+                  child: ProfileAvatarWidget(
+                    avatarUrl: widget.senderAvatarJson ?? msg.senderAvatarUrl,
+                    displayName: msg.senderName,
+                    size: 44,
+                    borderColor: const Color(0xFF5DA399),
+                    borderWidth: 2,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(

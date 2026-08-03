@@ -1,58 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../widgets/custom_image_widget.dart';
 import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
-/// Safely decodes an avatar JSON string, returning null on any malformed
-/// input instead of throwing.
-Map<String, dynamic>? _safeDecodeTrayAvatar(String? raw) {
-  if (raw == null || raw.isEmpty) return null;
-  try {
-    final decoded = jsonDecode(raw);
-    return decoded is Map<String, dynamic> ? decoded : null;
-  } catch (_) {
-    return null;
-  }
-}
 
-/// Builds the right avatar widget for whichever shape avatarUrl actually is:
-/// real users store a small JSON package ({"type":...,"value":...}), while
-/// the sample placeholder members (Sarah/Michael/etc.) store a plain photo
-/// URL directly. Trying to JSON-decode a plain URL fails silently and falls
-/// back to initials-only -- which is exactly what broke the sample tray.
-Widget _buildTrayAvatar(String? avatarUrl, String name) {
-  final decoded = _safeDecodeTrayAvatar(avatarUrl);
-  if (decoded != null) {
-    return ProfileAvatarWidget(
-      profileData: decoded,
-      displayName: name,
-      size: 56,
-      borderColor: Colors.transparent,
-      borderWidth: 0,
-    );
-  }
-  if (avatarUrl != null &&
-      (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://'))) {
-    return ClipOval(
-      child: CustomImageWidget(
-        imageUrl: avatarUrl,
-        width: 56,
-        height: 56,
-        fit: BoxFit.cover,
-        semanticLabel: '$name profile photo',
-      ),
-    );
-  }
-  return ProfileAvatarWidget(
-    profileData: null,
-    displayName: name,
-    size: 56,
-    borderColor: Colors.transparent,
-    borderWidth: 0,
-  );
-}
 
 /// Horizontal row of avatars for everyone in the Nest, shown at the top of
 /// the Home feed. Tapping a member is meant to open a private 1:1 message
@@ -103,7 +54,13 @@ class NestAvatarRowWidget extends StatelessWidget {
                       width: 2,
                     ),
                   ),
-                  child: _buildTrayAvatar(avatarUrl, name),
+                  child: ProfileAvatarWidget(
+                    avatarUrl: avatarUrl,
+                    displayName: name,
+                    size: 56,
+                    borderColor: Colors.transparent,
+                    borderWidth: 0,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 SizedBox(

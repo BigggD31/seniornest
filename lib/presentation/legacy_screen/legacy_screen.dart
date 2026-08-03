@@ -27,19 +27,6 @@ class LegacyScreen extends StatefulWidget {
   State<LegacyScreen> createState() => _LegacyScreenState();
 }
 
-/// Safely decodes an avatar JSON string, returning null on any malformed
-/// input instead of throwing — a bad avatar_url value should never crash a
-/// story card.
-Map<String, dynamic>? _safeDecodeAvatarJsonLegacy(String? raw) {
-  if (raw == null || raw.isEmpty) return null;
-  try {
-    final decoded = jsonDecode(raw);
-    return decoded is Map<String, dynamic> ? decoded : null;
-  } catch (_) {
-    return null;
-  }
-}
-
 class _LegacyScreenState extends State<LegacyScreen>
     with TickerProviderStateMixin {
   int _currentNavIndex = 2;
@@ -4502,11 +4489,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                         children: [
                           (story['isSample'] == true || story['isMine'] != true)
                               ? ProfileAvatarWidget(
-                                  // authorAvatarUrl is a raw JSON blob from Supabase
-                                  // ({"type":...,"value":...}), not a plain image URL —
-                                  // must be decoded, not handed to an image loader.
-                                  profileData: _safeDecodeAvatarJsonLegacy(
-                                      story['authorAvatarUrl'] as String?),
+                                  avatarUrl: story['authorAvatarUrl'] as String?,
                                   displayName: (story['authorName'] as String? ?? '').isNotEmpty
                                       ? story['authorName'] as String
                                       : 'A Family Member',
