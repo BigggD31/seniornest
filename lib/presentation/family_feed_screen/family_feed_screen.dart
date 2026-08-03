@@ -40,6 +40,7 @@ class MessageModel {
     required this.heartCount,
     required this.isHearted,
     this.isSample = false,
+    this.isRecordedVideo = false,
   });
 
   final String id;
@@ -57,6 +58,10 @@ class MessageModel {
   int heartCount;
   bool isHearted;
   final bool isSample; // true for demo/sample cards shown before real posts exist
+  // Only relevant when type is video: whether this came from this app's own
+  // live front-camera recording (needs the mirror correction) vs an
+  // uploaded/picked video (never needs it).
+  final bool isRecordedVideo;
 
   factory MessageModel.fromMap(Map<String, dynamic> map) {
     return MessageModel(
@@ -74,6 +79,7 @@ class MessageModel {
       heartCount: map['heartCount'] as int,
       isHearted: map['isHearted'] as bool,
       isSample: map['isSample'] as bool? ?? false,
+      isRecordedVideo: map['isRecordedVideo'] as bool? ?? false,
     );
   }
 
@@ -105,6 +111,7 @@ class MessageModel {
     'heartCount': heartCount,
     'isHearted': isHearted,
     'isSample': isSample,
+    'isRecordedVideo': isRecordedVideo,
   };
 }
 
@@ -939,6 +946,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           timestamp: DateTime.parse(post['created_at'] as String),
           heartCount: heartCounts[post['id'] as String] ?? 0,
           isHearted: heartedByMe.contains(post['id'] as String),
+          isRecordedVideo: post['is_recorded_video'] as bool? ?? false,
         );
       }).toList();
 

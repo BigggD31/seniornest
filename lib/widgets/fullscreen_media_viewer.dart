@@ -30,12 +30,16 @@ void openFullscreenVideo({
   required BuildContext context,
   required String videoUrl,
   bool isDarkMode = false,
+  bool isRecordedVideo = false,
 }) {
   Navigator.of(context).push(
     PageRouteBuilder(
       opaque: false,
       barrierColor: Colors.black,
-      pageBuilder: (_, __, ___) => _FullscreenVideoPage(videoUrl: videoUrl),
+      pageBuilder: (_, __, ___) => _FullscreenVideoPage(
+        videoUrl: videoUrl,
+        isRecordedVideo: isRecordedVideo,
+      ),
       transitionsBuilder: (_, anim, __, child) =>
           FadeTransition(opacity: anim, child: child),
     ),
@@ -132,9 +136,13 @@ class _FullscreenImagePageState extends State<_FullscreenImagePage> {
 // ── Full-screen Video Page ─────────────────────────────────────────────────
 
 class _FullscreenVideoPage extends StatefulWidget {
-  const _FullscreenVideoPage({required this.videoUrl});
+  const _FullscreenVideoPage({
+    required this.videoUrl,
+    this.isRecordedVideo = false,
+  });
 
   final String videoUrl;
+  final bool isRecordedVideo;
 
   @override
   State<_FullscreenVideoPage> createState() => _FullscreenVideoPageState();
@@ -215,7 +223,13 @@ class _FullscreenVideoPageState extends State<_FullscreenVideoPage> {
                 child: _initialized && _controller != null
                     ? AspectRatio(
                         aspectRatio: _controller!.value.aspectRatio,
-                        child: VideoPlayer(_controller!),
+                        child: widget.isRecordedVideo
+                            ? Transform(
+                                alignment: Alignment.center,
+                                transform: Matrix4.rotationY(3.14159),
+                                child: VideoPlayer(_controller!),
+                              )
+                            : VideoPlayer(_controller!),
                       )
                     : const CircularProgressIndicator(color: Colors.white54),
               ),

@@ -436,7 +436,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
           if (msg.type == MessageType.video && msg.imageUrl.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: _VideoPlayer(isDarkMode: isDark, videoUrl: msg.imageUrl, enableTap: false),
+              child: _VideoPlayer(isDarkMode: isDark, videoUrl: msg.imageUrl, enableTap: false, isRecordedVideo: msg.isRecordedVideo),
             ),
           // Text content — truncated to 4 lines; tapping opens the full popup
           if (msg.content.isNotEmpty)
@@ -1065,12 +1065,16 @@ class _VideoPlayer extends StatefulWidget {
     required this.isDarkMode,
     required this.videoUrl,
     this.enableTap = true,
+    this.isRecordedVideo = false,
   });
   final bool isDarkMode;
   final String videoUrl;
   // When false, tapping the thumbnail does nothing here so the tap falls
   // through to an ancestor GestureDetector (e.g. the card's tap-to-preview).
   final bool enableTap;
+  // Whether this came from this app's own live front-camera recording
+  // (needs the mirror correction) vs an uploaded/picked video (never does).
+  final bool isRecordedVideo;
 
   @override
   State<_VideoPlayer> createState() => _VideoPlayerState();
@@ -1085,6 +1089,7 @@ class _VideoPlayerState extends State<_VideoPlayer> {
               context: context,
               videoUrl: widget.videoUrl,
               isDarkMode: widget.isDarkMode,
+              isRecordedVideo: widget.isRecordedVideo,
             )
           : null,
       child: Container(
@@ -1276,7 +1281,7 @@ class _MessagePreviewSheet extends StatelessWidget {
                   else if (msg.type == MessageType.voice)
                     _VoiceNotePlayer(isDarkMode: isDarkMode, audioUrl: msg.imageUrl)
                   else if (msg.type == MessageType.video && msg.imageUrl.isNotEmpty)
-                    _VideoPlayer(isDarkMode: isDarkMode, videoUrl: msg.imageUrl),
+                    _VideoPlayer(isDarkMode: isDarkMode, videoUrl: msg.imageUrl, isRecordedVideo: msg.isRecordedVideo),
                   if (msg.content.isNotEmpty)
                     Padding(
                       padding: EdgeInsets.only(

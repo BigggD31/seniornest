@@ -79,6 +79,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   // ── Audio/Video file paths ──────────────────────────────────────────────────
   String? _voiceFilePath;
   String? _videoFilePath;
+  bool _videoIsFromRecording = false;
 
   // ── Video recording state ──────────────────────────────────────────────────
   bool _videoIsRecording = false;
@@ -1135,7 +1136,13 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                             if (_videoPlayerController != null && _videoPlayerController!.value.isInitialized)
                               AspectRatio(
                                 aspectRatio: _videoPlayerController!.value.aspectRatio,
-                                child: VideoPlayer(_videoPlayerController!),
+                                child: _videoIsFromRecording
+                                    ? Transform(
+                                        alignment: Alignment.center,
+                                        transform: Matrix4.rotationY(3.14159),
+                                        child: VideoPlayer(_videoPlayerController!),
+                                      )
+                                    : VideoPlayer(_videoPlayerController!),
                               ),
                             // Play/pause overlay
                             GestureDetector(
@@ -1515,6 +1522,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       if (isVideo) {
         setState(() {
           _videoFilePath = picked.path;
+          _videoIsFromRecording = false;
           _selectedType = 'video';
           _videoHasRecording = true;
         });
@@ -2571,7 +2579,10 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     try {
       if (_cameraController != null && _cameraController!.value.isRecordingVideo) {
         final file = await _cameraController!.stopVideoRecording();
-        setState(() => _videoFilePath = file.path);
+        setState(() {
+          _videoFilePath = file.path;
+          _videoIsFromRecording = true;
+        });
         // Initialize video player for playback
         _videoPlayerController = VideoPlayerController.file(File(file.path));
         await _videoPlayerController!.initialize();
@@ -2603,6 +2614,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       _videoIsPlaying = false;
       _videoPlayPosition = 0;
       _videoFilePath = null;
+      _videoIsFromRecording = false;
     });
   }
 
@@ -3470,6 +3482,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         'post_type': effectiveType,
         'content': overrideContent ?? _messageController.text.trim(),
         'media_url': mediaUrl,
+        'is_recorded_video': effectiveType == 'video' ? _videoIsFromRecording : false,
         'visible_to_ids':
             _selectedRecipients.isEmpty ? null : _selectedRecipients,
       });
@@ -3499,6 +3512,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         _videoIsPlaying = false;
         _videoPlayPosition = 0;
         _videoFilePath = null;
+        _videoIsFromRecording = false;
       });
 
     } catch (e) {
