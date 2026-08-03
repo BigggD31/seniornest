@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../routes/app_routes.dart';
-import '../profile_photo_picker_screen/profile_photo_picker_screen.dart' show kProfilePhotoKey;
+import '../profile_photo_picker_screen/profile_photo_picker_screen.dart' show kProfilePhotoKey, kProfilePhotoOwnerKey;
 import '../../services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
