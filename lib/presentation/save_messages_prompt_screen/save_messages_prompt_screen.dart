@@ -151,10 +151,23 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           final avatarUrl = existingProfile['avatar_url'] as String? ?? '';
           if (avatarUrl.isNotEmpty) {
             await prefs.setString(kProfilePhotoKey, avatarUrl);
+            await prefs.setString(kProfilePhotoOwnerKey, checkUserId);
             print('PROFILE_PHOTO: restored from Supabase for user $checkUserId');
           } else {
-            await prefs.remove(kProfilePhotoKey);
-            print('PROFILE_PHOTO: no Supabase avatar for user $checkUserId -- cleared stale local cache');
+            // Supabase shows no avatar -- but that can legitimately mean
+            // "hasn't synced yet" right after picking one during this same
+            // onboarding session, not "this user genuinely has none". Only
+            // clear the local cache if it actually belongs to a DIFFERENT
+            // user (a real account switch); otherwise trust what's already
+            // cached for this same user rather than destroying a fresh pick.
+            final cachedOwnerId = prefs.getString(kProfilePhotoOwnerKey);
+            if (cachedOwnerId != null && cachedOwnerId != checkUserId) {
+              await prefs.remove(kProfilePhotoKey);
+              await prefs.remove(kProfilePhotoOwnerKey);
+              print('PROFILE_PHOTO: cached avatar belonged to a different user -- cleared stale cache');
+            } else {
+              print('PROFILE_PHOTO: no Supabase avatar yet for user $checkUserId, but local cache already belongs to them -- keeping it');
+            }
           }
         }
 

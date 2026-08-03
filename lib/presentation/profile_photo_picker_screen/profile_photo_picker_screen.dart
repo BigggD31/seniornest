@@ -10,6 +10,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Key used to persist the profile photo choice across the app.
 /// Value is a JSON string: {"type": "emoji"|"photo", "value": "<emoji char>"|"<base64 bytes>"}
 const String kProfilePhotoKey = 'profile_photo_data';
+// Tracks which user the cached avatar actually belongs to. This is the
+// authoritative signal for whether local avatar cache should be trusted --
+// far safer than "is Supabase empty right now", which can be empty due to
+// a timing race right after picking (Supabase hasn't caught up yet) rather
+// than the user genuinely having no avatar, and wiping the cache on that
+// false signal was destroying freshly-picked avatars during onboarding.
+const String kProfilePhotoOwnerKey = 'profile_photo_owner_id';
 
 class ProfilePhotoPickerScreen extends StatefulWidget {
   const ProfilePhotoPickerScreen({super.key});
@@ -125,6 +132,10 @@ class _ProfilePhotoPickerScreenState extends State<ProfilePhotoPickerScreen>
   Future<void> _saveAndReturn(Map<String, String> data) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(kProfilePhotoKey, jsonEncode(data));
+    final pickerUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (pickerUserId != null) {
+      await prefs.setString(kProfilePhotoOwnerKey, pickerUserId);
+    }
 
     // Save to Supabase so photo survives sign-out and restores on sign-in
     try {

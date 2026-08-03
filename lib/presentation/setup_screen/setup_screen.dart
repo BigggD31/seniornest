@@ -1727,6 +1727,7 @@ class _SetupScreenState extends State<SetupScreen>
               await prefs.remove('cached_real_messages');
               await prefs.remove('cached_real_messages_nest_id');
               await prefs.remove('profile_photo_data');
+              await prefs.remove('profile_photo_owner_id');
               await prefs.remove('birthday');
               await prefs.remove('anniversary');
               await prefs.setBool('just_signed_out', true);
