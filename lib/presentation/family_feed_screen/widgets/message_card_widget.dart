@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
@@ -875,9 +876,20 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
       }
     });
     _audioPlayer.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed && mounted) {
+      if (!mounted) return;
+      // Single source of truth for the play/pause icon: the player's own
+      // real-time "playing" flag, not a manually-toggled boolean. Manually
+      // setting _isPlaying right after calling play() was unreliable --
+      // just_audio's play() future doesn't necessarily resolve the moment
+      // playback actually starts, so the icon could sit on "play" for the
+      // entire duration until a second tap happened to catch it up.
+      final reallyPlaying = state.playing &&
+          state.processingState != ProcessingState.completed;
+      if (reallyPlaying != _isPlaying) {
+        setState(() => _isPlaying = reallyPlaying);
+      }
+      if (state.processingState == ProcessingState.completed) {
         setState(() {
-          _isPlaying = false;
           _progress = 0.0;
           _positionSeconds = 0;
         });
@@ -904,7 +916,6 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
   Future<void> _togglePlayback() async {
     if (_isPlaying) {
       await _audioPlayer.pause();
-      setState(() => _isPlaying = false);
     } else {
       if (widget.audioUrl.isNotEmpty) {
         try {
@@ -914,8 +925,13 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
             await _audioPlayer.setUrl(widget.audioUrl);
             _audioPreloaded = true;
           }
-          await _audioPlayer.play();
-          if (mounted) setState(() => _isPlaying = true);
+          // Not awaited on purpose: just_audio's play() future does not
+          // reliably resolve the moment playback starts, so awaiting it
+          // here was exactly why the icon lagged a full tap behind reality.
+          // The playerStateStream listener above is now the single source
+          // of truth for _isPlaying and updates the icon the instant the
+          // player itself reports it started.
+          unawaited(_audioPlayer.play());
         } catch (e) {
           debugPrint('Audio playback error: \$e');
         }
