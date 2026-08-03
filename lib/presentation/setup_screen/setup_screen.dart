@@ -579,6 +579,17 @@ class _SetupScreenState extends State<SetupScreen>
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('birthday');
                           setState(() => _birthday = null);
+                          try {
+                            final supabase = Supabase.instance.client;
+                            final userId = supabase.auth.currentUser?.id;
+                            if (userId != null) {
+                              await supabase
+                                  .from('user_profiles')
+                                  .update({'birthday': null}).eq('id', userId);
+                            }
+                          } catch (e) {
+                            debugPrint('SETUP_DATE_REMOVE_ERROR: $e');
+                          }
                         },
                         child: const Icon(
                           Icons.close_rounded,
@@ -632,6 +643,17 @@ class _SetupScreenState extends State<SetupScreen>
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('anniversary');
                           setState(() => _anniversary = null);
+                          try {
+                            final supabase = Supabase.instance.client;
+                            final userId = supabase.auth.currentUser?.id;
+                            if (userId != null) {
+                              await supabase
+                                  .from('user_profiles')
+                                  .update({'anniversary': null}).eq('id', userId);
+                            }
+                          } catch (e) {
+                            debugPrint('SETUP_DATE_REMOVE_ERROR: $e');
+                          }
                         },
                         child: const Icon(
                           Icons.close_rounded,
@@ -685,6 +707,21 @@ class _SetupScreenState extends State<SetupScreen>
       } else {
         await prefs.setString('anniversary', picked.toIso8601String());
         setState(() => _anniversary = picked);
+      }
+      try {
+        final supabase = Supabase.instance.client;
+        final userId = supabase.auth.currentUser?.id;
+        final userEmail = supabase.auth.currentUser?.email ?? '';
+        if (userId != null) {
+          await supabase.from('user_profiles').upsert({
+            'id': userId,
+            if (userEmail.isNotEmpty) 'email': userEmail,
+            'birthday': _birthday?.toIso8601String(),
+            'anniversary': _anniversary?.toIso8601String(),
+          });
+        }
+      } catch (e) {
+        debugPrint('SETUP_DATE_SYNC_ERROR: $e');
       }
     }
   }
