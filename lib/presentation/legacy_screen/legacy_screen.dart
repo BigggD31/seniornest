@@ -17,7 +17,6 @@ import '../../widgets/app_navigation.dart';
 import '../../widgets/keyboard_done_bar.dart';
 import '../../widgets/share_preview_widget.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
-import '../../widgets/custom_image_widget.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 class LegacyScreen extends StatefulWidget {

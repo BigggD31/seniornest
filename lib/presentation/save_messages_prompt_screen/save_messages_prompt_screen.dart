@@ -8,7 +8,6 @@ import '../profile_photo_picker_screen/profile_photo_picker_screen.dart' show kP
 import '../../services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
-import 'dart:convert';
 import '../splash_screen/widgets/nest_logo_widget.dart';
 import '../../widgets/keyboard_done_bar.dart';
 
