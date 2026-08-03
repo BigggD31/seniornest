@@ -213,13 +213,9 @@ class _FullscreenVideoPageState extends State<_FullscreenVideoPage> {
               // Video or loading/error state
               Center(
                 child: _initialized && _controller != null
-                    ? Transform(
-                        alignment: Alignment.center,
-                        transform: Matrix4.rotationY(3.14159),
-                        child: AspectRatio(
-                          aspectRatio: _controller!.value.aspectRatio,
-                          child: VideoPlayer(_controller!),
-                        ),
+                    ? AspectRatio(
+                        aspectRatio: _controller!.value.aspectRatio,
+                        child: VideoPlayer(_controller!),
                       )
                     : const CircularProgressIndicator(color: Colors.white54),
               ),

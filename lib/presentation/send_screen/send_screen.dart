@@ -1135,11 +1135,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                             if (_videoPlayerController != null && _videoPlayerController!.value.isInitialized)
                               AspectRatio(
                                 aspectRatio: _videoPlayerController!.value.aspectRatio,
-                                child: Transform(
-                                  alignment: Alignment.center,
-                                  transform: Matrix4.rotationY(3.14159),
-                                  child: VideoPlayer(_videoPlayerController!),
-                                ),
+                                child: VideoPlayer(_videoPlayerController!),
                               ),
                             // Play/pause overlay
                             GestureDetector(
