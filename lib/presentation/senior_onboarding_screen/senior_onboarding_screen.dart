@@ -358,7 +358,12 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
                 print('NEST_DEBUG: senior invite lookup found no nest for code $_inviteCode');
               }
             } catch (e) {
+              // Previously this only printed and let execution fall through,
+              // which silently navigated the senior forward as if they'd
+              // joined a nest when they hadn't. Rethrow so the outer
+              // try/catch (below) shows the real error and stops navigation.
               print('NEST_DEBUG: senior invite join error: $e');
+              rethrow;
             }
           } else {
             // Create new nest with invite code

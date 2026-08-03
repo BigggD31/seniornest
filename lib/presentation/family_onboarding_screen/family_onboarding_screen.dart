@@ -359,12 +359,12 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
                     'nest_id': nestId,
                     'user_id': userId,
                   });
-                  debugPrint('Member joined nest: \$nestId');
+                  debugPrint('Member joined nest: $nestId');
                 } else {
-                  debugPrint('Nest not found for invite code: \$inviteCode');
+                  debugPrint('Nest not found for invite code: $inviteCode');
                 }
               } catch (e) {
-                debugPrint('Member join error: \$e');
+                debugPrint('Member join error: $e');
               }
             } else {
               // Owner creating new nest
@@ -384,7 +384,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         }
       }
     } catch (e) {
-      debugPrint('Family onboarding Supabase error: \$e');
+      debugPrint('Family onboarding Supabase error: $e');
     }
 
     if (mounted) {
