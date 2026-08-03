@@ -108,6 +108,44 @@ class _SafetyScreenState extends State<SafetyScreen>
     } catch (e) {
       debugPrint('Load contacts error: $e');
     }
+    // Resolve the real senior's name from Supabase for family members.
+    // The local 'senior_name' SharedPreferences key is never written
+    // anywhere in the app -- confirmed via full codebase search -- so it
+    // was always blank. Same proven pattern already working in Legacy
+    // screen: the nest's creator is always the senior owner.
+    String resolvedSeniorName = prefs.getString('senior_name') ?? '';
+    final isSeniorRoleForLookup =
+        (prefs.getString('user_role') ?? 'senior') == 'senior';
+    if (!isSeniorRoleForLookup) {
+      try {
+        final supabase = Supabase.instance.client;
+        final nestId = prefs.getString('nest_id') ?? '';
+        if (nestId.isNotEmpty) {
+          final nestRow = await supabase
+              .from('nests')
+              .select('created_by')
+              .eq('id', nestId)
+              .maybeSingle();
+          final seniorId = nestRow?['created_by'] as String?;
+          if (seniorId != null) {
+            final seniorProfile = await supabase
+                .from('user_profiles')
+                .select('display_name, preferred_name')
+                .eq('id', seniorId)
+                .maybeSingle();
+            final seniorPreferred =
+                seniorProfile?['preferred_name'] as String? ?? '';
+            final seniorDisplay =
+                seniorProfile?['display_name'] as String? ?? '';
+            final name =
+                seniorPreferred.isNotEmpty ? seniorPreferred : seniorDisplay;
+            if (name.isNotEmpty) resolvedSeniorName = name;
+          }
+        }
+      } catch (e) {
+        debugPrint('SAFETY SENIOR NAME LOAD ERROR: $e');
+      }
+    }
     final systemDark =
         WidgetsBinding.instance.platformDispatcher.platformBrightness ==
         Brightness.dark;
@@ -133,7 +171,7 @@ class _SafetyScreenState extends State<SafetyScreen>
                   prefs.getString('user_name') ??
                   '');
       } else {
-        _seniorName = prefs.getString('senior_name') ?? '';
+        _seniorName = resolvedSeniorName;
       }
       // Load nest name from family nest setup
       _nestName = prefs.getString('nest_name') ?? '';
