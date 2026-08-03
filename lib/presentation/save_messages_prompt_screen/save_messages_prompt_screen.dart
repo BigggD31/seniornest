@@ -167,23 +167,32 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
               await prefs.remove(kProfilePhotoKey);
               await prefs.remove(kProfilePhotoOwnerKey);
               print('PROFILE_PHOTO: cached avatar belonged to a different user -- cleared stale cache');
-            } else if (cachedOwnerId == checkUserId) {
-              // Self-heal: local cache has an avatar for this exact user,
-              // but Supabase doesn't. This is the real gap that was causing
-              // avatars to vanish on sign-out -- the picker's write may have
-              // never landed (silent failure, or the picker was never
-              // actually re-opened this session because onboarding restored
-              // the photo from local cache alone). Push it up now instead of
-              // only ever pulling down.
+            } else if (cachedOwnerId == checkUserId || cachedOwnerId == null) {
+              // Self-heal: local cache has an avatar but Supabase doesn't.
+              // cachedOwnerId is commonly null here -- NOT because the data
+              // is ownerless/stale, but because the avatar was picked
+              // *during onboarding, before this account existed*. The
+              // picker only tags an owner id when a signed-in user is
+              // already present at pick time (see profile_photo_picker_screen
+              // .dart _saveAndReturn); picking an avatar as one of the first
+              // onboarding steps -- before the final "create account" step
+              // -- leaves it untagged. Since sign-out always clears both
+              // kProfilePhotoKey and kProfilePhotoOwnerKey together, any
+              // local avatar data with no owner tag can only be a fresh,
+              // not-yet-claimed pick from the current device session --
+              // safe to attribute to whichever account is completing
+              // sign-up/sign-in right now. This was the actual gap causing
+              // build 140's avatar fix not to fire at all: the old check
+              // required an exact owner match and silently did nothing when
+              // cachedOwnerId was null instead of treating it as claimable.
               final localAvatar = prefs.getString(kProfilePhotoKey);
               if (localAvatar != null && localAvatar.isNotEmpty) {
                 avatarToPush = localAvatar;
+                await prefs.setString(kProfilePhotoOwnerKey, checkUserId);
                 print('PROFILE_PHOTO: local cache has an avatar Supabase is missing -- will push it up');
               } else {
                 print('PROFILE_PHOTO: no Supabase avatar yet for user $checkUserId, and no local cache either');
               }
-            } else {
-              print('PROFILE_PHOTO: no Supabase avatar yet for user $checkUserId, but local cache already belongs to them -- keeping it');
             }
           }
         }
