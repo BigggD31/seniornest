@@ -1372,13 +1372,24 @@ class _LegacyScreenState extends State<LegacyScreen>
                               color: const Color(0xFF5DA399).withAlpha(20),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: Text(
-                              story['category'] as String,
-                              style: GoogleFonts.nunitoSans(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF5DA399),
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.sell_outlined,
+                                  size: 11,
+                                  color: Color(0xFF5DA399),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  story['category'] as String,
+                                  style: GoogleFonts.nunitoSans(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF5DA399),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const Spacer(),
@@ -4528,9 +4539,20 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                                       color: const Color(0xFF5DA399).withAlpha(25),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
-                                    child: Text(
-                                      story['category'] as String? ?? 'Memories',
-                                      style: GoogleFonts.nunitoSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF5DA399)),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.sell_outlined,
+                                          size: 11,
+                                          color: Color(0xFF5DA399),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          story['category'] as String? ?? 'Memories',
+                                          style: GoogleFonts.nunitoSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF5DA399)),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   if (story['isSample'] == true) ...[
