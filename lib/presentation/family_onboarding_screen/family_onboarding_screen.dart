@@ -293,16 +293,28 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       final inviteCode = prefs.getString('invite_code') ?? '';
 
       if (userId != null) {
+        final localBirthday = prefs.getString('birthday');
+        final localAnniversary = prefs.getString('anniversary');
+        final userEmail = supabase.auth.currentUser?.email ?? '';
+        // email is a NOT NULL column. Postgres validates NOT NULL on the
+        // candidate row for INSERT ... ON CONFLICT DO UPDATE *before* it
+        // checks for a conflict, even when a matching row already exists --
+        // so this must be included, and upsert (not update) used, so this
+        // can never silently no-op if the profile row isn't created yet.
         final updateData = <String, dynamic>{
+          'id': userId,
+          if (userEmail.isNotEmpty) 'email': userEmail,
           'display_name': name,
           'full_name': name,
           'role': 'family',
           'relation_type': (_selectedRelationship ?? 'Other').toLowerCase(),
+          if (localBirthday != null) 'birthday': localBirthday,
+          if (localAnniversary != null) 'anniversary': localAnniversary,
         };
         if (preferredName.isNotEmpty) {
           updateData['preferred_name'] = preferredName;
         }
-        await supabase.from('user_profiles').update(updateData).eq('id', userId);
+        await supabase.from('user_profiles').upsert(updateData);
 
         final profileCheck = await supabase
             .from('user_profiles')

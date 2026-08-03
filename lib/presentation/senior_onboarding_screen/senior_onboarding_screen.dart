@@ -288,8 +288,15 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
 
       if (userId != null) {
         print('NEST_DEBUG: upserting profile...');
+        // email is a NOT NULL column. Postgres validates NOT NULL on the
+        // candidate row for INSERT ... ON CONFLICT DO UPDATE *before* it
+        // checks for a conflict, even when a matching row already exists --
+        // proven via direct SQL test to fail silently without this, which
+        // is exactly why birthday/anniversary were never actually saving.
+        final userEmail = supabase.auth.currentUser?.email ?? '';
         final profileData = <String, dynamic>{
           'id': userId,
+          if (userEmail.isNotEmpty) 'email': userEmail,
           'role': 'senior',
           'birthday': _birthday?.toIso8601String(),
           'anniversary': _anniversary?.toIso8601String(),
