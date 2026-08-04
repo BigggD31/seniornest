@@ -1037,6 +1037,23 @@ class _SafetyScreenState extends State<SafetyScreen>
                         ),
                       ),
                       GestureDetector(
+                        onTap: () => _showEditContactSheet(contact),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            color: _textSecondary.withAlpha(20),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.edit_rounded,
+                            color: _textSecondary,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
                         onTap: () async {
                           final rawPhone = contact['phone'] as String? ?? '';
                           final digitsOnly = rawPhone.replaceAll(RegExp(r'[^\d+]'), '');
