@@ -779,6 +779,16 @@ class _SetupScreenState extends State<SetupScreen>
         }
       } catch (e) {
         debugPrint('SETUP_DATE_SYNC_ERROR: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  "Saved on this device, but couldn't reach the server. Please check your connection and try again."),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 6),
+            ),
+          );
+        }
       }
     }
   }
@@ -1422,7 +1432,19 @@ class _SetupScreenState extends State<SetupScreen>
                 'anniversary': anniversary?.toIso8601String(),
               }).eq('id', userId);
             }
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('PROFILE_SAVE_ERROR: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      "Your changes were saved on this device, but couldn't reach the server. Please check your connection and try again."),
+                  backgroundColor: Colors.orange,
+                  duration: Duration(seconds: 6),
+                ),
+              );
+            }
+          }
           setState(() {
             _displayName = name;
             _preferredName = preferredName;

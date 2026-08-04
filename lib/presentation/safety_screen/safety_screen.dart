@@ -1449,6 +1449,7 @@ class _EditContactSheetState extends State<_EditContactSheet> {
       return;
     }
     setState(() => _isSaving = true);
+    bool succeeded = true;
     try {
       final supabase = Supabase.instance.client;
       final contactId = widget.contact['id'];
@@ -1460,8 +1461,17 @@ class _EditContactSheetState extends State<_EditContactSheet> {
       }
     } catch (e) {
       debugPrint('Update contact error: $e');
+      succeeded = false;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error saving contact: $e'),
+              backgroundColor: Colors.red),
+        );
+        setState(() => _isSaving = false);
+      }
     }
-    if (mounted) {
+    if (mounted && succeeded) {
       Navigator.pop(context);
     }
   }
