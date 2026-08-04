@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
 
@@ -57,6 +58,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         if (purchase.status == PurchaseStatus.purchased ||
             purchase.status == PurchaseStatus.restored) {
           _iap.completePurchase(purchase);
+          _recordSubscription(purchase.productID, purchase.purchaseID);
           if (mounted) {
             setState(() => _isPurchasing = false);
             _navigateForward();
@@ -68,6 +70,43 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         }
       }
     });
+  }
+
+  // Actually records the purchase in Supabase so the rest of the app can
+  // tell whether this person is currently entitled. Previously nothing
+  // wrote this down anywhere -- purchasing and access were disconnected.
+  Future<void> _recordSubscription(String productId, String? transactionId) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+      final now = DateTime.now();
+      // Soft expiry estimate used between launches; re-verified against
+      // Apple via restorePurchases() each time the app opens (see main.dart).
+      // Lifetime/promo entitlements never expire.
+      DateTime? expiresAt;
+      String status = 'active';
+      if (productId == _yearlyProductId) {
+        expiresAt = now.add(const Duration(days: 365));
+      } else if (productId == _monthlyProductId) {
+        expiresAt = now.add(const Duration(days: 30));
+      } else {
+        // promo / lifetime-style entitlement
+        expiresAt = null;
+        status = 'lifetime';
+      }
+      await supabase.from('subscriptions').upsert({
+        'user_id': userId,
+        'product_id': productId,
+        'status': status,
+        'purchase_date': now.toIso8601String(),
+        'expires_at': expiresAt?.toIso8601String(),
+        'transaction_id': transactionId,
+        'updated_at': now.toIso8601String(),
+      }, onConflict: 'user_id');
+    } catch (e) {
+      debugPrint('SUBSCRIPTION_RECORD_ERROR: $e');
+    }
   }
 
   Future<void> _initIAP() async {
@@ -116,8 +155,13 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
 
   void _applyPromoCode() {
     final code = _promoController.text.trim().toUpperCase();
+    // NOTE: this hardcoded code is a known open item -- flagged to D Von
+    // Aug 4 2026, not yet decided/resolved. Left functional for now so it
+    // doesn't silently break, but it ships inside the app binary with no
+    // usage limit or expiration.
     if (code == 'LIFETIME2026') {
       setState(() { _promoApplied = true; _promoError = ''; });
+      _recordSubscription('promo_lifetime2026', null);
       Future.delayed(const Duration(milliseconds: 800), () {
         if (!mounted) return;
         _navigateForward();

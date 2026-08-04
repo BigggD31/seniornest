@@ -93,6 +93,31 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
+  // Checks whether the signed-in user currently has access. Lifetime/promo
+  // entitlements never expire; regular subscriptions are checked against
+  // their estimated expiry. No row at all means never subscribed.
+  Future<bool> _isCurrentlyEntitled() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return false;
+      final row = await Supabase.instance.client
+          .from('subscriptions')
+          .select('status, expires_at')
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (row == null) return false;
+      if (row['status'] == 'lifetime') return true;
+      final expiresAt = row['expires_at'] as String?;
+      if (expiresAt == null) return false;
+      return DateTime.parse(expiresAt).isAfter(DateTime.now());
+    } catch (e) {
+      debugPrint('ENTITLEMENT_CHECK_ERROR: $e');
+      // Fail open on a network/error blip rather than locking someone out
+      // due to a connectivity hiccup at launch.
+      return true;
+    }
+  }
+
   Future<void> _resolveInitialRoute() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -111,8 +136,14 @@ class _MyAppState extends State<MyApp> {
       final isSignedIn = AuthService.isSignedIn;
 
       if (isSignedIn && hasOnboarded) {
-        // Signed in and onboarded → go to home
-        _initialRoute = AppRoutes.familyFeedScreen;
+        // Signed in and onboarded -- but only let them straight into the
+        // app if they're currently entitled. Previously this went straight
+        // to Home regardless of subscription status, since nothing
+        // anywhere checked it.
+        final entitled = await _isCurrentlyEntitled();
+        _initialRoute = entitled
+            ? AppRoutes.familyFeedScreen
+            : AppRoutes.subscribeNestScreen;
       } else if (isSignedIn && !hasOnboarded) {
         // Signed in but not yet onboarded → resume onboarding from role choice
         _initialRoute = AppRoutes.roleChoiceScreen;
