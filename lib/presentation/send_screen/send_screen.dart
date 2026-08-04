@@ -2245,32 +2245,11 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                     children: [
                       Stack(
                         children: [
-                          Builder(builder: (context) {
-                            final avatarUrl = r['avatarUrl'] as String? ?? '';
-                            final name = r['name'] as String? ?? '';
-                            final initial =
-                                name.isNotEmpty ? name[0].toUpperCase() : '?';
-                            if (avatarUrl.isNotEmpty) {
-                              return CircleAvatar(
-                                radius: 22,
-                                backgroundImage: NetworkImage(avatarUrl),
-                                backgroundColor: _surface,
-                              );
-                            }
-                            return CircleAvatar(
-                              radius: 22,
-                              backgroundColor:
-                                  const Color(0xFF5DA399).withAlpha(40),
-                              child: Text(
-                                initial,
-                                style: GoogleFonts.nunitoSans(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF5DA399),
-                                ),
-                              ),
-                            );
-                          }),
+                          ProfileAvatarWidget(
+                            avatarUrl: r['avatarUrl'] as String?,
+                            displayName: r['name'] as String? ?? '',
+                            size: 44,
+                          ),
                           if (isSelected)
                             Positioned(
                               right: 0,
@@ -2290,19 +2269,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                               ),
                             ),
                         ],
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        '${r['name']} • ${r['relationship']}',
-                        style: GoogleFonts.nunitoSans(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: isSelected
-                              ? const Color(0xFF5DA399)
-                              : _textSecondary,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
                       ),
                     ],
                   ),

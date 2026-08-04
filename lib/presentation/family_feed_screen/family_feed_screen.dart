@@ -301,7 +301,28 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     final firstName = prefs.getString('display_name') ?? '';
     final preferredNameVal = prefs.getString('preferred_name') ?? '';
     final name = preferredNameVal.isNotEmpty ? preferredNameVal : firstName;
-    final nestName = prefs.getString('nest_name') ?? '';
+    // Nest name was previously local-storage-only, so a rename made on one
+    // flow/device (e.g. senior onboarding) was invisible on every other
+    // flow sharing the same nest (e.g. a family member's own device).
+    // Now sourced live from Supabase, with local cache as fallback.
+    String nestName = prefs.getString('nest_name') ?? '';
+    try {
+      final nestIdForName = prefs.getString('nest_id') ?? '';
+      if (nestIdForName.isNotEmpty) {
+        final nestRow = await Supabase.instance.client
+            .from('nests')
+            .select('name')
+            .eq('id', nestIdForName)
+            .maybeSingle();
+        final remoteName = nestRow?['name'] as String?;
+        if (remoteName != null && remoteName.isNotEmpty) {
+          nestName = remoteName;
+          await prefs.setString('nest_name', remoteName);
+        }
+      }
+    } catch (e) {
+      print('NEST_NAME_LOAD_ERROR: $e');
+    }
     final goodToday = prefs.getBool('good_today_${_todayKey()}') ?? false;
     final medsReminder = prefs.getBool('meds_reminder_${_todayKey()}') ?? true;
     final firstLoad = prefs.getBool('first_load') ?? true;

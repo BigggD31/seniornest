@@ -98,14 +98,35 @@ class _SetupScreenState extends State<SetupScreen>
     // populated it from real data, so it silently showed "0 members" no
     // matter how many people had actually joined the nest.
     List<Map<String, dynamic>> realFamilyMembers = [];
+    // Nest name was previously local-storage-only, so a rename on one
+    // device/flow was invisible to every other flow sharing the same nest.
+    // Now sourced live from Supabase, with local cache only as an
+    // offline/loading-moment fallback.
+    String? fetchedNestName;
     try {
       final supabase = Supabase.instance.client;
       final currentUserId = supabase.auth.currentUser?.id;
       final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isNotEmpty) {
+        try {
+          final nestRow = await supabase
+              .from('nests')
+              .select('name')
+              .eq('id', nestId)
+              .maybeSingle();
+          final remoteName = nestRow?['name'] as String?;
+          if (remoteName != null && remoteName.isNotEmpty) {
+            fetchedNestName = remoteName;
+            await prefs.setString('nest_name', remoteName);
+          }
+        } catch (e) {
+          debugPrint('NEST_NAME_LOAD_ERROR: $e');
+        }
+      }
       if (currentUserId != null && nestId.isNotEmpty) {
         final memberRows = await supabase
             .from('nest_members')
-            .select('user_id, user_profiles(display_name, preferred_name, relation_type, role)')
+            .select('user_id, user_profiles(display_name, preferred_name, avatar_url, relation_type, role)')
             .eq('nest_id', nestId);
         for (final row in (memberRows as List<dynamic>)) {
           final memberUserId = row['user_id'] as String?;
@@ -121,11 +142,13 @@ class _SetupScreenState extends State<SetupScreen>
               ? (relationType[0].toUpperCase() + relationType.substring(1))
               : (memberRole == 'senior' ? 'Senior' : 'Family');
           final initials = memberName.trim().isNotEmpty ? memberName.trim()[0].toUpperCase() : '?';
+          final avatarUrl = profile['avatar_url'] as String? ?? '';
           realFamilyMembers.add({
             'id': memberUserId,
             'name': memberName,
             'relationship': relationshipLabel,
             'initials': initials,
+            'avatarUrl': avatarUrl,
           });
         }
       }
@@ -155,13 +178,46 @@ class _SetupScreenState extends State<SetupScreen>
         anniversary = DateTime.parse(anniversaryStr);
       } catch (_) {}
     }
+    // Saving a birthday/anniversary already wrote to Supabase, but loading
+    // this screen only ever checked local storage. That meant the real
+    // data was safe in the database (which is why Home's Celebrations kept
+    // showing it correctly), but Setup's own display would silently go
+    // blank any time local storage got cleared -- reinstall, sign-out,
+    // new device -- even though nothing was actually lost. Now sourced
+    // live from Supabase on load, re-caching locally to stay in sync.
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null) {
+        final profileRow = await Supabase.instance.client
+            .from('user_profiles')
+            .select('birthday, anniversary')
+            .eq('id', userId)
+            .maybeSingle();
+        final remoteBirthday = profileRow?['birthday'] as String?;
+        final remoteAnniversary = profileRow?['anniversary'] as String?;
+        if (remoteBirthday != null && remoteBirthday.isNotEmpty) {
+          try {
+            birthday = DateTime.parse(remoteBirthday);
+            await prefs.setString('birthday', remoteBirthday);
+          } catch (_) {}
+        }
+        if (remoteAnniversary != null && remoteAnniversary.isNotEmpty) {
+          try {
+            anniversary = DateTime.parse(remoteAnniversary);
+            await prefs.setString('anniversary', remoteAnniversary);
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      debugPrint('BIRTHDAY_ANNIVERSARY_LOAD_ERROR: $e');
+    }
 
     setState(() {
       _isSenior = isSenior;
       _isNestOwner = isNestOwner;
       _displayName = savedName;
       _preferredName = savedPreferredName;
-      _nestName = prefs.getString('nest_name') ?? 'Your Nest';
+      _nestName = fetchedNestName ?? prefs.getString('nest_name') ?? 'Your Nest';
       _relationship = prefs.getString('relationship') ?? '';
       _isDarkMode = prefs.getBool('dark_mode') ?? false;
       _medsReminders = prefs.getBool('meds_reminders') ?? true;
@@ -1375,6 +1431,16 @@ class _SetupScreenState extends State<SetupScreen>
         onSave: (name) async {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('nest_name', name);
+          try {
+            final nestId = prefs.getString('nest_id') ?? '';
+            if (nestId.isNotEmpty) {
+              await Supabase.instance.client
+                  .from('nests')
+                  .update({'name': name}).eq('id', nestId);
+            }
+          } catch (e) {
+            debugPrint('NEST_NAME_SAVE_ERROR: $e');
+          }
           setState(() => _nestName = name);
         },
       ),
@@ -2404,23 +2470,10 @@ class _FamilyMembersSheetState extends State<_FamilyMembersSheet> {
                   child: Row(
                     children: [
                       // Avatar
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF5DA399).withAlpha(40),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            member['initials'] as String,
-                            style: GoogleFonts.nunitoSans(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF5DA399),
-                            ),
-                          ),
-                        ),
+                      ProfileAvatarWidget(
+                        avatarUrl: member['avatarUrl'] as String?,
+                        displayName: member['name'] as String,
+                        size: 44,
                       ),
                       const SizedBox(width: 14),
                       // Name & relationship
@@ -2490,23 +2543,10 @@ class _FamilyMembersSheetState extends State<_FamilyMembersSheet> {
             // Member info header
             Row(
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF5DA399).withAlpha(40),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      member['initials'] as String,
-                      style: GoogleFonts.nunitoSans(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF5DA399),
-                      ),
-                    ),
-                  ),
+                ProfileAvatarWidget(
+                  avatarUrl: member['avatarUrl'] as String?,
+                  displayName: member['name'] as String,
+                  size: 48,
                 ),
                 const SizedBox(width: 14),
                 Column(

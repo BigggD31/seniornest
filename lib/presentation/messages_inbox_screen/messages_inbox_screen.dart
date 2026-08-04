@@ -7,6 +7,7 @@ import '../../widgets/custom_image_widget.dart';
 import '../../widgets/app_navigation.dart';
 import '../message_thread_screen/message_thread_screen.dart';
 import '../../routes/app_routes.dart';
+import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 /// Inbox: one row per person the current user has a private thread with,
 /// showing their last message and whether it's unread.
@@ -220,26 +221,11 @@ class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
           shape: BoxShape.circle,
           border: Border.all(color: const Color(0xFF5DA399), width: 2),
         ),
-        child: avatarUrl.isNotEmpty
-            ? ClipOval(
-                child: CustomImageWidget(
-                  imageUrl: avatarUrl,
-                  width: 52,
-                  height: 52,
-                  fit: BoxFit.cover,
-                ),
-              )
-            : CircleAvatar(
-                radius: 26,
-                backgroundColor: const Color(0xFF5DA399).withAlpha(40),
-                child: Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: GoogleFonts.nunitoSans(
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF5DA399),
-                  ),
-                ),
-              ),
+        child: ProfileAvatarWidget(
+          avatarUrl: avatarUrl,
+          displayName: name,
+          size: 48,
+        ),
       ),
       title: Text(
         name,
