@@ -72,7 +72,7 @@ class _SetupScreenState extends State<SetupScreen>
     final defaultSize = isSenior ? 'Large' : 'Normal';
 
     String savedName = prefs.getString('display_name') ?? '';
-    final savedPreferredName = prefs.getString('preferred_name') ?? '';
+    String savedPreferredName = prefs.getString('preferred_name') ?? '';
     if (savedName.isEmpty) {
       try {
         final user = Supabase.instance.client.auth.currentUser;
@@ -190,11 +190,13 @@ class _SetupScreenState extends State<SetupScreen>
       if (userId != null) {
         final profileRow = await Supabase.instance.client
             .from('user_profiles')
-            .select('birthday, anniversary')
+            .select('birthday, anniversary, display_name, preferred_name')
             .eq('id', userId)
             .maybeSingle();
         final remoteBirthday = profileRow?['birthday'] as String?;
         final remoteAnniversary = profileRow?['anniversary'] as String?;
+        final remoteDisplayName = profileRow?['display_name'] as String?;
+        final remotePreferredName = profileRow?['preferred_name'] as String?;
         if (remoteBirthday != null && remoteBirthday.isNotEmpty) {
           try {
             birthday = DateTime.parse(remoteBirthday);
@@ -206,6 +208,18 @@ class _SetupScreenState extends State<SetupScreen>
             anniversary = DateTime.parse(remoteAnniversary);
             await prefs.setString('anniversary', remoteAnniversary);
           } catch (_) {}
+        }
+        // Same local-only-load bug as birthday/anniversary: saving a name
+        // change already reached Supabase, but loading here only checked
+        // local storage, with just a weak fallback to the original
+        // sign-up name. Now sourced live, same as birthday/anniversary.
+        if (remoteDisplayName != null && remoteDisplayName.isNotEmpty) {
+          savedName = remoteDisplayName;
+          await prefs.setString('display_name', remoteDisplayName);
+        }
+        if (remotePreferredName != null && remotePreferredName.isNotEmpty) {
+          savedPreferredName = remotePreferredName;
+          await prefs.setString('preferred_name', remotePreferredName);
         }
       }
     } catch (e) {
@@ -1506,8 +1520,26 @@ class _SetupScreenState extends State<SetupScreen>
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              // Persist removal
+              // Actually remove the member from the nest in Supabase --
+              // previously this only hid them on this one device via a
+              // local list, while their real nest_members row (and their
+              // access) stayed untouched.
               final prefs = await SharedPreferences.getInstance();
+              try {
+                final supabase = Supabase.instance.client;
+                final nestId = prefs.getString('nest_id') ?? '';
+                if (nestId.isNotEmpty) {
+                  await supabase
+                      .from('nest_members')
+                      .delete()
+                      .eq('user_id', memberId)
+                      .eq('nest_id', nestId);
+                }
+              } catch (e) {
+                debugPrint('REMOVE_MEMBER ERROR: $e');
+              }
+              // Keep local hide-list too, so this device's list updates
+              // instantly without waiting on a re-fetch.
               final removedIds =
                   prefs.getStringList('removed_member_ids') ?? [];
               if (!removedIds.contains(memberId)) {

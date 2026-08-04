@@ -352,8 +352,60 @@ class _SafetyScreenState extends State<SafetyScreen>
     required bool isEmergency,
   }) async {
     setState(() => _isSendingAlert = true);
-    // TODO: Replace with Supabase push notification / SMS to all emergency contacts
-    await Future.delayed(const Duration(milliseconds: 800));
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+
+      // Send a real in-app message to every other member of this nest,
+      // so it actually shows up in their DM inbox -- this previously did
+      // nothing at all despite the UI claiming it was sent.
+      if (userId != null && nestId.isNotEmpty) {
+        final memberRows = await supabase
+            .from('nest_members')
+            .select('user_id')
+            .eq('nest_id', nestId);
+        final recipientIds = (memberRows as List<dynamic>)
+            .map((m) => m['user_id'] as String?)
+            .whereType<String>()
+            .where((id) => id != userId)
+            .toSet();
+
+        for (final recipientId in recipientIds) {
+          await supabase.from('private_messages').insert({
+            'nest_id': nestId,
+            'sender_id': userId,
+            'recipient_id': recipientId,
+            'message_type': 'text',
+            'content': message,
+          });
+        }
+      }
+
+      // For real emergencies, also open the phone's native texting app,
+      // pre-filled to the primary emergency contact's real number. There
+      // is no SMS/push backend in this app, so this is what actually gets
+      // a genuine text out -- even to a contact who doesn't have the app.
+      if (isEmergency && _mockContacts.isNotEmpty) {
+        final primary = _mockContacts.firstWhere(
+          (c) => c['isPrimary'] == true,
+          orElse: () => _mockContacts.first,
+        );
+        final phone = (primary['phone'] as String?)?.trim();
+        if (phone != null && phone.isNotEmpty) {
+          final smsUri =
+              Uri.parse('sms:$phone&body=${Uri.encodeComponent(message)}');
+          try {
+            await launchUrl(smsUri);
+          } catch (e) {
+            debugPrint('SAFETY_ALERT: could not launch SMS composer: $e');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('SAFETY_ALERT ERROR: $e');
+    }
     setState(() => _isSendingAlert = false);
 
     if (mounted) {
