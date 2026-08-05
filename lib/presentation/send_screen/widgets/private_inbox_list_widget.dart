@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../widgets/custom_image_widget.dart';
+import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../message_thread_screen/message_thread_screen.dart';
 import '../../family_feed_screen/widgets/nest_avatar_row_widget.dart';
 import '../../../routes/app_routes.dart';
@@ -238,26 +239,13 @@ class _PrivateInboxListWidgetState extends State<PrivateInboxListWidget> {
                 shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFF5DA399), width: 2),
               ),
-              child: avatarUrl.isNotEmpty
-                  ? ClipOval(
-                      child: CustomImageWidget(
-                        imageUrl: avatarUrl,
-                        width: 52,
-                        height: 52,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  : CircleAvatar(
-                      radius: 26,
-                      backgroundColor: const Color(0xFF5DA399).withAlpha(40),
-                      child: Text(
-                        name.isNotEmpty ? name[0].toUpperCase() : '?',
-                        style: GoogleFonts.nunitoSans(
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF5DA399),
-                        ),
-                      ),
-                    ),
+              child: ProfileAvatarWidget(
+                avatarUrl: avatarUrl,
+                displayName: name,
+                size: 48,
+                borderColor: Colors.transparent,
+                borderWidth: 0,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(

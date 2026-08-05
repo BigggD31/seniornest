@@ -68,7 +68,7 @@ class _SetupScreenState extends State<SetupScreen>
     final role = prefs.getString('user_role') ?? 'senior';
     final isSenior = role == 'senior';
     final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
-    final isNestOwner = !joinedViaInvite;
+    bool isNestOwner = !joinedViaInvite;
     final defaultSize = isSenior ? 'Large' : 'Normal';
 
     String savedName = prefs.getString('display_name') ?? '';
@@ -111,13 +111,24 @@ class _SetupScreenState extends State<SetupScreen>
         try {
           final nestRow = await supabase
               .from('nests')
-              .select('name')
+              .select('name, created_by')
               .eq('id', nestId)
               .maybeSingle();
           final remoteName = nestRow?['name'] as String?;
           if (remoteName != null && remoteName.isNotEmpty) {
             fetchedNestName = remoteName;
             await prefs.setString('nest_name', remoteName);
+          }
+          // Real ownership check. Previously "am I the nest owner" was
+          // derived only from a local "joined via invite" flag -- fragile
+          // in the same way as everything else fixed today, and it was
+          // silently showing the actual nest creator as a plain "Member",
+          // which also meant the Remove Member button (gated on this same
+          // flag) never worked for them even though the DB-level fix was
+          // in place.
+          final realCreatedBy = nestRow?['created_by'] as String?;
+          if (realCreatedBy != null && currentUserId != null) {
+            isNestOwner = realCreatedBy == currentUserId;
           }
         } catch (e) {
           debugPrint('NEST_NAME_LOAD_ERROR: $e');

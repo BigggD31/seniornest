@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/custom_image_widget.dart';
+import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../widgets/keyboard_done_bar.dart';
 
 /// Private 1:1 conversation between the current user and [recipientId].
@@ -188,28 +189,13 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFF5DA399), width: 1.5),
               ),
-              child: (widget.recipientAvatarUrl ?? '').isNotEmpty
-                  ? ClipOval(
-                      child: CustomImageWidget(
-                        imageUrl: widget.recipientAvatarUrl!,
-                        width: 36,
-                        height: 36,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  : CircleAvatar(
-                      radius: 18,
-                      backgroundColor: const Color(0xFF5DA399).withAlpha(40),
-                      child: Text(
-                        widget.recipientName.isNotEmpty
-                            ? widget.recipientName[0].toUpperCase()
-                            : '?',
-                        style: GoogleFonts.nunitoSans(
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF5DA399),
-                        ),
-                      ),
-                    ),
+              child: ProfileAvatarWidget(
+                avatarUrl: widget.recipientAvatarUrl,
+                displayName: widget.recipientName,
+                size: 33,
+                borderColor: Colors.transparent,
+                borderWidth: 0,
+              ),
             ),
             const SizedBox(width: 10),
             Text(

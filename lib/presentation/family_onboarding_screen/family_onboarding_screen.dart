@@ -359,6 +359,25 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
                     'nest_id': nestId,
                     'user_id': userId,
                   });
+                  // Show the real nest being joined on the confirmation
+                  // screen, instead of falling through to the generic
+                  // "$name's Nest" default meant for the owner-creates-nest
+                  // path -- that was showing the invited member's own name
+                  // ("DVon's Nest") rather than the senior's actual nest.
+                  try {
+                    final realNestRow = await supabase
+                        .from('nests')
+                        .select('name')
+                        .eq('id', nestId)
+                        .maybeSingle();
+                    final realNestName = realNestRow?['name'] as String?;
+                    if (realNestName != null && realNestName.isNotEmpty) {
+                      _nestNameController.text = realNestName;
+                      await prefs.setString('nest_name', realNestName);
+                    }
+                  } catch (e) {
+                    debugPrint('REAL_NEST_NAME_FETCH_ERROR: $e');
+                  }
                   debugPrint('Member joined nest: $nestId');
                 } else {
                   debugPrint('Nest not found for invite code: $inviteCode');
