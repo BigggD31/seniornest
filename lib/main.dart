@@ -9,6 +9,11 @@ import './core/app_export.dart';
 import './core/app_state.dart';
 import './routes/app_routes.dart';
 import './presentation/favs_screen/favs_screen.dart';
+import './presentation/family_feed_screen/family_feed_screen.dart';
+import './presentation/send_screen/send_screen.dart';
+import './presentation/legacy_screen/legacy_screen.dart';
+import './presentation/safety_screen/safety_screen.dart';
+import './presentation/setup_screen/setup_screen.dart';
 import './services/auth_service.dart';
 import './services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -119,6 +124,29 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  // Confirms the locally cached nest_id is still a real membership in
+  // Supabase. A removed member's device keeps its old cached nest_id --
+  // this is what actually catches that instead of trusting the cache.
+  Future<bool> _hasValidNestMembership(SharedPreferences prefs) async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (userId == null || nestId.isEmpty) return false;
+      final row = await Supabase.instance.client
+          .from('nest_members')
+          .select('nest_id')
+          .eq('nest_id', nestId)
+          .eq('user_id', userId)
+          .maybeSingle();
+      return row != null;
+    } catch (e) {
+      debugPrint('NEST_MEMBERSHIP_CHECK_ERROR: $e');
+      // Fail open on a network/error blip, same reasoning as the
+      // entitlement check -- don't lock someone out over connectivity.
+      return true;
+    }
+  }
+
   Future<void> _resolveInitialRoute() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -142,9 +170,34 @@ class _MyAppState extends State<MyApp> {
         // to Home regardless of subscription status, since nothing
         // anywhere checked it.
         final entitled = await _isCurrentlyEntitled();
-        _initialRoute = entitled
-            ? AppRoutes.familyFeedScreen
-            : AppRoutes.subscribeNestScreen;
+        if (!entitled) {
+          _initialRoute = AppRoutes.subscribeNestScreen;
+        } else {
+          // Also verify the cached nest_id is still a real membership.
+          // Previously, removing someone from a nest only deleted their
+          // Supabase row -- their own device still had "signed in +
+          // onboarded" cached locally, so they'd sail straight back into
+          // the nest they were just removed from. This re-checks the real
+          // membership every launch instead of trusting stale local state.
+          final stillAMember = await _hasValidNestMembership(prefs);
+          if (stillAMember) {
+            _initialRoute = AppRoutes.familyFeedScreen;
+          } else {
+            await prefs.remove('nest_id');
+            await prefs.setBool('has_onboarded', false);
+            await prefs.setBool('onboarding_complete', false);
+            // Also clear the cached invite code state -- there are a few
+            // other screens (onboarding, save-messages-prompt) that will
+            // silently re-join a nest from a cached invite code with no
+            // awareness of whether this person was just removed. Since the
+            // invite code itself is never invalidated after use, clearing
+            // it here is what actually closes that loophole, rather than
+            // patching each of those rejoin code paths individually.
+            await prefs.remove('invite_code');
+            await prefs.setBool('joined_via_invite', false);
+            _initialRoute = AppRoutes.roleChoiceScreen;
+          }
+        }
       } else if (isSignedIn && !hasOnboarded) {
         // Signed in but not yet onboarded → resume onboarding from role choice
         _initialRoute = AppRoutes.roleChoiceScreen;
@@ -186,41 +239,47 @@ class _MyAppState extends State<MyApp> {
                   // 🚨 END CRITICAL SECTION
                   debugShowCheckedModeBanner: false,
                   routes: AppRoutes.routes,
-                  // Isolated animation test (Aug 5 2026): Favs gets a
-                  // deliberate fade + gentle lift transition instead of the
-                  // platform default, so D Von can feel it on one screen
-                  // before deciding whether to roll it out everywhere.
-                  // Easy to remove: delete this whole onGenerateRoute block
-                  // and restore favsScreen to the routes map above.
+                  // App-wide fade + gentle lift transition for all six
+                  // bottom-nav screens (Aug 5 2026), replacing whatever
+                  // each screen's platform default happened to be. D Von
+                  // tested this in isolation on Favs first and confirmed
+                  // he wants it as the standard everywhere.
                   onGenerateRoute: (settings) {
-                    if (settings.name == AppRoutes.favsScreen) {
-                      return PageRouteBuilder(
-                        settings: settings,
-                        transitionDuration: const Duration(milliseconds: 300),
-                        reverseTransitionDuration:
-                            const Duration(milliseconds: 300),
-                        pageBuilder: (context, animation, secondaryAnimation) =>
-                            const FavsScreen(),
-                        transitionsBuilder:
-                            (context, animation, secondaryAnimation, child) {
-                          final curved = CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOut,
-                          );
-                          return FadeTransition(
-                            opacity: curved,
-                            child: SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0, 0.03),
-                                end: Offset.zero,
-                              ).animate(curved),
-                              child: child,
-                            ),
-                          );
-                        },
-                      );
-                    }
-                    return null;
+                    final Widget? page = switch (settings.name) {
+                      AppRoutes.familyFeedScreen => const FamilyFeedScreen(),
+                      AppRoutes.sendScreen => const SendScreen(),
+                      AppRoutes.legacyScreen => const LegacyScreen(),
+                      AppRoutes.favsScreen => const FavsScreen(),
+                      AppRoutes.safetyScreen => const SafetyScreen(),
+                      AppRoutes.setupScreen => const SetupScreen(),
+                      _ => null,
+                    };
+                    if (page == null) return null;
+                    return PageRouteBuilder(
+                      settings: settings,
+                      transitionDuration: const Duration(milliseconds: 300),
+                      reverseTransitionDuration:
+                          const Duration(milliseconds: 300),
+                      pageBuilder: (context, animation, secondaryAnimation) =>
+                          page,
+                      transitionsBuilder:
+                          (context, animation, secondaryAnimation, child) {
+                        final curved = CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOut,
+                        );
+                        return FadeTransition(
+                          opacity: curved,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.03),
+                              end: Offset.zero,
+                            ).animate(curved),
+                            child: child,
+                          ),
+                        );
+                      },
+                    );
                   },
                   initialRoute: _initialRoute,
                 );

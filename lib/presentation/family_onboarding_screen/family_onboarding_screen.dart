@@ -210,6 +210,14 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     if (_currentStep == 1) {
       // Save preferences then show finish screen
       await _savePreferences();
+      // Join the nest (if via invite code) and fetch its real name BEFORE
+      // showing the confirmation screen -- previously this only happened
+      // inside _finishOnboarding(), triggered by the final "Enter My Nest"
+      // button on the confirmation screen itself, which meant the screen
+      // had already rendered and shown the wrong fallback name by the time
+      // the real one arrived. Doing it here means the confirmation screen
+      // has the correct data on its very first build.
+      await _joinNestEarlyIfNeeded();
       setState(() => _currentStep = 2);
       _entranceController
         ..reset()
@@ -274,6 +282,64 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       setState(() => _inviteCode = code);
     } else {
       setState(() => _inviteCode = existingCode);
+    }
+  }
+
+  // Joins the nest via invite code (if applicable) and fetches its real
+  // name early, so the confirmation screen shows correct data on first
+  // render instead of the wrong fallback. Safe to call before
+  // _finishOnboarding also does its own nest_id check -- if this already
+  // set a valid nest_id locally, that later check will just skip re-joining.
+  Future<void> _joinNestEarlyIfNeeded() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
+      final inviteCode = prefs.getString('invite_code') ?? '';
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (!joinedViaInvite || inviteCode.isEmpty || userId == null) return;
+
+      final existingNestId = prefs.getString('nest_id') ?? '';
+      if (existingNestId.isNotEmpty) {
+        final membershipCheck = await supabase
+            .from('nest_members')
+            .select('nest_id')
+            .eq('nest_id', existingNestId)
+            .eq('user_id', userId)
+            .maybeSingle();
+        if (membershipCheck != null) return; // already joined
+      }
+
+      final lookupResult = await supabase.rpc(
+        'lookup_nest_by_invite_code',
+        params: {'p_code': inviteCode.toUpperCase()},
+      );
+      final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
+          ? lookupResult.first as Map<String, dynamic>
+          : null;
+      if (nestResponse == null) return;
+
+      final nestId = nestResponse['id'] as String;
+      await prefs.setString('nest_id', nestId);
+      await supabase.from('nest_members').upsert({
+        'nest_id': nestId,
+        'user_id': userId,
+      });
+
+      final realNestRow = await supabase
+          .from('nests')
+          .select('name')
+          .eq('id', nestId)
+          .maybeSingle();
+      final realNestName = realNestRow?['name'] as String?;
+      if (realNestName != null && realNestName.isNotEmpty && mounted) {
+        setState(() {
+          _nestNameController.text = realNestName;
+        });
+        await prefs.setString('nest_name', realNestName);
+      }
+    } catch (e) {
+      debugPrint('EARLY_NEST_JOIN_ERROR: $e');
     }
   }
 

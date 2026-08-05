@@ -7,7 +7,6 @@ import '../presentation/senior_onboarding_screen/senior_onboarding_screen.dart';
 import '../presentation/family_onboarding_screen/family_onboarding_screen.dart';
 import '../presentation/send_screen/send_screen.dart';
 import '../presentation/legacy_screen/legacy_screen.dart';
-import '../presentation/favs_screen/favs_screen.dart';
 import '../presentation/safety_screen/safety_screen.dart';
 import '../presentation/setup_screen/setup_screen.dart';
 import '../presentation/nest_role_after_invite_screen/nest_role_after_invite_screen.dart';
@@ -47,10 +46,8 @@ class AppRoutes {
     initial: (context) => const SplashScreen(),
     splashScreen: (context) => const SplashScreen(),
     roleChoiceScreen: (context) => const RoleChoiceScreen(),
-    familyFeedScreen: (context) => const FamilyFeedScreen(),
     seniorOnboardingScreen: (context) => const SeniorOnboardingScreen(),
     familyOnboardingScreen: (context) => const FamilyOnboardingScreen(),
-    sendScreen: (context) => const SendScreen(),
     messagesInboxScreen: (context) => const MessagesInboxScreen(),
     messageThreadScreen: (context) {
       final args =
@@ -61,9 +58,6 @@ class AppRoutes {
         recipientAvatarUrl: args?['recipientAvatarUrl'] as String?,
       );
     },
-    legacyScreen: (context) => const LegacyScreen(),
-    safetyScreen: (context) => const SafetyScreen(),
-    setupScreen: (context) => const SetupScreen(),
     nestRoleAfterInviteScreen: (context) {
       final args =
           ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
