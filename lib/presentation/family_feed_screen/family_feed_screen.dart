@@ -1159,26 +1159,75 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                // Nest avatar row — everyone in the Nest, tap to message them
-                if (_nestMembers.isNotEmpty) ...[
-                  NestAvatarRowWidget(
-                    members: _nestMembers,
-                    isDarkMode: _isDarkMode,
-                    onMemberTap: _onAvatarRowMemberTap,
-                  ),
-                  const SizedBox(height: 16),
-                ],
+                // Nest avatar row — everyone in the Nest, tap to message them.
+                // Wrapped in the same fade+lift language as the rest of the
+                // app instead of abruptly popping into the layout once its
+                // data finishes loading.
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder: (child, animation) {
+                    final curved =
+                        CurvedAnimation(parent: animation, curve: Curves.easeOut);
+                    return FadeTransition(
+                      opacity: curved,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.03),
+                          end: Offset.zero,
+                        ).animate(curved),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: _nestMembers.isNotEmpty
+                      ? Column(
+                          key: const ValueKey('avatarRowPresent'),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            NestAvatarRowWidget(
+                              members: _nestMembers,
+                              isDarkMode: _isDarkMode,
+                              onMemberTap: _onAvatarRowMemberTap,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        )
+                      : const SizedBox.shrink(key: ValueKey('avatarRowEmpty')),
+                ),
                 // Pinned daily check-in status card (shown once we know who the senior is)
-                if (_seniorUserId.isNotEmpty) ...[
-                  DailyCheckinCardWidget(
-                    isDarkMode: _isDarkMode,
-                    isSenior: _isSenior,
-                    seniorName: _seniorName,
-                    checkedIn: _seniorCheckedInToday,
-                    checkinTime: _seniorCheckinTime,
-                  ),
-                  const SizedBox(height: 14),
-                ],
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder: (child, animation) {
+                    final curved =
+                        CurvedAnimation(parent: animation, curve: Curves.easeOut);
+                    return FadeTransition(
+                      opacity: curved,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.03),
+                          end: Offset.zero,
+                        ).animate(curved),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: _seniorUserId.isNotEmpty
+                      ? Column(
+                          key: const ValueKey('checkinPresent'),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            DailyCheckinCardWidget(
+                              isDarkMode: _isDarkMode,
+                              isSenior: _isSenior,
+                              seniorName: _seniorName,
+                              checkedIn: _seniorCheckedInToday,
+                              checkinTime: _seniorCheckinTime,
+                            ),
+                            const SizedBox(height: 14),
+                          ],
+                        )
+                      : const SizedBox.shrink(key: ValueKey('checkinEmpty')),
+                ),
                 // Meds reminder (senior only)
                 if (_isSenior && _showMedsReminder) ...[
                   MedsReminderCardWidget(

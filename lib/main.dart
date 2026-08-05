@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import './core/app_export.dart';
 import './core/app_state.dart';
 import './routes/app_routes.dart';
+import './presentation/favs_screen/favs_screen.dart';
 import './services/auth_service.dart';
 import './services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -185,6 +186,42 @@ class _MyAppState extends State<MyApp> {
                   // 🚨 END CRITICAL SECTION
                   debugShowCheckedModeBanner: false,
                   routes: AppRoutes.routes,
+                  // Isolated animation test (Aug 5 2026): Favs gets a
+                  // deliberate fade + gentle lift transition instead of the
+                  // platform default, so D Von can feel it on one screen
+                  // before deciding whether to roll it out everywhere.
+                  // Easy to remove: delete this whole onGenerateRoute block
+                  // and restore favsScreen to the routes map above.
+                  onGenerateRoute: (settings) {
+                    if (settings.name == AppRoutes.favsScreen) {
+                      return PageRouteBuilder(
+                        settings: settings,
+                        transitionDuration: const Duration(milliseconds: 300),
+                        reverseTransitionDuration:
+                            const Duration(milliseconds: 300),
+                        pageBuilder: (context, animation, secondaryAnimation) =>
+                            const FavsScreen(),
+                        transitionsBuilder:
+                            (context, animation, secondaryAnimation, child) {
+                          final curved = CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOut,
+                          );
+                          return FadeTransition(
+                            opacity: curved,
+                            child: SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(0, 0.03),
+                                end: Offset.zero,
+                              ).animate(curved),
+                              child: child,
+                            ),
+                          );
+                        },
+                      );
+                    }
+                    return null;
+                  },
                   initialRoute: _initialRoute,
                 );
               },

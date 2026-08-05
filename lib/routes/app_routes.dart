@@ -62,7 +62,6 @@ class AppRoutes {
       );
     },
     legacyScreen: (context) => const LegacyScreen(),
-    favsScreen: (context) => const FavsScreen(),
     safetyScreen: (context) => const SafetyScreen(),
     setupScreen: (context) => const SetupScreen(),
     nestRoleAfterInviteScreen: (context) {
