@@ -4513,7 +4513,9 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                                       ? ((story['authorName'] as String? ?? '').isNotEmpty
                                           ? story['authorName'] as String
                                           : 'A Family Member')
-                                      : widget.displayName,
+                                      : (widget.displayName.isNotEmpty
+                                          ? widget.displayName
+                                          : 'My Story'),
                                   size: 36,
                                   borderColor: const Color(0xFF5DA399),
                                   borderWidth: 1.5,

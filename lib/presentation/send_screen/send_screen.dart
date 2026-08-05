@@ -2270,6 +2270,19 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                             ),
                         ],
                       ),
+                      const SizedBox(height: 6),
+                      Text(
+                        (r['name'] as String? ?? '').isNotEmpty
+                            ? r['name'] as String
+                            : 'Family Member',
+                        style: GoogleFonts.nunitoSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _textSecondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),
