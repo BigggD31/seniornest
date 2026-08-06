@@ -1090,12 +1090,26 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Photo preview if available
+              // Photo preview if available -- has its own independent tap
+              // straight to the fullscreen zoomable viewer, exactly like
+              // Home's card. Previously the whole card (including this
+              // photo) was wrapped in one single tap zone that only ever
+              // opened the intermediate popup -- there was no direct path
+              // to fullscreen from the card at all, which is the real
+              // structural gap Home never had.
               if (imageUrl.isNotEmpty)
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                  child: Image.network(imageUrl, height: 160, width: double.infinity, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                GestureDetector(
+                  onTap: () => openFullscreenImage(
+                    context: context,
+                    imageUrl: imageUrl,
+                    semanticLabel: title,
+                    isDarkMode: _isDarkMode,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                    child: Image.network(imageUrl, height: 160, width: double.infinity, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                  ),
                 ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
