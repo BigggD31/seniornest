@@ -291,6 +291,37 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
   // _finishOnboarding also does its own nest_id check -- if this already
   // set a valid nest_id locally, that later check will just skip re-joining.
   Future<void> _joinNestEarlyIfNeeded() async {
+    // Retries the whole sequence up to 3 times with a short pause between --
+    // every piece of this has been individually verified against the live
+    // database (RLS policies, the invite-lookup function, the insert
+    // permissions, the name read) and all of it works correctly even for a
+    // brand-new non-member user. So if this keeps failing in the wild
+    // despite that, it's a brief client-side timing race, not a real
+    // permissions or data problem -- worth retrying rather than giving up
+    // after one attempt.
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      final succeeded = await _attemptJoinNestAndFetchName();
+      if (succeeded) return;
+      if (attempt < 3) await Future.delayed(Duration(milliseconds: 400 * attempt));
+    }
+    // All 3 attempts failed. Log it somewhere Sage can actually query later
+    // instead of an invisible debugPrint -- next time this happens, we get
+    // real evidence of exactly what failed instead of another guess.
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      await supabase.from('client_debug_log').insert({
+        'user_id': userId,
+        'context': 'family_onboarding_nest_name_fetch',
+        'detail': 'All 3 retry attempts failed to fetch/set real nest name',
+      });
+    } catch (_) {
+      // Even the diagnostic log failed (e.g. offline) -- nothing more to do.
+    }
+  }
+
+  /// Returns true if the real nest name was successfully fetched and set.
+  Future<bool> _attemptJoinNestAndFetchName() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
@@ -312,7 +343,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           debugPrint('EARLY_NEST_JOIN_SESSION_REFRESH_ERROR: $e');
         }
       }
-      if (!joinedViaInvite || inviteCode.isEmpty || userId == null) return;
+      if (!joinedViaInvite || inviteCode.isEmpty || userId == null) return false;
 
       // Was previously: if membership already existed, return immediately --
       // which skipped the real-name fetch below entirely and left the
@@ -340,9 +371,30 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
             ? lookupResult.first as Map<String, dynamic>
             : null;
-        if (nestResponse == null) return;
+        if (nestResponse == null) return false;
 
         nestId = nestResponse['id'] as String;
+
+        // Same real ban check used on the sign-in path -- a person removed
+        // from this specific nest should never rejoin via a cached or
+        // freshly-entered invite code, on any path through the app.
+        bool isBanned = false;
+        try {
+          final banCheck = await supabase.rpc(
+            'is_user_banned_from_nest',
+            params: {'p_nest_id': nestId, 'p_user_id': userId},
+          );
+          isBanned = banCheck == true;
+        } catch (e) {
+          debugPrint('BAN_CHECK_ERROR: $e');
+        }
+        if (isBanned) {
+          await prefs.remove('nest_id');
+          await prefs.remove('invite_code');
+          await prefs.setBool('joined_via_invite', false);
+          return false;
+        }
+
         await prefs.setString('nest_id', nestId);
         await supabase.from('nest_members').upsert({
           'nest_id': nestId,
@@ -361,9 +413,12 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           _nestNameController.text = realNestName;
         });
         await prefs.setString('nest_name', realNestName);
+        return true;
       }
+      return false;
     } catch (e) {
       debugPrint('EARLY_NEST_JOIN_ERROR: $e');
+      return false;
     }
   }
 

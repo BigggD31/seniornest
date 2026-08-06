@@ -1561,9 +1561,10 @@ class _SetupScreenState extends State<SetupScreen>
               final supabase = Supabase.instance.client;
               bool deleteSucceeded = false;
               String? errorMessage;
+              String resolvedNestId = '';
               try {
-                var nestId = prefs.getString('nest_id') ?? '';
-                if (nestId.isEmpty) {
+                resolvedNestId = prefs.getString('nest_id') ?? '';
+                if (resolvedNestId.isEmpty) {
                   // Cached nest_id can be stale or missing on the owner's
                   // own device -- fall back to looking it up directly
                   // instead of silently no-op'ing the whole removal.
@@ -1574,15 +1575,15 @@ class _SetupScreenState extends State<SetupScreen>
                         .select('id')
                         .eq('created_by', ownerUserId)
                         .maybeSingle();
-                    nestId = ownedNest?['id'] as String? ?? '';
+                    resolvedNestId = ownedNest?['id'] as String? ?? '';
                   }
                 }
-                if (nestId.isNotEmpty) {
+                if (resolvedNestId.isNotEmpty) {
                   await supabase
                       .from('nest_members')
                       .delete()
                       .eq('user_id', memberId)
-                      .eq('nest_id', nestId);
+                      .eq('nest_id', resolvedNestId);
                   // Confirm the row is actually gone -- a blocked delete
                   // (e.g. an RLS denial) doesn't always throw, it can just
                   // silently affect zero rows. This is what stops the app
@@ -1592,7 +1593,7 @@ class _SetupScreenState extends State<SetupScreen>
                       .from('nest_members')
                       .select('nest_id')
                       .eq('user_id', memberId)
-                      .eq('nest_id', nestId)
+                      .eq('nest_id', resolvedNestId)
                       .maybeSingle();
                   deleteSucceeded = stillThere == null;
                 } else {
@@ -1627,6 +1628,26 @@ class _SetupScreenState extends State<SetupScreen>
                   );
                 }
                 return;
+              }
+
+              // Record a real, permanent removal -- previously "Remove
+              // Member" only ever deleted the membership row, which is a
+              // kick (same as Discord/GitHub): the person could always walk
+              // back in with any still-valid invite code, since nothing
+              // anywhere remembered they'd specifically been removed. This
+              // is the actual ban record, checked at every future join
+              // attempt regardless of which path they use to try to rejoin.
+              try {
+                final ownerUserId = supabase.auth.currentUser?.id;
+                if (resolvedNestId.isNotEmpty) {
+                  await supabase.from('nest_removed_members').upsert({
+                    'nest_id': resolvedNestId,
+                    'user_id': memberId,
+                    'removed_by': ownerUserId,
+                  });
+                }
+              } catch (e) {
+                debugPrint('REMOVE_MEMBER_BAN_RECORD_ERROR: $e');
               }
 
               // Keep local hide-list too, so this device's list updates
