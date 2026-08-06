@@ -153,6 +153,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
   late AnimationController _listEntranceController;
   bool _hasPlayedEntranceOnce = false;
+
+  // Every nav tap on the bottom bar uses pushReplacementNamed, which builds
+  // a brand new FamilyFeedScreen + State each time -- so an ordinary
+  // instance field can't remember "already animated" across visits. This
+  // has to be static (lives for the whole app process) so the avatar row
+  // and check-in card only ever pop in with their fade+lift once per
+  // session, instead of empty-then-fade-in-and-shove-everything-down on
+  // every single visit to Home, which is what read as "twitchy."
+  static bool _topCardsAnimatedOnceThisSession = false;
   final List<Animation<double>> _itemAnimations = [];
   final ScrollController _scrollController = ScrollController();
 
@@ -597,6 +606,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           _seniorCheckinTime = checkinResponse != null
               ? DateTime.parse(checkinResponse['created_at'] as String)
               : null;
+          _topCardsAnimatedOnceThisSession = true;
         });
       }
     } catch (e) {
@@ -702,7 +712,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       final membersToShow = loaded.isNotEmpty ? loaded : _sampleNestMembers;
 
       if (mounted) {
-        setState(() => _nestMembers = membersToShow);
+        setState(() {
+          _nestMembers = membersToShow;
+          _topCardsAnimatedOnceThisSession = true;
+        });
       }
     } catch (e) {
       debugPrint('NEST_MEMBERS_LOAD_ERROR: $e');
@@ -1164,7 +1177,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 // app instead of abruptly popping into the layout once its
                 // data finishes loading.
                 AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
+                  duration: _topCardsAnimatedOnceThisSession
+                      ? Duration.zero
+                      : const Duration(milliseconds: 300),
                   transitionBuilder: (child, animation) {
                     final curved =
                         CurvedAnimation(parent: animation, curve: Curves.easeOut);
@@ -1196,7 +1211,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 ),
                 // Pinned daily check-in status card (shown once we know who the senior is)
                 AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
+                  duration: _topCardsAnimatedOnceThisSession
+                      ? Duration.zero
+                      : const Duration(milliseconds: 300),
                   transitionBuilder: (child, animation) {
                     final curved =
                         CurvedAnimation(parent: animation, curve: Curves.easeOut);

@@ -264,18 +264,38 @@ class _MyAppState extends State<MyApp> {
                           page,
                       transitionsBuilder:
                           (context, animation, secondaryAnimation, child) {
-                        final curved = CurvedAnimation(
+                        // Fade-through, not a plain crossfade: the outgoing
+                        // page fades out first (0-30% of the duration), then
+                        // the incoming page fades + lifts in (30-100%).
+                        // Previously this only handled `animation` (the
+                        // incoming page) and never touched
+                        // `secondaryAnimation` (the outgoing page), so the
+                        // old page sat fully opaque underneath while the new
+                        // one faded in on top of it -- both fully visible at
+                        // once, which read as a "double page" ghost that
+                        // lingered for the whole 300ms.
+                        final incomingCurve = CurvedAnimation(
                           parent: animation,
-                          curve: Curves.easeOut,
+                          curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+                        );
+                        final outgoingCurve = CurvedAnimation(
+                          parent: secondaryAnimation,
+                          curve: const Interval(0.0, 0.3, curve: Curves.easeIn),
                         );
                         return FadeTransition(
-                          opacity: curved,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0, 0.03),
-                              end: Offset.zero,
-                            ).animate(curved),
-                            child: child,
+                          opacity: Tween<double>(
+                            begin: 1.0,
+                            end: 0.0,
+                          ).animate(outgoingCurve),
+                          child: FadeTransition(
+                            opacity: incomingCurve,
+                            child: SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(0, 0.03),
+                                end: Offset.zero,
+                              ).animate(incomingCurve),
+                              child: child,
+                            ),
                           ),
                         );
                       },
