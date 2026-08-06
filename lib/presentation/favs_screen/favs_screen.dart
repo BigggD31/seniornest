@@ -1015,10 +1015,18 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                     else if ((category == 'Video' || entryType == 'video') && mediaUrl.isNotEmpty)
                       _FavsVideoPlayer(videoUrl: mediaUrl, isDarkMode: _isDarkMode)
                     else if ((category == 'Photos') && imageUrl.isNotEmpty)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(imageUrl, width: double.infinity, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                      GestureDetector(
+                        onTap: () => openFullscreenImage(
+                          context: context,
+                          imageUrl: imageUrl,
+                          semanticLabel: title,
+                          isDarkMode: _isDarkMode,
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(imageUrl, width: double.infinity, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                        ),
                       )
                     else if (content2.isNotEmpty)
                       Text(content2,
