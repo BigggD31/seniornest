@@ -459,6 +459,43 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       initialMessages = hasRealPost ? [] : _messageMaps.map(MessageModel.fromMap).toList();
     }
 
+    // Same cache-first pattern as messages -- avoid showing an empty
+    // avatar row / check-in card on every visit while the live Supabase
+    // queries are still in flight, which is what made them visibly "pop
+    // in last" even with a zero-duration animation. Local prefs reads are
+    // fast enough to paint alongside the rest of Home's first frame,
+    // unlike a real network round-trip.
+    final cachedMembersNestId = prefs.getString('cached_nest_members_nest_id') ?? '';
+    List<Map<String, dynamic>> initialNestMembers = [];
+    if (cachedMembersNestId.isNotEmpty && cachedMembersNestId == _currentNestIdForCache) {
+      final cachedMembersJson = prefs.getString('cached_nest_members');
+      if (cachedMembersJson != null && cachedMembersJson.isNotEmpty) {
+        try {
+          final List<dynamic> cachedList = jsonDecode(cachedMembersJson) as List<dynamic>;
+          initialNestMembers = cachedList
+              .map((m) => Map<String, dynamic>.from(m as Map))
+              .toList();
+        } catch (_) {}
+      }
+    }
+
+    final cachedCheckinNestId = prefs.getString('cached_checkin_nest_id') ?? '';
+    final cachedCheckinDate = prefs.getString('cached_checkin_date') ?? '';
+    String initialSeniorUserId = '';
+    String initialSeniorName = '';
+    bool initialSeniorCheckedIn = false;
+    DateTime? initialSeniorCheckinTime;
+    if (cachedCheckinNestId.isNotEmpty &&
+        cachedCheckinNestId == _currentNestIdForCache &&
+        cachedCheckinDate == _todayDateString()) {
+      initialSeniorUserId = prefs.getString('cached_checkin_senior_id') ?? '';
+      initialSeniorName = prefs.getString('cached_checkin_senior_name') ?? '';
+      initialSeniorCheckedIn = prefs.getBool('cached_checkin_checked_in') ?? false;
+      final cachedTimeStr = prefs.getString('cached_checkin_time');
+      initialSeniorCheckinTime =
+          cachedTimeStr != null ? DateTime.tryParse(cachedTimeStr) : null;
+    }
+
     setState(() {
       _isSenior = role == 'senior';
       _displayName = name;
@@ -476,6 +513,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       _isLoading = false;
       _todayCelebrations = todayEvents;
       _upcomingCelebrations = upcomingEvents;
+      if (initialNestMembers.isNotEmpty) {
+        _nestMembers = initialNestMembers;
+      }
+      if (initialSeniorUserId.isNotEmpty) {
+        _seniorUserId = initialSeniorUserId;
+        _seniorName = initialSeniorName;
+        _seniorCheckedInToday = initialSeniorCheckedIn;
+        _seniorCheckinTime = initialSeniorCheckinTime;
+      }
     });
 
     // Load bookmarks from Supabase
@@ -609,6 +655,20 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           _topCardsAnimatedOnceThisSession = true;
         });
       }
+
+      try {
+        await prefs.setString('cached_checkin_nest_id', nestId);
+        await prefs.setString('cached_checkin_date', _todayDateString());
+        await prefs.setString('cached_checkin_senior_id', seniorId);
+        await prefs.setString('cached_checkin_senior_name', seniorName);
+        await prefs.setBool('cached_checkin_checked_in', checkinResponse != null);
+        if (checkinResponse != null) {
+          await prefs.setString(
+              'cached_checkin_time', checkinResponse['created_at'] as String);
+        } else {
+          await prefs.remove('cached_checkin_time');
+        }
+      } catch (_) {}
     } catch (e) {
       debugPrint('CHECKIN_STATUS_LOAD_ERROR: $e');
     }
@@ -717,6 +777,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           _topCardsAnimatedOnceThisSession = true;
         });
       }
+
+      try {
+        await prefs.setString('cached_nest_members', jsonEncode(membersToShow));
+        await prefs.setString('cached_nest_members_nest_id', nestId);
+      } catch (_) {}
     } catch (e) {
       debugPrint('NEST_MEMBERS_LOAD_ERROR: $e');
     }

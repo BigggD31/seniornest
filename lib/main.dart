@@ -257,44 +257,50 @@ class _MyAppState extends State<MyApp> {
                     if (page == null) return null;
                     return PageRouteBuilder(
                       settings: settings,
-                      transitionDuration: const Duration(milliseconds: 300),
+                      transitionDuration: const Duration(milliseconds: 350),
                       reverseTransitionDuration:
-                          const Duration(milliseconds: 300),
+                          const Duration(milliseconds: 350),
                       pageBuilder: (context, animation, secondaryAnimation) =>
                           page,
                       transitionsBuilder:
                           (context, animation, secondaryAnimation, child) {
-                        // Fade-through, not a plain crossfade: the outgoing
-                        // page fades out first (0-30% of the duration), then
-                        // the incoming page fades + lifts in (30-100%).
-                        // Previously this only handled `animation` (the
-                        // incoming page) and never touched
-                        // `secondaryAnimation` (the outgoing page), so the
-                        // old page sat fully opaque underneath while the new
-                        // one faded in on top of it -- both fully visible at
-                        // once, which read as a "double page" ghost that
-                        // lingered for the whole 300ms.
+                        // True simultaneous crossfade -- previously this was
+                        // staged (old page fades out over the first 30% of
+                        // the duration, THEN the new page fades in over the
+                        // remaining 70%), which read as two distinct events
+                        // with a gap in the middle rather than one smooth
+                        // motion. Now both curves span the FULL duration so
+                        // the outgoing and incoming page dissolve into each
+                        // other at the same time. A themed backdrop
+                        // Container (matching the live light/dark scaffold
+                        // color) sits underneath both layers so even where
+                        // they briefly overlap, it never reveals a flash of
+                        // the platform's default white -- which is what
+                        // read as a "bright light" shock in a dark room.
                         final incomingCurve = CurvedAnimation(
                           parent: animation,
-                          curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+                          curve: Curves.easeInOut,
                         );
                         final outgoingCurve = CurvedAnimation(
                           parent: secondaryAnimation,
-                          curve: const Interval(0.0, 0.3, curve: Curves.easeIn),
+                          curve: Curves.easeInOut,
                         );
-                        return FadeTransition(
-                          opacity: Tween<double>(
-                            begin: 1.0,
-                            end: 0.0,
-                          ).animate(outgoingCurve),
+                        return Container(
+                          color: Theme.of(context).scaffoldBackgroundColor,
                           child: FadeTransition(
-                            opacity: incomingCurve,
-                            child: SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0, 0.03),
-                                end: Offset.zero,
-                              ).animate(incomingCurve),
-                              child: child,
+                            opacity: Tween<double>(
+                              begin: 1.0,
+                              end: 0.0,
+                            ).animate(outgoingCurve),
+                            child: FadeTransition(
+                              opacity: incomingCurve,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, 0.015),
+                                  end: Offset.zero,
+                                ).animate(incomingCurve),
+                                child: child,
+                              ),
                             ),
                           ),
                         );
