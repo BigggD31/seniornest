@@ -244,6 +244,49 @@ class _SplashScreenState extends State<SplashScreen>
       if (session != null) {
         final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
         if (hasOnboarded && mounted) {
+          // Re-check the cached nest membership against Supabase before
+          // trusting it -- this mirrors the same fix already applied to
+          // main.dart's cold-start routing. That fix only covered the app's
+          // very first launch; this splash screen runs again on its own
+          // whenever someone signs back in mid-session, and had the exact
+          // same "trust the local has_onboarded flag" bug, which is why a
+          // removed member could sign back in and land straight back in
+          // the nest they'd just been removed from.
+          final nestId = prefs.getString('nest_id') ?? '';
+          final userId = Supabase.instance.client.auth.currentUser?.id;
+          bool stillAMember = true; // fail open on error/no data, same as main.dart
+          if (userId != null && nestId.isNotEmpty) {
+            try {
+              final row = await Supabase.instance.client
+                  .from('nest_members')
+                  .select('nest_id')
+                  .eq('nest_id', nestId)
+                  .eq('user_id', userId)
+                  .maybeSingle();
+              stillAMember = row != null;
+            } catch (e) {
+              debugPrint('SPLASH_MEMBERSHIP_CHECK_ERROR: $e');
+              stillAMember = true;
+            }
+          }
+          if (!stillAMember) {
+            await prefs.remove('nest_id');
+            await prefs.setBool('has_onboarded', false);
+            await prefs.setBool('onboarding_complete', false);
+            // Also clear cached invite state -- otherwise onboarding or
+            // save-messages-prompt will silently re-join the same nest
+            // from the old invite code with no awareness they were removed.
+            await prefs.remove('invite_code');
+            await prefs.setBool('joined_via_invite', false);
+            if (mounted) {
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                AppRoutes.roleChoiceScreen,
+                (route) => false,
+              );
+            }
+            return;
+          }
           Future.delayed(const Duration(milliseconds: 300), () {
             if (mounted) {
               Navigator.pushNamedAndRemoveUntil(

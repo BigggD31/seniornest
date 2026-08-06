@@ -1558,19 +1558,77 @@ class _SetupScreenState extends State<SetupScreen>
               // local list, while their real nest_members row (and their
               // access) stayed untouched.
               final prefs = await SharedPreferences.getInstance();
+              final supabase = Supabase.instance.client;
+              bool deleteSucceeded = false;
+              String? errorMessage;
               try {
-                final supabase = Supabase.instance.client;
-                final nestId = prefs.getString('nest_id') ?? '';
+                var nestId = prefs.getString('nest_id') ?? '';
+                if (nestId.isEmpty) {
+                  // Cached nest_id can be stale or missing on the owner's
+                  // own device -- fall back to looking it up directly
+                  // instead of silently no-op'ing the whole removal.
+                  final ownerUserId = supabase.auth.currentUser?.id;
+                  if (ownerUserId != null) {
+                    final ownedNest = await supabase
+                        .from('nests')
+                        .select('id')
+                        .eq('created_by', ownerUserId)
+                        .maybeSingle();
+                    nestId = ownedNest?['id'] as String? ?? '';
+                  }
+                }
                 if (nestId.isNotEmpty) {
                   await supabase
                       .from('nest_members')
                       .delete()
                       .eq('user_id', memberId)
                       .eq('nest_id', nestId);
+                  // Confirm the row is actually gone -- a blocked delete
+                  // (e.g. an RLS denial) doesn't always throw, it can just
+                  // silently affect zero rows. This is what stops the app
+                  // from showing "removed" success when the person is
+                  // still really a member.
+                  final stillThere = await supabase
+                      .from('nest_members')
+                      .select('nest_id')
+                      .eq('user_id', memberId)
+                      .eq('nest_id', nestId)
+                      .maybeSingle();
+                  deleteSucceeded = stillThere == null;
+                } else {
+                  errorMessage = 'Could not find your nest — please try again.';
                 }
               } catch (e) {
                 debugPrint('REMOVE_MEMBER ERROR: $e');
+                errorMessage =
+                    'Something went wrong removing ${member['name']}. Please try again.';
               }
+
+              if (!deleteSucceeded) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        errorMessage ??
+                            '${member['name']} could not be removed. Please try again.',
+                        style: GoogleFonts.nunitoSans(
+                          fontSize: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                      backgroundColor: const Color(0xFFB00020),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      margin: const EdgeInsets.all(16),
+                      duration: const Duration(seconds: 4),
+                    ),
+                  );
+                }
+                return;
+              }
+
               // Keep local hide-list too, so this device's list updates
               // instantly without waiting on a re-fetch.
               final removedIds =
