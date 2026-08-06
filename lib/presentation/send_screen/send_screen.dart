@@ -92,6 +92,24 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
 
   static const int _maxRecordSeconds = 60;
 
+  // Size caps for media picked from Photos/Files (not live in-app recording,
+  // which is already governed by _maxRecordSeconds and never comes close to
+  // these numbers). Agreed with D Von Aug 6 2026: video 750MB, photo 20MB.
+  static const int _maxVideoBytes = 750 * 1024 * 1024;
+  static const int _maxPhotoBytes = 20 * 1024 * 1024;
+
+  void _showSizeLimitError(String mediaType, int maxBytes) {
+    if (!mounted) return;
+    final maxMb = maxBytes ~/ (1024 * 1024);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('That $mediaType is too large. Please choose one under ${maxMb}MB.'),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1520,6 +1538,11 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           picked.path.toLowerCase().endsWith('.mov') ||
           picked.path.toLowerCase().endsWith('.m4v');
       if (isVideo) {
+        final fileSize = await File(picked.path).length();
+        if (fileSize > _maxVideoBytes) {
+          _showSizeLimitError('video', _maxVideoBytes);
+          return;
+        }
         setState(() {
           _videoFilePath = picked.path;
           _videoIsFromRecording = false;
@@ -1537,6 +1560,10 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         });
       } else {
         final bytes = await picked.readAsBytes();
+        if (bytes.length > _maxPhotoBytes) {
+          _showSizeLimitError('photo', _maxPhotoBytes);
+          return;
+        }
         setState(() {
           _selectedPhotoBase64 = base64Encode(bytes);
           _selectedType = 'photo';
@@ -1551,6 +1578,10 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     final picked = await picker.pickImage(source: ImageSource.camera);
     if (picked != null && mounted) {
       final bytes = await picked.readAsBytes();
+      if (bytes.length > _maxPhotoBytes) {
+        _showSizeLimitError('photo', _maxPhotoBytes);
+        return;
+      }
       setState(() {
         _selectedPhotoBase64 = base64Encode(bytes);
         _selectedType = 'photo';
@@ -1569,6 +1600,10 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       final file = result.files.first;
       final bytes = file.bytes;
       if (bytes != null) {
+        if (bytes.length > _maxPhotoBytes) {
+          _showSizeLimitError('photo', _maxPhotoBytes);
+          return;
+        }
         setState(() {
           _selectedPhotoBase64 = base64Encode(bytes);
           _selectedType = 'photo';
