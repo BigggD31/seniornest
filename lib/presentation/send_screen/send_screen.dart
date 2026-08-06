@@ -94,9 +94,22 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
 
   // Size caps for media picked from Photos/Files (not live in-app recording,
   // which is already governed by _maxRecordSeconds and never comes close to
-  // these numbers). Agreed with D Von Aug 6 2026: video 750MB, photo 20MB.
+  // these numbers). Agreed with D Von Aug 6 2026: video 750MB, photo 20MB,
+  // audio 300MB (generous on purpose -- covers a real historical recording,
+  // e.g. an hour-long digitized cassette tape, which can run 300-600MB in
+  // an older/uncompressed format even though an hour of modern compressed
+  // speech audio is only ~50-60MB).
   static const int _maxVideoBytes = 750 * 1024 * 1024;
   static const int _maxPhotoBytes = 20 * 1024 * 1024;
+  // NOT YET ENFORCED ANYWHERE: there is currently no working path to pick an
+  // existing audio file at all -- audio is only ever live-recorded (capped
+  // at _maxRecordSeconds, nowhere near this size), and the Files picker
+  // still mishandles any non-photo file as a photo (separate known bug).
+  // This constant is locked in now so the agreed number isn't lost, and
+  // should be wired in as part of fixing the Files picker's audio/video
+  // type detection.
+  // ignore: unused_field
+  static const int _maxAudioBytes = 300 * 1024 * 1024;
 
   void _showSizeLimitError(String mediaType, int maxBytes) {
     if (!mounted) return;
