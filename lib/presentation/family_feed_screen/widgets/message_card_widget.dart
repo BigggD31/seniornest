@@ -314,7 +314,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'To: Everyone in the Nest',
+                        'To: ${msg.recipientLabel}',
                         style: GoogleFonts.nunitoSans(
                           fontSize: 11,
                           color: isDark

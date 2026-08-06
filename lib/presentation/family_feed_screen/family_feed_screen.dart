@@ -41,6 +41,7 @@ class MessageModel {
     required this.isHearted,
     this.isSample = false,
     this.isRecordedVideo = false,
+    this.recipientLabel = 'Everyone in the Nest',
   });
 
   final String id;
@@ -62,6 +63,11 @@ class MessageModel {
   // live front-camera recording (needs the mirror correction) vs an
   // uploaded/picked video (never needs it).
   final bool isRecordedVideo;
+  // Who this post is actually addressed to -- resolved from the real
+  // visible_to_ids saved at send time. Previously that field was saved to
+  // Supabase but never read back anywhere, so every card showed the same
+  // generic default no matter who was actually selected.
+  final String recipientLabel;
 
   factory MessageModel.fromMap(Map<String, dynamic> map) {
     return MessageModel(
@@ -80,6 +86,7 @@ class MessageModel {
       isHearted: map['isHearted'] as bool,
       isSample: map['isSample'] as bool? ?? false,
       isRecordedVideo: map['isRecordedVideo'] as bool? ?? false,
+      recipientLabel: map['recipientLabel'] as String? ?? 'Everyone in the Nest',
     );
   }
 
@@ -112,6 +119,7 @@ class MessageModel {
     'isHearted': isHearted,
     'isSample': isSample,
     'isRecordedVideo': isRecordedVideo,
+    'recipientLabel': recipientLabel,
   };
 }
 
@@ -993,10 +1001,19 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         }
       }
 
+      // Resolve visible_to_ids -> real names. _nestMembers excludes the
+      // current user by design, so add self in separately.
+      final memberNameById = <String, String>{
+        for (final m in _nestMembers)
+          (m['id'] as String? ?? ''): (m['name'] as String? ?? ''),
+      };
+      if (userId != null) {
+        memberNameById[userId] = localName.isNotEmpty ? localName : 'You';
+      }
+
       final List<MessageModel> loaded = posts.map((post) {
         final profile = post['user_profiles'] as Map<String, dynamic>?;
-        final authorId = post['author_id'] as String? ?? '';
-        final supabasePreferredName = profile?['preferred_name'] as String? ?? '';
+        final authorId = post['author_id'] as String? ?? '';        final supabasePreferredName = profile?['preferred_name'] as String? ?? '';
         final supabaseFirstName = profile?['display_name'] as String? ?? '';
         final supabaseName = supabasePreferredName.isNotEmpty
             ? supabasePreferredName
@@ -1030,6 +1047,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             : rawRelation;
         final senderRole = profile?['role'] as String? ?? 'family';
         final type = post['post_type'] as String? ?? 'text';
+        final rawVisibleTo = post['visible_to_ids'];
+        String recipientLabel = 'Everyone in the Nest';
+        if (rawVisibleTo is List && rawVisibleTo.isNotEmpty) {
+          final names = rawVisibleTo
+              .map((id) => memberNameById[id as String] ?? '')
+              .where((n) => n.isNotEmpty)
+              .toList();
+          if (names.isNotEmpty) {
+            recipientLabel = names.join(', ');
+          }
+        }
         return MessageModel(
           id: post['id'] as String,
           senderName: senderName,
@@ -1046,6 +1074,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           heartCount: heartCounts[post['id'] as String] ?? 0,
           isHearted: heartedByMe.contains(post['id'] as String),
           isRecordedVideo: post['is_recorded_video'] as bool? ?? false,
+          recipientLabel: recipientLabel,
         );
       }).toList();
 
