@@ -339,6 +339,52 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
           final typedInviteCode = prefs.getString('invite_code') ?? '';
 
+          // Google/Apple/email sign-in all funnel through this same
+          // function for BOTH a brand-new signup and a returning sign-in,
+          // with no explicit flag to tell them apart. Without this check,
+          // a removed member's device -- which still has 'joined_via_invite'
+          // and the old 'invite_code' cached locally, since removal happens
+          // on the OWNER's device and touches nothing here -- would silently
+          // redeem that stale, never-expiring code and rejoin them the
+          // moment they sign back in, with zero action on their part.
+          // A genuinely new auth account has a createdAt timestamp only
+          // moments old; a returning account's createdAt is from whenever
+          // they originally signed up, long before this exact sign-in.
+          bool isGenuinelyNewAccount = false;
+          try {
+            final authUser = supabase.auth.currentUser;
+            final createdAt = authUser != null
+                ? DateTime.tryParse(authUser.createdAt)
+                : null;
+            if (createdAt != null) {
+              isGenuinelyNewAccount = DateTime.now()
+                      .toUtc()
+                      .difference(createdAt.toUtc())
+                      .inSeconds
+                      .abs() <
+                  30;
+            }
+          } catch (_) {}
+
+          if (joinedViaInvite && typedInviteCode.isNotEmpty && !isGenuinelyNewAccount) {
+            // Existing account, no live membership -- most likely removed.
+            // Clear the stale invite state so it can't trigger this again,
+            // and send them to enter a fresh invite code instead of
+            // silently dropping them back into a nest they no longer
+            // belong to.
+            await prefs.remove('nest_id');
+            await prefs.remove('invite_code');
+            await prefs.setBool('joined_via_invite', false);
+            if (mounted) {
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/nest-role-after-invite-screen',
+                (route) => false,
+              );
+            }
+            return;
+          }
+
           if (joinedViaInvite && typedInviteCode.isNotEmpty) {
             final lookupResult = await supabase.rpc(
               'lookup_nest_by_invite_code',

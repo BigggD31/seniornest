@@ -314,37 +314,46 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       }
       if (!joinedViaInvite || inviteCode.isEmpty || userId == null) return;
 
-      final existingNestId = prefs.getString('nest_id') ?? '';
-      if (existingNestId.isNotEmpty) {
+      // Was previously: if membership already existed, return immediately --
+      // which skipped the real-name fetch below entirely and left the
+      // confirmation screen showing the "$name's Nest" fallback on every
+      // repeat run (e.g. re-testing with the same account). Now: if already
+      // a member, just skip the re-join network call, but always fall
+      // through to fetch and display the real name.
+      String? nestId = prefs.getString('nest_id');
+      bool alreadyMember = false;
+      if (nestId != null && nestId.isNotEmpty) {
         final membershipCheck = await supabase
             .from('nest_members')
             .select('nest_id')
-            .eq('nest_id', existingNestId)
+            .eq('nest_id', nestId)
             .eq('user_id', userId)
             .maybeSingle();
-        if (membershipCheck != null) return; // already joined
+        alreadyMember = membershipCheck != null;
       }
 
-      final lookupResult = await supabase.rpc(
-        'lookup_nest_by_invite_code',
-        params: {'p_code': inviteCode.toUpperCase()},
-      );
-      final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
-          ? lookupResult.first as Map<String, dynamic>
-          : null;
-      if (nestResponse == null) return;
+      if (!alreadyMember) {
+        final lookupResult = await supabase.rpc(
+          'lookup_nest_by_invite_code',
+          params: {'p_code': inviteCode.toUpperCase()},
+        );
+        final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
+            ? lookupResult.first as Map<String, dynamic>
+            : null;
+        if (nestResponse == null) return;
 
-      final nestId = nestResponse['id'] as String;
-      await prefs.setString('nest_id', nestId);
-      await supabase.from('nest_members').upsert({
-        'nest_id': nestId,
-        'user_id': userId,
-      });
+        nestId = nestResponse['id'] as String;
+        await prefs.setString('nest_id', nestId);
+        await supabase.from('nest_members').upsert({
+          'nest_id': nestId,
+          'user_id': userId,
+        });
+      }
 
       final realNestRow = await supabase
           .from('nests')
           .select('name')
-          .eq('id', nestId)
+          .eq('id', nestId!)
           .maybeSingle();
       final realNestName = realNestRow?['name'] as String?;
       if (realNestName != null && realNestName.isNotEmpty && mounted) {
