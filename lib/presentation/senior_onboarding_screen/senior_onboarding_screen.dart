@@ -826,6 +826,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
               decoration: BoxDecoration(

@@ -957,6 +957,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
               onTap: () => setState(() => _selectedRelationship = rel),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 10,

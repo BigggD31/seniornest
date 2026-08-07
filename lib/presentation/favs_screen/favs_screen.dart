@@ -315,6 +315,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(

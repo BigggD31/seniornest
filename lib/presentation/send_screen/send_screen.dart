@@ -1771,6 +1771,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       onTap: () => setState(() => _topTabIndex = index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF5DA399) : Colors.transparent,
@@ -2073,6 +2074,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                     children: [
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOut,
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
@@ -2158,6 +2160,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           onTap: () => setState(() => _selectedRecipients.clear()),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             decoration: BoxDecoration(
               color: everyoneSelected
@@ -2218,6 +2221,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
                   width: 26,
                   height: 26,
                   decoration: BoxDecoration(
@@ -2261,6 +2265,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 onTap: () => _toggleRecipient(r['id'] as String),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
                   margin: EdgeInsets.only(
                     right: index < _nestRecipients.length - 1 ? 10 : 0,
                   ),

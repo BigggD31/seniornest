@@ -1797,6 +1797,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isActive

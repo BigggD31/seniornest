@@ -1012,6 +1012,7 @@ class _LegacyScreenState extends State<LegacyScreen>
             onTap: () => setState(() => _selectedCategory = index),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -2256,6 +2257,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
                                 setState(() => _selectedCategory = cat),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeOut,
                               margin: EdgeInsets.only(
                                 right: cat != _categories.last ? 6 : 0,
                               ),
@@ -3338,6 +3340,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
                   onTap: () => setState(() => _selectedCategory = cat),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
                     margin: EdgeInsets.only(right: cat != _categories.last ? 6 : 0),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
@@ -3895,6 +3898,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
                   onTap: () => setState(() => _selectedCategory = cat),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
                     margin: EdgeInsets.only(right: cat != _categories.last ? 6 : 0),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
