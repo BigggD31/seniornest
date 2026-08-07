@@ -28,6 +28,11 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
   final TextEditingController _preferredNameController = TextEditingController();
   final TextEditingController _inviteCodeController = TextEditingController();
   final TextEditingController _nestNameController = TextEditingController();
+  // TEMPORARY diagnostic only -- shows the real-time status of the
+  // early nest-name fetch directly on the confirmation screen, since the
+  // database-log approach couldn't confirm whether the fetch was even
+  // being reached. Remove once the real root cause is confirmed.
+  String _nestNameDebugStatus = 'not started';
   String? _selectedRelationship;
   bool _notifyOnCheckIn = true;
   bool _notifyOnMessages = true;
@@ -300,9 +305,13 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     // permissions or data problem -- worth retrying rather than giving up
     // after one attempt.
     for (var attempt = 1; attempt <= 3; attempt++) {
+      if (mounted) setState(() => _nestNameDebugStatus = 'attempt $attempt starting...');
       final succeeded = await _attemptJoinNestAndFetchName();
       if (succeeded) return;
       if (attempt < 3) await Future.delayed(Duration(milliseconds: 400 * attempt));
+    }
+    if (mounted) {
+      setState(() => _nestNameDebugStatus = 'ALL 3 ATTEMPTS FAILED: $_nestNameDebugStatus');
     }
     // All 3 attempts failed. Log it somewhere Sage can actually query later
     // instead of an invisible debugPrint -- next time this happens, we get
@@ -341,9 +350,16 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           userId = refreshed.session?.user.id ?? supabase.auth.currentUser?.id;
         } catch (e) {
           debugPrint('EARLY_NEST_JOIN_SESSION_REFRESH_ERROR: $e');
+          if (mounted) setState(() => _nestNameDebugStatus = 'session refresh threw: $e');
         }
       }
-      if (!joinedViaInvite || inviteCode.isEmpty || userId == null) return false;
+      if (!joinedViaInvite || inviteCode.isEmpty || userId == null) {
+        if (mounted) {
+          setState(() => _nestNameDebugStatus =
+              'guard failed: joinedViaInvite=$joinedViaInvite inviteCode="$inviteCode" userId=$userId');
+        }
+        return false;
+      }
 
       // Was previously: if membership already existed, return immediately --
       // which skipped the real-name fetch below entirely and left the
@@ -354,6 +370,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       String? nestId = prefs.getString('nest_id');
       bool alreadyMember = false;
       if (nestId != null && nestId.isNotEmpty) {
+        if (mounted) setState(() => _nestNameDebugStatus = 'checking existing membership, cached nestId=$nestId');
         final membershipCheck = await supabase
             .from('nest_members')
             .select('nest_id')
@@ -364,6 +381,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       }
 
       if (!alreadyMember) {
+        if (mounted) setState(() => _nestNameDebugStatus = 'looking up nest by invite code "$inviteCode"...');
         final lookupResult = await supabase.rpc(
           'lookup_nest_by_invite_code',
           params: {'p_code': inviteCode.toUpperCase()},
@@ -371,7 +389,12 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
             ? lookupResult.first as Map<String, dynamic>
             : null;
-        if (nestResponse == null) return false;
+        if (nestResponse == null) {
+          if (mounted) {
+            setState(() => _nestNameDebugStatus = 'invite code "$inviteCode" found NO matching nest');
+          }
+          return false;
+        }
 
         nestId = nestResponse['id'] as String;
 
@@ -389,12 +412,14 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           debugPrint('BAN_CHECK_ERROR: $e');
         }
         if (isBanned) {
+          if (mounted) setState(() => _nestNameDebugStatus = 'blocked: this account is banned from nest $nestId');
           await prefs.remove('nest_id');
           await prefs.remove('invite_code');
           await prefs.setBool('joined_via_invite', false);
           return false;
         }
 
+        if (mounted) setState(() => _nestNameDebugStatus = 'joining nest $nestId...');
         await prefs.setString('nest_id', nestId);
         await supabase.from('nest_members').upsert({
           'nest_id': nestId,
@@ -402,6 +427,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         });
       }
 
+      if (mounted) setState(() => _nestNameDebugStatus = 'fetching real name for nest $nestId...');
       final realNestRow = await supabase
           .from('nests')
           .select('name')
@@ -411,13 +437,18 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       if (realNestName != null && realNestName.isNotEmpty && mounted) {
         setState(() {
           _nestNameController.text = realNestName;
+          _nestNameDebugStatus = 'SUCCESS: "$realNestName"';
         });
         await prefs.setString('nest_name', realNestName);
         return true;
       }
+      if (mounted) {
+        setState(() => _nestNameDebugStatus = 'nests row returned but name was empty/null for nestId=$nestId');
+      }
       return false;
     } catch (e) {
       debugPrint('EARLY_NEST_JOIN_ERROR: $e');
+      if (mounted) setState(() => _nestNameDebugStatus = 'EXCEPTION: $e');
       return false;
     }
   }
@@ -1366,6 +1397,20 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         _buildSummaryRow(Icons.person_rounded, 'Name', name, isDark),
         const SizedBox(height: 8),
         _buildSummaryRow(Icons.home_rounded, 'Nest', nestName, isDark),
+        const SizedBox(height: 8),
+        // TEMPORARY diagnostic -- remove once real root cause is confirmed.
+        // Small on purpose, but selectable so it can be copied and sent
+        // exactly as-is rather than retyped/paraphrased.
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: SelectableText(
+            'debug: $_nestNameDebugStatus',
+            style: GoogleFonts.nunitoSans(
+              fontSize: 10,
+              color: mutedText,
+            ),
+          ),
+        ),
         const SizedBox(height: 8),
         _buildSummaryRow(
           Icons.favorite_rounded,
