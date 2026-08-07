@@ -291,79 +291,94 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     }
   }
 
-  // Joins the nest via invite code (if applicable) and fetches its real
-  // name early, so the confirmation screen shows correct data on first
-  // render instead of the wrong fallback. Safe to call before
-  // _finishOnboarding also does its own nest_id check -- if this already
-  // set a valid nest_id locally, that later check will just skip re-joining.
+  // Shows the real nest name and separately joins the nest, as two
+  // decoupled operations -- previously these were tangled together, so
+  // name display was waiting on user-identity resolution it never
+  // actually needed. The invite code alone identifies the nest,
+  // independent of who's asking; only the actual join needs to know who
+  // the user is.
   Future<void> _joinNestEarlyIfNeeded() async {
-    // Retries the whole sequence up to 3 times with a short pause between --
-    // every piece of this has been individually verified against the live
-    // database (RLS policies, the invite-lookup function, the insert
-    // permissions, the name read) and all of it works correctly even for a
-    // brand-new non-member user. So if this keeps failing in the wild
-    // despite that, it's a brief client-side timing race, not a real
-    // permissions or data problem -- worth retrying rather than giving up
-    // after one attempt.
+    final prefs = await SharedPreferences.getInstance();
+    final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
+    final inviteCode = prefs.getString('invite_code') ?? '';
+    if (!joinedViaInvite || inviteCode.isEmpty) {
+      if (mounted) {
+        setState(() => _nestNameDebugStatus =
+            'not an invite join: joinedViaInvite=$joinedViaInvite inviteCode="$inviteCode"');
+      }
+      return;
+    }
+
+    // Step 1: show the real name immediately -- needs only the invite
+    // code, nothing about the user's identity.
+    await _fetchAndDisplayRealNestName(inviteCode);
+
+    // Step 2: actually join as this specific person, in the background.
+    // This genuinely does need a resolved user id, so it gets its own
+    // retry loop, separate from name display -- a slow/failed join no
+    // longer holds the correct name hostage.
+    await _joinNestInBackground(inviteCode);
+  }
+
+  Future<void> _fetchAndDisplayRealNestName(String inviteCode) async {
+    try {
+      final supabase = Supabase.instance.client;
+      if (mounted) {
+        setState(() => _nestNameDebugStatus = 'looking up nest name by invite code "$inviteCode"...');
+      }
+      final lookupResult = await supabase.rpc(
+        'lookup_nest_by_invite_code',
+        params: {'p_code': inviteCode.toUpperCase()},
+      );
+      final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
+          ? lookupResult.first as Map<String, dynamic>
+          : null;
+      final realNestName = nestResponse?['name'] as String?;
+      if (realNestName != null && realNestName.isNotEmpty && mounted) {
+        setState(() {
+          _nestNameController.text = realNestName;
+          _nestNameDebugStatus = 'NAME SHOWN: "$realNestName" (join happens separately)';
+        });
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('nest_name', realNestName);
+        final nestId = nestResponse?['id'] as String?;
+        if (nestId != null) await prefs.setString('nest_id', nestId);
+      } else if (mounted) {
+        setState(() => _nestNameDebugStatus = 'invite code "$inviteCode" found no matching nest name');
+      }
+    } catch (e) {
+      debugPrint('NEST_NAME_DISPLAY_ERROR: $e');
+      if (mounted) setState(() => _nestNameDebugStatus = 'name lookup EXCEPTION: $e');
+    }
+  }
+
+  Future<void> _joinNestInBackground(String inviteCode) async {
     for (var attempt = 1; attempt <= 3; attempt++) {
-      if (mounted) setState(() => _nestNameDebugStatus = 'attempt $attempt starting...');
-      final succeeded = await _attemptJoinNestAndFetchName();
+      final succeeded = await _attemptJoinNest(inviteCode);
       if (succeeded) return;
       if (attempt < 3) await Future.delayed(Duration(milliseconds: 400 * attempt));
     }
-    if (mounted) {
-      setState(() => _nestNameDebugStatus = 'ALL 3 ATTEMPTS FAILED: $_nestNameDebugStatus');
-    }
-    // All 3 attempts failed. Log it somewhere Sage can actually query later
-    // instead of an invisible debugPrint -- next time this happens, we get
-    // real evidence of exactly what failed instead of another guess.
     try {
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
       await supabase.from('client_debug_log').insert({
         'user_id': userId,
-        'context': 'family_onboarding_nest_name_fetch',
-        'detail': 'All 3 retry attempts failed to fetch/set real nest name',
+        'context': 'family_onboarding_join_nest',
+        'detail': 'All 3 retry attempts failed to join nest_members (name display unaffected by this)',
       });
-    } catch (_) {
-      // Even the diagnostic log failed (e.g. offline) -- nothing more to do.
-    }
+    } catch (_) {}
   }
 
-  /// Returns true if the real nest name was successfully fetched and set.
-  Future<bool> _attemptJoinNestAndFetchName() async {
+  Future<bool> _attemptJoinNest(String inviteCode) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
-      final inviteCode = prefs.getString('invite_code') ?? '';
       final supabase = Supabase.instance.client;
-      // Confirmed via on-screen diagnostics that a single refreshSession()
-      // attempt was not enough -- userId stayed null through all 3 retries
-      // of this whole function. Now uses the shared resolver that actively
-      // waits for a genuine signed-in auth event as the real last resort,
-      // instead of guessing with another fixed delay.
       final userId = await AuthService.getReliableUserId();
-      if (mounted && userId == null) {
-        setState(() => _nestNameDebugStatus = 'getReliableUserId returned null even after waiting for auth event');
-      }
-      if (!joinedViaInvite || inviteCode.isEmpty || userId == null) {
-        if (mounted) {
-          setState(() => _nestNameDebugStatus =
-              'guard failed: joinedViaInvite=$joinedViaInvite inviteCode="$inviteCode" userId=$userId');
-        }
-        return false;
-      }
+      if (userId == null) return false;
 
-      // Was previously: if membership already existed, return immediately --
-      // which skipped the real-name fetch below entirely and left the
-      // confirmation screen showing the "$name's Nest" fallback on every
-      // repeat run (e.g. re-testing with the same account). Now: if already
-      // a member, just skip the re-join network call, but always fall
-      // through to fetch and display the real name.
+      final prefs = await SharedPreferences.getInstance();
       String? nestId = prefs.getString('nest_id');
       bool alreadyMember = false;
       if (nestId != null && nestId.isNotEmpty) {
-        if (mounted) setState(() => _nestNameDebugStatus = 'checking existing membership, cached nestId=$nestId');
         final membershipCheck = await supabase
             .from('nest_members')
             .select('nest_id')
@@ -374,7 +389,6 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       }
 
       if (!alreadyMember) {
-        if (mounted) setState(() => _nestNameDebugStatus = 'looking up nest by invite code "$inviteCode"...');
         final lookupResult = await supabase.rpc(
           'lookup_nest_by_invite_code',
           params: {'p_code': inviteCode.toUpperCase()},
@@ -382,13 +396,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
             ? lookupResult.first as Map<String, dynamic>
             : null;
-        if (nestResponse == null) {
-          if (mounted) {
-            setState(() => _nestNameDebugStatus = 'invite code "$inviteCode" found NO matching nest');
-          }
-          return false;
-        }
-
+        if (nestResponse == null) return false;
         nestId = nestResponse['id'] as String;
 
         // Same real ban check used on the sign-in path -- a person removed
@@ -405,43 +413,22 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           debugPrint('BAN_CHECK_ERROR: $e');
         }
         if (isBanned) {
-          if (mounted) setState(() => _nestNameDebugStatus = 'blocked: this account is banned from nest $nestId');
           await prefs.remove('nest_id');
           await prefs.remove('invite_code');
           await prefs.setBool('joined_via_invite', false);
+          if (mounted) setState(() => _nestNameDebugStatus = 'blocked: this account is banned from this nest');
           return false;
         }
 
-        if (mounted) setState(() => _nestNameDebugStatus = 'joining nest $nestId...');
         await prefs.setString('nest_id', nestId);
         await supabase.from('nest_members').upsert({
           'nest_id': nestId,
           'user_id': userId,
         });
       }
-
-      if (mounted) setState(() => _nestNameDebugStatus = 'fetching real name for nest $nestId...');
-      final realNestRow = await supabase
-          .from('nests')
-          .select('name')
-          .eq('id', nestId!)
-          .maybeSingle();
-      final realNestName = realNestRow?['name'] as String?;
-      if (realNestName != null && realNestName.isNotEmpty && mounted) {
-        setState(() {
-          _nestNameController.text = realNestName;
-          _nestNameDebugStatus = 'SUCCESS: "$realNestName"';
-        });
-        await prefs.setString('nest_name', realNestName);
-        return true;
-      }
-      if (mounted) {
-        setState(() => _nestNameDebugStatus = 'nests row returned but name was empty/null for nestId=$nestId');
-      }
-      return false;
+      return true;
     } catch (e) {
-      debugPrint('EARLY_NEST_JOIN_ERROR: $e');
-      if (mounted) setState(() => _nestNameDebugStatus = 'EXCEPTION: $e');
+      debugPrint('JOIN_NEST_ERROR: $e');
       return false;
     }
   }
@@ -455,7 +442,10 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
 
     try {
       final supabase = Supabase.instance.client;
-      final userId = supabase.auth.currentUser?.id;
+      // Same reliable resolver used everywhere else tonight -- this button
+      // is what actually creates the user's profile row, so it needs this
+      // even more than the display-only pieces do.
+      final userId = await AuthService.getReliableUserId();
       final name = prefs.getString('display_name') ?? '';
       final preferredName = prefs.getString('preferred_name') ?? '';
       final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
