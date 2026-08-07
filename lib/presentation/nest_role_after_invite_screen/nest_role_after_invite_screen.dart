@@ -8,7 +8,16 @@ import '../splash_screen/widgets/nest_logo_widget.dart';
 
 class NestRoleAfterInviteScreen extends StatefulWidget {
   final String inviteCode;
-  const NestRoleAfterInviteScreen({super.key, required this.inviteCode});
+  // True when this screen is reached because a removed member tried to
+  // rejoin -- shows accurate messaging instead of the default "your invite
+  // code has been verified" text, which directly contradicted the red
+  // "invite no longer valid" banner shown alongside it.
+  final bool wasRemoved;
+  const NestRoleAfterInviteScreen({
+    super.key,
+    required this.inviteCode,
+    this.wasRemoved = false,
+  });
 
   @override
   State<NestRoleAfterInviteScreen> createState() =>
@@ -122,7 +131,9 @@ class _NestRoleAfterInviteScreenState extends State<NestRoleAfterInviteScreen>
                             NestLogoWidget(size: isTablet ? 200.0 : 180.0),
                             SizedBox(height: isTablet ? 36 : 28),
                             Text(
-                              'Who are you in this Nest?',
+                              widget.wasRemoved
+                                  ? 'You\'ll need a new invite'
+                                  : 'Who are you in this Nest?',
                               style: GoogleFonts.nunitoSans(
                                 fontSize: isTablet ? 26 : 22,
                                 fontWeight: FontWeight.w800,
@@ -133,7 +144,9 @@ class _NestRoleAfterInviteScreenState extends State<NestRoleAfterInviteScreen>
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              'Your invite code has been verified.\nNow tell us who you are.',
+                              widget.wasRemoved
+                                  ? 'Your previous invite to this nest is no longer valid. Please ask the nest owner to send you a new one.'
+                                  : 'Your invite code has been verified.\nNow tell us who you are.',
                               style: GoogleFonts.nunitoSans(
                                 fontSize: isTablet ? 15 : 14,
                                 color: const Color(0xFF9E8E7E),

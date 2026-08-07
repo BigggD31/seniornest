@@ -63,6 +63,7 @@ class AppRoutes {
           ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       return NestRoleAfterInviteScreen(
         inviteCode: args?['inviteCode'] as String? ?? '',
+        wasRemoved: args?['wasRemoved'] as bool? ?? false,
       );
     },
     subscribeNestScreen: (context) => const SubscribeNestScreen(),

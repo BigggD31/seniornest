@@ -377,18 +377,16 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
                 await prefs.remove('invite_code');
                 await prefs.setBool('joined_via_invite', false);
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                          'This invite is no longer valid for your account. Please ask the nest owner for a new invite.'),
-                      backgroundColor: Colors.red,
-                      duration: Duration(seconds: 5),
-                    ),
-                  );
+                  // Previously this paired a red "invite no longer valid"
+                  // toast with a screen that still said "your invite code
+                  // has been verified" -- directly contradicting each
+                  // other. Passing wasRemoved lets the destination screen
+                  // show accurate, non-contradictory messaging on its own.
                   Navigator.pushNamedAndRemoveUntil(
                     context,
                     '/nest-role-after-invite-screen',
                     (route) => false,
+                    arguments: {'wasRemoved': true},
                   );
                 }
                 return;
