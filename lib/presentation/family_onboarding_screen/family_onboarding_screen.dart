@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../routes/app_routes.dart';
 import '../../services/share_service.dart';
+import '../../services/auth_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../widgets/keyboard_done_bar.dart';
 
@@ -336,22 +337,14 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
       final inviteCode = prefs.getString('invite_code') ?? '';
       final supabase = Supabase.instance.client;
-      var userId = supabase.auth.currentUser?.id;
-      // currentUser can be briefly null right after sign-up/sign-in while
-      // the session is still establishing -- this exact codebase has hit
-      // this race before (the build-27 nest-creation bug). Previously a
-      // null userId here just silently returned, which is what left this
-      // early fetch never running and the confirmation screen showing the
-      // "$name's Nest" fallback instead of the real nest name. Force a
-      // session refresh instead of giving up immediately.
-      if (userId == null) {
-        try {
-          final refreshed = await supabase.auth.refreshSession();
-          userId = refreshed.session?.user.id ?? supabase.auth.currentUser?.id;
-        } catch (e) {
-          debugPrint('EARLY_NEST_JOIN_SESSION_REFRESH_ERROR: $e');
-          if (mounted) setState(() => _nestNameDebugStatus = 'session refresh threw: $e');
-        }
+      // Confirmed via on-screen diagnostics that a single refreshSession()
+      // attempt was not enough -- userId stayed null through all 3 retries
+      // of this whole function. Now uses the shared resolver that actively
+      // waits for a genuine signed-in auth event as the real last resort,
+      // instead of guessing with another fixed delay.
+      final userId = await AuthService.getReliableUserId();
+      if (mounted && userId == null) {
+        setState(() => _nestNameDebugStatus = 'getReliableUserId returned null even after waiting for auth event');
       }
       if (!joinedViaInvite || inviteCode.isEmpty || userId == null) {
         if (mounted) {

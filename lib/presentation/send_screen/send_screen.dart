@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
 import '../../widgets/keyboard_done_bar.dart';
+import '../../services/auth_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'widgets/private_inbox_list_widget.dart';
 
@@ -3431,7 +3432,13 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
 
     try {
       final supabase = Supabase.instance.client;
-      final userId = supabase.auth.currentUser?.id;
+      // Previously this only checked currentUser?.id once, with no retry --
+      // if the session hadn't fully established yet (confirmed as a real,
+      // persistent issue on this exact account tonight, not a one-off),
+      // this silently failed: spinner appears, then clears, nothing sent,
+      // no explanation, keyboard left stuck. Now it actively waits for a
+      // real signed-in session before giving up.
+      final userId = await AuthService.getReliableUserId();
       final prefs = await SharedPreferences.getInstance();
       String nestId = prefs.getString('nest_id') ?? '';
 
@@ -3453,6 +3460,16 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       if (userId == null || nestId.isEmpty) {
         debugPrint('SendMessage: userId or nestId missing');
         setState(() => _isSending = false);
+        if (mounted) {
+          FocusScope.of(context).unfocus();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Couldn't send -- please check your connection and try again."),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
         return;
       }
 

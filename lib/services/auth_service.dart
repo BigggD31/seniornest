@@ -196,6 +196,37 @@ class AuthService {
   static Stream<AuthState> get authStateChanges =>
       _client.auth.onAuthStateChange;
 
+  /// Reliably resolves the current user's ID. currentUser?.id can stay null
+  /// for longer than a fixed-count retry loop can cover in some real-world
+  /// timing cases -- confirmed directly via on-screen diagnostics on Aug 7
+  /// 2026, where it stayed null through 3 retries with delays AND through a
+  /// subsequent unrelated screen's send action minutes later. Rather than
+  /// guess at another delay, this actively waits for a genuine signed-in
+  /// auth state event as the last resort, which is the actual signal that
+  /// the session is ready -- not an assumption about how long that takes.
+  static Future<String?> getReliableUserId({Duration timeout = const Duration(seconds: 5)}) async {
+    final immediate = _client.auth.currentUser?.id;
+    if (immediate != null) return immediate;
+
+    try {
+      final refreshed = await _client.auth.refreshSession();
+      final afterRefresh = refreshed.session?.user.id ?? _client.auth.currentUser?.id;
+      if (afterRefresh != null) return afterRefresh;
+    } catch (e) {
+      debugPrint('getReliableUserId: refreshSession threw: $e');
+    }
+
+    try {
+      final event = await _client.auth.onAuthStateChange
+          .firstWhere((state) => state.session?.user.id != null)
+          .timeout(timeout);
+      return event.session?.user.id;
+    } catch (e) {
+      debugPrint('getReliableUserId: waiting for auth state event failed/timed out: $e');
+      return null;
+    }
+  }
+
   // ── Friendly error messages ───────────────────────────────────────────────
   static String _friendlyAuthError(String message) {
     final lower = message.toLowerCase();
