@@ -40,6 +40,23 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen>
     );
     _setupAnimations();
     _entranceController.forward();
+    // Shows a banner passed from a redirect (e.g. a removed member trying
+    // to rejoin) once this screen is fully built and stable -- showing it
+    // any earlier, on the screen being navigated AWAY from, gets torn down
+    // before it ever really appears.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final bannerMessage = args?['bannerMessage'] as String?;
+      if (bannerMessage != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(bannerMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    });
   }
 
   void _setupAnimations() {

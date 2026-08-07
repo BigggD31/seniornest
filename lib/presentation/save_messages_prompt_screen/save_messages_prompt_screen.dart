@@ -377,24 +377,22 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
                 await prefs.remove('invite_code');
                 await prefs.setBool('joined_via_invite', false);
                 if (mounted) {
-                  // D Von's explicit correction: don't land on the
-                  // invite-specific role screen at all (it presupposes a
-                  // valid invite, which is exactly what's wrong here) --
-                  // land on the neutral role-choice screen instead, and
-                  // keep the red error banner visible so it's clear what
-                  // happened, not just a quiet redirect.
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                          'This invite is no longer valid for your account. Please ask the nest owner for a new invite.'),
-                      backgroundColor: Colors.red,
-                      duration: Duration(seconds: 5),
-                    ),
-                  );
+                  // Previously this called showSnackBar() then immediately
+                  // cleared the entire navigation stack with
+                  // pushNamedAndRemoveUntil -- which tears down the very
+                  // screen hosting that SnackBar before it ever really
+                  // appears. That's why the red message kept vanishing.
+                  // Now the message is passed as an argument to the
+                  // destination screen, which shows it once it's actually
+                  // settled and staying on screen.
                   Navigator.pushNamedAndRemoveUntil(
                     context,
                     '/role-choice-screen',
                     (route) => false,
+                    arguments: {
+                      'bannerMessage':
+                          'This invite is no longer valid for your account. Please ask the nest owner for a new invite.',
+                    },
                   );
                 }
                 return;
