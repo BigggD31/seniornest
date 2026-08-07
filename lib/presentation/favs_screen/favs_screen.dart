@@ -1014,26 +1014,63 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                       _FavsAudioPlayer(audioUrl: mediaUrl, isDarkMode: _isDarkMode)
                     else if ((category == 'Video' || entryType == 'video') && mediaUrl.isNotEmpty)
                       _FavsVideoPlayer(videoUrl: mediaUrl, isDarkMode: _isDarkMode)
-                    else if ((category == 'Photos') && imageUrl.isNotEmpty)
-                      GestureDetector(
-                        onTap: () => openFullscreenImage(
-                          context: context,
-                          imageUrl: imageUrl,
-                          semanticLabel: title,
-                          isDarkMode: _isDarkMode,
+                    else ...[
+                      // Previously photo and text were an if/else-if chain --
+                      // whichever matched first was shown, and the other was
+                      // silently dropped. A bookmark with both a photo AND
+                      // real text (like this one) only ever showed the
+                      // photo. Now both show together, matching Home.
+                      if ((category == 'Photos') && imageUrl.isNotEmpty)
+                        GestureDetector(
+                          onTap: () => openFullscreenImage(
+                            context: context,
+                            imageUrl: imageUrl,
+                            semanticLabel: title,
+                            isDarkMode: _isDarkMode,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Stack(
+                              children: [
+                                Image.network(imageUrl, width: double.infinity, fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                                // Same tap-to-expand hint used on Home, so
+                                // the affordance is visually consistent
+                                // across both screens, not just functional.
+                                Positioned(
+                                  bottom: 8,
+                                  right: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withAlpha(120),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.fullscreen_rounded, color: Colors.white, size: 14),
+                                        SizedBox(width: 3),
+                                        Text('Tap to expand',
+                                            style: TextStyle(
+                                                color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(imageUrl, width: double.infinity, fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const SizedBox.shrink()),
-                        ),
-                      )
-                    else if (content2.isNotEmpty)
-                      Text(content2,
-                          style: GoogleFonts.nunitoSans(
-                              fontSize: 16,
-                              color: _isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417),
-                              height: 1.7)),
+                      if ((category == 'Photos') && imageUrl.isNotEmpty && content2.isNotEmpty)
+                        const SizedBox(height: 16),
+                      if (content2.isNotEmpty)
+                        Text(content2,
+                            style: GoogleFonts.nunitoSans(
+                                fontSize: 16,
+                                color: _isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417),
+                                height: 1.7)),
+                    ],
                   ],
                 ),
               ),
@@ -1107,8 +1144,32 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                   ),
                   child: ClipRRect(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                    child: Image.network(imageUrl, height: 160, width: double.infinity, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                    child: Stack(
+                      children: [
+                        Image.network(imageUrl, height: 160, width: double.infinity, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                        Positioned(
+                          bottom: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withAlpha(120),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.fullscreen_rounded, color: Colors.white, size: 14),
+                                SizedBox(width: 3),
+                                Text('Tap to expand',
+                                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               Padding(
