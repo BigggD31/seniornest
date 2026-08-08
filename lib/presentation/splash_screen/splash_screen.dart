@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
-import '../../services/auth_service.dart';
 import './widgets/heartbeat_painter_widget.dart';
 import './widgets/nest_logo_widget.dart';
 import '../../widgets/keyboard_done_bar.dart';
@@ -725,6 +724,10 @@ class _InviteCodeSubmitButtonState extends State<_InviteCodeSubmitButton> {
 
     // Real, trackable, limited-use VIP codes -- replaces the single
     // hardcoded VIP218460 that had unlimited uses and zero tracking.
+    // This screen runs BEFORE sign-up -- no account exists yet, on
+    // purpose, for every user, always. So this only checks the code is
+    // real and still has uses left; actual redemption happens once
+    // onboarding actually creates an account.
     if (normalizedCode.startsWith('VIP')) {
       setState(() {
         _isValidating = true;
@@ -732,19 +735,13 @@ class _InviteCodeSubmitButtonState extends State<_InviteCodeSubmitButton> {
       });
       try {
         final supabase = Supabase.instance.client;
-        final userId = await AuthService.getReliableUserId();
-        if (userId == null) {
-          setState(() {
-            _isValidating = false;
-            _errorText = "Couldn't verify your account -- please try again.";
-          });
-          return;
-        }
-        final redeemed = await supabase.rpc(
-          'redeem_vip_code',
-          params: {'p_code': normalizedCode, 'p_user_id': userId},
+        final valid = await supabase.rpc(
+          'check_vip_code_valid',
+          params: {'p_code': normalizedCode},
         );
-        if (redeemed == true) {
+        if (valid == true) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('vip_code', normalizedCode);
           widget.onVipCode();
           return;
         }

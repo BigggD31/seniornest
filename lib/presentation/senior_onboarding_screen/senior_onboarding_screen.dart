@@ -311,6 +311,22 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         await supabase.from('user_profiles').upsert(profileData);
         print('NEST_DEBUG: profile upsert done');
 
+        // Deferred VIP redemption -- the code was only validated (not
+        // consumed) back at invite-code entry, before this account
+        // existed. Now that it genuinely does, actually redeem it.
+        final cachedVipCode = prefs.getString('vip_code');
+        if (cachedVipCode != null && cachedVipCode.isNotEmpty) {
+          try {
+            await supabase.rpc('redeem_vip_code', params: {
+              'p_code': cachedVipCode,
+              'p_user_id': userId,
+            });
+            await prefs.remove('vip_code');
+          } catch (e) {
+            debugPrint('VIP_REDEMPTION_ERROR: $e');
+          }
+        }
+
         // Check if nest already exists for this user
         final existingNestId = prefs.getString('nest_id') ?? '';
         String nestId = existingNestId;

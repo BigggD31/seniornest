@@ -482,6 +482,22 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
             .maybeSingle();
 
         if (profileCheck != null) {
+          // Deferred VIP redemption -- the code was only validated (not
+          // consumed) back at invite-code entry, before this account
+          // existed. Now that it genuinely does, actually redeem it.
+          final cachedVipCode = prefs.getString('vip_code');
+          if (cachedVipCode != null && cachedVipCode.isNotEmpty) {
+            try {
+              await supabase.rpc('redeem_vip_code', params: {
+                'p_code': cachedVipCode,
+                'p_user_id': userId,
+              });
+              await prefs.remove('vip_code');
+            } catch (e) {
+              debugPrint('VIP_REDEMPTION_ERROR: $e');
+            }
+          }
+
           final existingNestId = prefs.getString('nest_id') ?? '';
           bool nestIdIsValid = false;
           if (existingNestId.isNotEmpty) {

@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
-import '../../services/auth_service.dart';
 import '../splash_screen/widgets/nest_logo_widget.dart';
 import './widgets/role_button_widget.dart';
 import '../../widgets/keyboard_done_bar.dart';
@@ -376,6 +375,12 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
     // hardcoded VIP218460 that had unlimited uses and zero tracking.
     // Each code allows exactly 2 uses, by design allowing the SAME person
     // to redeem it twice (once per nest, e.g. both sides of their family).
+    //
+    // This screen runs BEFORE sign-up -- there is no account yet at this
+    // point, on purpose, for every user, always. So this only checks the
+    // code is real and still has uses left (no user id needed for that);
+    // the actual redemption (which does need a real account) happens once
+    // onboarding actually creates one.
     if (normalizedCode.startsWith('VIP')) {
       setState(() {
         _isLoading = true;
@@ -383,19 +388,13 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
       });
       try {
         final supabase = Supabase.instance.client;
-        final userId = await AuthService.getReliableUserId();
-        if (userId == null) {
-          setState(() {
-            _isLoading = false;
-            _errorText = "Couldn't verify your account -- please try again.";
-          });
-          return;
-        }
-        final redeemed = await supabase.rpc(
-          'redeem_vip_code',
-          params: {'p_code': normalizedCode, 'p_user_id': userId},
+        final valid = await supabase.rpc(
+          'check_vip_code_valid',
+          params: {'p_code': normalizedCode},
         );
-        if (redeemed == true && mounted) {
+        if (valid == true && mounted) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('vip_code', normalizedCode);
           Navigator.pop(context);
           Navigator.pushNamed(context, AppRoutes.roleChoiceScreen);
           return;
