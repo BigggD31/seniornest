@@ -957,15 +957,53 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      title,
-                      style: GoogleFonts.nunitoSans(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: _isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417),
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                title,
+                                style: GoogleFonts.nunitoSans(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  color: _isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417),
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if ((item['senderRole'] as String?) != null || (item['senderRelationship'] as String?)?.isNotEmpty == true) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF5DA399).withAlpha(31),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  (item['senderRole'] as String?) == 'senior'
+                                      ? 'Senior'
+                                      : ((item['senderRelationship'] as String?)?.isEmpty ?? true ? 'Family' : item['senderRelationship'] as String),
+                                  style: GoogleFonts.nunitoSans(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF5DA399)),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if ((item['recipientLabel'] as String?)?.isNotEmpty ?? false)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text('To: ${item['recipientLabel']}',
+                              style: GoogleFonts.nunitoSans(
+                                fontSize: 12,
+                                color: _textSecondary,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1178,8 +1216,14 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header row
+                    // Header row -- matches Home's exact structure: name +
+                    // role pill inline, then a separate "To: X" line below.
+                    // Previously this only showed a generic relationship
+                    // label with no recipient line at all, because the
+                    // bookmark snapshot never captured senderRole or
+                    // recipientLabel in the first place.
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ProfileAvatarWidget(
                           avatarUrl: item['senderAvatarUrl'] as String?,
@@ -1193,12 +1237,40 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(title,
-                                style: GoogleFonts.nunitoSans(fontSize: 14, fontWeight: FontWeight.w700, color: _textPrimary),
-                                maxLines: 1, overflow: TextOverflow.ellipsis),
-                              if (senderRelationship.isNotEmpty)
-                                Text(senderRelationship,
-                                  style: GoogleFonts.nunitoSans(fontSize: 11, color: _textSecondary)),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(title,
+                                      style: GoogleFonts.nunitoSans(fontSize: 14, fontWeight: FontWeight.w700, color: _textPrimary),
+                                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF5DA399).withAlpha(31),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      (item['senderRole'] as String?) == 'senior'
+                                          ? 'Senior'
+                                          : (senderRelationship.isEmpty ? 'Family' : senderRelationship),
+                                      style: GoogleFonts.nunitoSans(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF5DA399)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if ((item['recipientLabel'] as String?)?.isNotEmpty ?? false)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text('To: ${item['recipientLabel']}',
+                                    style: GoogleFonts.nunitoSans(
+                                      fontSize: 11,
+                                      color: _textSecondary,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),

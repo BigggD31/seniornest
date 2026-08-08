@@ -1648,9 +1648,22 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         _showSizeLimitError('audio', _maxAudioBytes);
         return;
       }
+      // Was missing _voiceHasRecording=true -- without it, the composer's
+      // voice tab always fell through to the empty "tap to start
+      // recording" UI, regardless of whether a real file was already
+      // picked and ready to send. Also reads the real duration so
+      // playback and the progress display aren't stuck at 0:00.
+      Duration? realDuration;
+      try {
+        realDuration = await _audioPlayer.setFilePath(path);
+      } catch (e) {
+        debugPrint('AUDIO_DURATION_READ_ERROR: $e');
+      }
       setState(() {
         _voiceFilePath = path;
         _selectedType = 'voice';
+        _voiceHasRecording = true;
+        _voiceSeconds = realDuration?.inSeconds ?? 0;
       });
     } else {
       if (bytes.length > _maxPhotoBytes) {

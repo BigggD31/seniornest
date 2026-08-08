@@ -1137,6 +1137,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         'category': category,
         'senderName': msg.senderName,
         'senderRelationship': msg.senderRelationship,
+        'senderRole': msg.senderRole,
+        'recipientLabel': msg.recipientLabel,
         'senderAvatarUrl': msg.senderAvatarUrl,
         'senderAvatarLabel': msg.senderAvatarLabel,
         'content': msg.content,
