@@ -1382,20 +1382,6 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         const SizedBox(height: 8),
         _buildSummaryRow(Icons.home_rounded, 'Nest', nestName, isDark),
         const SizedBox(height: 8),
-        // TEMPORARY diagnostic -- remove once real root cause is confirmed.
-        // Small on purpose, but selectable so it can be copied and sent
-        // exactly as-is rather than retyped/paraphrased.
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: SelectableText(
-            'debug: $_nestNameDebugStatus',
-            style: GoogleFonts.nunitoSans(
-              fontSize: 10,
-              color: mutedText,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
         _buildSummaryRow(
           Icons.favorite_rounded,
           'Relationship',

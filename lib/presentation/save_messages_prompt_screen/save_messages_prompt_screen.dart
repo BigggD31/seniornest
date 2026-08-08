@@ -376,6 +376,12 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
                 await prefs.remove('nest_id');
                 await prefs.remove('invite_code');
                 await prefs.setBool('joined_via_invite', false);
+                // Splash screen has its own auto-navigation logic that runs
+                // on load and would otherwise race against this banner --
+                // resetting these two flags is what makes it safely skip
+                // that logic and just show the normal splash screen instead.
+                await prefs.setBool('has_onboarded', false);
+                await prefs.setBool('onboarding_complete', false);
                 if (mounted) {
                   // Previously this called showSnackBar() then immediately
                   // cleared the entire navigation stack with
@@ -387,7 +393,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
                   // settled and staying on screen.
                   Navigator.pushNamedAndRemoveUntil(
                     context,
-                    '/role-choice-screen',
+                    '/splash-screen',
                     (route) => false,
                     arguments: {
                       'bannerMessage':

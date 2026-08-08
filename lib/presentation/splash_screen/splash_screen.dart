@@ -43,6 +43,22 @@ class _SplashScreenState extends State<SplashScreen>
         statusBarIconBrightness: Brightness.dark,
       ),
     );
+    // Shows a banner passed from a redirect (e.g. a removed member trying
+    // to rejoin) once this screen is fully built and stable -- showing it
+    // any earlier gets torn down before it ever really appears.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final bannerMessage = args?['bannerMessage'] as String?;
+      if (bannerMessage != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(bannerMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    });
     _setupAnimations();
     _startSequence();
   }
