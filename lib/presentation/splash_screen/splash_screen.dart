@@ -54,7 +54,7 @@ class _SplashScreenState extends State<SplashScreen>
           SnackBar(
             content: Text(bannerMessage),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
+            duration: const Duration(seconds: 30),
           ),
         );
       }
