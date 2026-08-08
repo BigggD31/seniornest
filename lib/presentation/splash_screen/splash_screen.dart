@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
+import '../../services/auth_service.dart';
 import './widgets/heartbeat_painter_widget.dart';
 import './widgets/nest_logo_widget.dart';
 import '../../widgets/keyboard_done_bar.dart';
@@ -716,17 +717,49 @@ class _InviteCodeSubmitButtonState extends State<_InviteCodeSubmitButton> {
   bool _isValidating = false;
   String? _errorText;
 
-  static const String _vipCode = 'VIP218460';
-
   Future<void> _handleContinue() async {
     final rawCode = widget.codeController.text.trim();
     if (rawCode.isEmpty || _isValidating) return;
     final code = rawCode.toUpperCase();
     final normalizedCode = code.replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
-    if (normalizedCode == _vipCode) {
-      widget.onVipCode();
-      return;
+    // Real, trackable, limited-use VIP codes -- replaces the single
+    // hardcoded VIP218460 that had unlimited uses and zero tracking.
+    if (normalizedCode.startsWith('VIP')) {
+      setState(() {
+        _isValidating = true;
+        _errorText = null;
+      });
+      try {
+        final supabase = Supabase.instance.client;
+        final userId = await AuthService.getReliableUserId();
+        if (userId == null) {
+          setState(() {
+            _isValidating = false;
+            _errorText = "Couldn't verify your account -- please try again.";
+          });
+          return;
+        }
+        final redeemed = await supabase.rpc(
+          'redeem_vip_code',
+          params: {'p_code': normalizedCode, 'p_user_id': userId},
+        );
+        if (redeemed == true) {
+          widget.onVipCode();
+          return;
+        }
+        setState(() {
+          _isValidating = false;
+          _errorText = 'This VIP code is invalid or has already been fully used.';
+        });
+        return;
+      } catch (e) {
+        setState(() {
+          _isValidating = false;
+          _errorText = "Couldn't verify that code -- please try again.";
+        });
+        return;
+      }
     }
 
     setState(() {

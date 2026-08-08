@@ -27,6 +27,7 @@ class _SetupScreenState extends State<SetupScreen>
   bool _isDarkMode = false;
   bool _isLoading = true;
   bool _isNestOwner = false;
+  bool _isVipMember = false;
   String _displayName = '';
   String _preferredName = '';
   // If a preferred name has been set, show that everywhere; otherwise fall back to first name.
@@ -237,9 +238,22 @@ class _SetupScreenState extends State<SetupScreen>
       debugPrint('BIRTHDAY_ANNIVERSARY_LOAD_ERROR: $e');
     }
 
+    bool isVip = false;
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null) {
+        final result = await Supabase.instance.client
+            .rpc('is_vip_member', params: {'p_user_id': userId});
+        isVip = result == true;
+      }
+    } catch (e) {
+      debugPrint('VIP_CHECK_ERROR: $e');
+    }
+
     setState(() {
       _isSenior = isSenior;
       _isNestOwner = isNestOwner;
+      _isVipMember = isVip;
       _displayName = savedName;
       _preferredName = savedPreferredName;
       _nestName = fetchedNestName ?? prefs.getString('nest_name') ?? 'Your Nest';
@@ -512,6 +526,31 @@ class _SetupScreenState extends State<SetupScreen>
                         color: Colors.white,
                       ),
                     ),
+                    if (_isVipMember)
+                      Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD4AA00).withAlpha(60),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFD4AA00), width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.workspace_premium_rounded, color: Color(0xFFD4AA00), size: 12),
+                            const SizedBox(width: 4),
+                            Text(
+                              'VIP Lifetime Member',
+                              style: GoogleFonts.nunitoSans(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFFD4AA00),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     // Clearly labeled role line
                     if (_isSenior)
                       Container(

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
+import '../../services/auth_service.dart';
 import '../splash_screen/widgets/nest_logo_widget.dart';
 import './widgets/role_button_widget.dart';
 import '../../widgets/keyboard_done_bar.dart';
@@ -359,8 +360,6 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
   bool _isLoading = false;
   String? _errorText;
 
-  static const String _vipCode = 'VIP218460';
-
   @override
   void dispose() {
     _codeController.dispose();
@@ -373,12 +372,46 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
     final code = rawCode.toUpperCase();
     final normalizedCode = code.replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
-    if (normalizedCode == _vipCode) {
-      if (mounted) {
-        Navigator.pop(context);
-        Navigator.pushNamed(context, AppRoutes.roleChoiceScreen);
+    // Real, trackable, limited-use VIP codes -- replaces the single
+    // hardcoded VIP218460 that had unlimited uses and zero tracking.
+    // Each code allows exactly 2 uses, by design allowing the SAME person
+    // to redeem it twice (once per nest, e.g. both sides of their family).
+    if (normalizedCode.startsWith('VIP')) {
+      setState(() {
+        _isLoading = true;
+        _errorText = null;
+      });
+      try {
+        final supabase = Supabase.instance.client;
+        final userId = await AuthService.getReliableUserId();
+        if (userId == null) {
+          setState(() {
+            _isLoading = false;
+            _errorText = "Couldn't verify your account -- please try again.";
+          });
+          return;
+        }
+        final redeemed = await supabase.rpc(
+          'redeem_vip_code',
+          params: {'p_code': normalizedCode, 'p_user_id': userId},
+        );
+        if (redeemed == true && mounted) {
+          Navigator.pop(context);
+          Navigator.pushNamed(context, AppRoutes.roleChoiceScreen);
+          return;
+        }
+        setState(() {
+          _isLoading = false;
+          _errorText = 'This VIP code is invalid or has already been fully used.';
+        });
+        return;
+      } catch (e) {
+        setState(() {
+          _isLoading = false;
+          _errorText = "Couldn't verify that code -- please try again.";
+        });
+        return;
       }
-      return;
     }
 
     setState(() {
