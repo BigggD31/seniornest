@@ -102,14 +102,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   // speech audio is only ~50-60MB).
   static const int _maxVideoBytes = 750 * 1024 * 1024;
   static const int _maxPhotoBytes = 20 * 1024 * 1024;
-  // NOT YET ENFORCED ANYWHERE: there is currently no working path to pick an
-  // existing audio file at all -- audio is only ever live-recorded (capped
-  // at _maxRecordSeconds, nowhere near this size), and the Files picker
-  // still mishandles any non-photo file as a photo (separate known bug).
-  // This constant is locked in now so the agreed number isn't lost, and
-  // should be wired in as part of fixing the Files picker's audio/video
-  // type detection.
-  // ignore: unused_field
   static const int _maxAudioBytes = 300 * 1024 * 1024;
 
   void _showSizeLimitError(String mediaType, int maxBytes) {
@@ -1610,19 +1602,65 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       allowMultiple: false,
       withData: true,
     );
-    if (result != null && result.files.isNotEmpty && mounted) {
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes != null) {
-        if (bytes.length > _maxPhotoBytes) {
-          _showSizeLimitError('photo', _maxPhotoBytes);
-          return;
-        }
-        setState(() {
-          _selectedPhotoBase64 = base64Encode(bytes);
-          _selectedType = 'photo';
-        });
+    if (result == null || result.files.isEmpty || !mounted) return;
+
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null) return;
+
+    // Previously this treated EVERY file picked here as a photo, regardless
+    // of what it actually was -- a real video or audio file would silently
+    // get misclassified and either fail or corrupt on send. Now detects the
+    // real type from the file extension and routes each to its correct
+    // handling, same as the Photos library picker already does.
+    final ext = (file.extension ?? '').toLowerCase();
+    final isVideo = ['mp4', 'mov', 'm4v'].contains(ext);
+    final isAudio = ['m4a', 'mp3', 'wav', 'aac', 'caf'].contains(ext);
+
+    if (isVideo) {
+      if (bytes.length > _maxVideoBytes) {
+        _showSizeLimitError('video', _maxVideoBytes);
+        return;
       }
+      final path = file.path;
+      if (path == null) {
+        _showSizeLimitError('video', _maxVideoBytes); // generic fallback message; path is required to preview/upload
+        return;
+      }
+      setState(() {
+        _videoFilePath = path;
+        _videoIsFromRecording = false;
+        _selectedType = 'video';
+        _videoHasRecording = true;
+      });
+      _videoPlayerController = VideoPlayerController.file(File(path));
+      await _videoPlayerController!.initialize();
+      setState(() {
+        _videoSeconds = _videoPlayerController!.value.duration.inSeconds;
+      });
+    } else if (isAudio) {
+      if (bytes.length > _maxAudioBytes) {
+        _showSizeLimitError('audio', _maxAudioBytes);
+        return;
+      }
+      final path = file.path;
+      if (path == null) {
+        _showSizeLimitError('audio', _maxAudioBytes);
+        return;
+      }
+      setState(() {
+        _voiceFilePath = path;
+        _selectedType = 'voice';
+      });
+    } else {
+      if (bytes.length > _maxPhotoBytes) {
+        _showSizeLimitError('photo', _maxPhotoBytes);
+        return;
+      }
+      setState(() {
+        _selectedPhotoBase64 = base64Encode(bytes);
+        _selectedType = 'photo';
+      });
     }
   }
 
