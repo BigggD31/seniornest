@@ -46,6 +46,14 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   final FocusNode _textFocusNode = FocusNode();
   String _selectedType = 'text';
   String? _selectedPhotoBase64;
+  // Memoizes the decoded photo bytes so rebuilds (e.g. every time the
+  // keyboard opens/closes, since build() reads keyboard height directly)
+  // reuse the same decoded object instead of re-decoding from scratch
+  // every time -- a fresh Uint8List each rebuild made Flutter treat it as
+  // a brand-new image and briefly flicker/redraw it, even though the
+  // actual photo never changed.
+  String? _lastDecodedPhotoBase64;
+  Uint8List? _lastDecodedPhotoBytes;
   final List<String> _selectedRecipients = [];
   List<Map<String, dynamic>> _nestRecipients = []; // real nest members (excludes current user)
 
@@ -2455,15 +2463,20 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildPhotoComposer() {
-    final photoBytes = _selectedPhotoBase64 != null
-        ? (() {
-            try {
-              return base64Decode(_selectedPhotoBase64!);
-            } catch (_) {
-              return null;
-            }
-          })()
-        : null;
+    Uint8List? photoBytes;
+    if (_selectedPhotoBase64 != null) {
+      if (_selectedPhotoBase64 == _lastDecodedPhotoBase64 && _lastDecodedPhotoBytes != null) {
+        photoBytes = _lastDecodedPhotoBytes;
+      } else {
+        try {
+          photoBytes = base64Decode(_selectedPhotoBase64!);
+          _lastDecodedPhotoBase64 = _selectedPhotoBase64;
+          _lastDecodedPhotoBytes = photoBytes;
+        } catch (_) {
+          photoBytes = null;
+        }
+      }
+    }
 
     if (photoBytes == null) {
       return _buildTextComposer();
