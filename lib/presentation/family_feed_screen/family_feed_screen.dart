@@ -473,9 +473,23 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // in last" even with a zero-duration animation. Local prefs reads are
     // fast enough to paint alongside the rest of Home's first frame,
     // unlike a real network round-trip.
+    //
+    // Cache key includes the current user's own id, not just the nest --
+    // the "other members" list always excludes whoever's currently
+    // viewing it, so it's a genuinely different list depending on who
+    // that is, even for the exact same nest. Without the user id in the
+    // key, switching between accounts on the same nest/device (D Von's
+    // normal testing pattern) briefly showed the PREVIOUS viewer's cached
+    // list -- which could include the CURRENT viewer's own avatar, since
+    // it was built to exclude someone else.
+    final currentUserIdForCache = Supabase.instance.client.auth.currentUser?.id ?? '';
     final cachedMembersNestId = prefs.getString('cached_nest_members_nest_id') ?? '';
+    final cachedMembersUserId = prefs.getString('cached_nest_members_user_id') ?? '';
     List<Map<String, dynamic>> initialNestMembers = [];
-    if (cachedMembersNestId.isNotEmpty && cachedMembersNestId == _currentNestIdForCache) {
+    if (cachedMembersNestId.isNotEmpty &&
+        cachedMembersNestId == _currentNestIdForCache &&
+        cachedMembersUserId.isNotEmpty &&
+        cachedMembersUserId == currentUserIdForCache) {
       final cachedMembersJson = prefs.getString('cached_nest_members');
       if (cachedMembersJson != null && cachedMembersJson.isNotEmpty) {
         try {
@@ -787,8 +801,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       }
 
       try {
+        final cacheUserId = Supabase.instance.client.auth.currentUser?.id ?? '';
         await prefs.setString('cached_nest_members', jsonEncode(membersToShow));
         await prefs.setString('cached_nest_members_nest_id', nestId);
+        await prefs.setString('cached_nest_members_user_id', cacheUserId);
       } catch (_) {}
     } catch (e) {
       debugPrint('NEST_MEMBERS_LOAD_ERROR: $e');
