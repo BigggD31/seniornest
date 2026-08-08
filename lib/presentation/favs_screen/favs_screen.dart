@@ -1049,67 +1049,67 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Previously audio/video/photo and text were all one
+                    // if/else-if chain -- whichever matched first was
+                    // shown, and any caption text was silently dropped for
+                    // every media type. Now the media (whichever type it
+                    // is) and the caption text are two separate blocks
+                    // that both always show when present, instead of one
+                    // excluding the other.
                     if ((category == 'Audio' || entryType == 'audio') && mediaUrl.isNotEmpty)
                       _FavsAudioPlayer(audioUrl: mediaUrl, isDarkMode: _isDarkMode)
                     else if ((category == 'Video' || entryType == 'video') && mediaUrl.isNotEmpty)
                       _FavsVideoPlayer(videoUrl: mediaUrl, isDarkMode: _isDarkMode)
-                    else ...[
-                      // Previously photo and text were an if/else-if chain --
-                      // whichever matched first was shown, and the other was
-                      // silently dropped. A bookmark with both a photo AND
-                      // real text (like this one) only ever showed the
-                      // photo. Now both show together, matching Home.
-                      if ((category == 'Photos') && imageUrl.isNotEmpty)
-                        GestureDetector(
-                          onTap: () => openFullscreenImage(
-                            context: context,
-                            imageUrl: imageUrl,
-                            semanticLabel: title,
-                            isDarkMode: _isDarkMode,
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Stack(
-                              children: [
-                                Image.network(imageUrl, width: double.infinity, fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const SizedBox.shrink()),
-                                // Same tap-to-expand hint used on Home, so
-                                // the affordance is visually consistent
-                                // across both screens, not just functional.
-                                Positioned(
-                                  bottom: 8,
-                                  right: 8,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withAlpha(120),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.fullscreen_rounded, color: Colors.white, size: 14),
-                                        SizedBox(width: 3),
-                                        Text('Tap to expand',
-                                            style: TextStyle(
-                                                color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500)),
-                                      ],
-                                    ),
+                    else if ((category == 'Photos') && imageUrl.isNotEmpty)
+                      GestureDetector(
+                        onTap: () => openFullscreenImage(
+                          context: context,
+                          imageUrl: imageUrl,
+                          semanticLabel: title,
+                          isDarkMode: _isDarkMode,
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Stack(
+                            children: [
+                              Image.network(imageUrl, width: double.infinity, fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                              // Same tap-to-expand hint used on Home, so
+                              // the affordance is visually consistent
+                              // across both screens, not just functional.
+                              Positioned(
+                                bottom: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withAlpha(120),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.fullscreen_rounded, color: Colors.white, size: 14),
+                                      SizedBox(width: 3),
+                                      Text('Tap to expand',
+                                          style: TextStyle(
+                                              color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500)),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
-                      if ((category == 'Photos') && imageUrl.isNotEmpty && content2.isNotEmpty)
-                        const SizedBox(height: 16),
-                      if (content2.isNotEmpty)
-                        Text(content2,
-                            style: GoogleFonts.nunitoSans(
-                                fontSize: 16,
-                                color: _isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417),
-                                height: 1.7)),
-                    ],
+                      ),
+                    if ((mediaUrl.isNotEmpty || imageUrl.isNotEmpty) && content2.isNotEmpty)
+                      const SizedBox(height: 16),
+                    if (content2.isNotEmpty)
+                      Text(content2,
+                          style: GoogleFonts.nunitoSans(
+                              fontSize: 16,
+                              color: _isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417),
+                              height: 1.7)),
                   ],
                 ),
               ),
@@ -1287,12 +1287,16 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    // Content — audio player, video player, text, or photo
+                    // Content — audio player, video player, or nothing extra
+                    // (photo has its own thumbnail block above already).
+                    // Caption text now shows alongside any of these instead
+                    // of only when neither audio nor video matched.
                     if ((category == 'Audio' || entryType == 'audio') && mediaUrl.isNotEmpty)
                       _FavsAudioPlayer(audioUrl: mediaUrl, isDarkMode: _isDarkMode)
                     else if ((category == 'Video' || entryType == 'video') && mediaUrl.isNotEmpty)
-                      _FavsVideoPlayer(videoUrl: mediaUrl, isDarkMode: _isDarkMode)
-                    else if (subtitle.isNotEmpty) ...[
+                      _FavsVideoPlayer(videoUrl: mediaUrl, isDarkMode: _isDarkMode),
+                    if (subtitle.isNotEmpty) ...[
+                      if (mediaUrl.isNotEmpty) const SizedBox(height: 10),
                       Text(subtitle,
                         style: GoogleFonts.nunitoSans(fontSize: 13, color: _textSecondary, height: 1.5),
                         maxLines: 3, overflow: TextOverflow.ellipsis),

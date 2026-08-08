@@ -2608,25 +2608,45 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   }
 
   void _toggleVoicePlayback() {
+    // This was a fake visual timer that never played real audio at all --
+    // just counted seconds up to simulate progress. The real pattern
+    // already existed elsewhere in this same file (the live-recording
+    // review modal's own togglePlayback), just never applied here. Now
+    // uses the same real _audioPlayer.setFilePath()+play() call.
     if (_voiceIsPlaying) {
+      _audioPlayer.stop();
       _voicePlayTimer?.cancel();
       setState(() => _voiceIsPlaying = false);
     } else {
+      if (_voiceFilePath == null) return;
       setState(() {
         _voiceIsPlaying = true;
         _voicePlayPosition = 0;
       });
-      _voicePlayTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-        if (_voicePlayPosition >= _voiceSeconds - 1) {
-          t.cancel();
-          setState(() {
-            _voiceIsPlaying = false;
-            _voicePlayPosition = 0;
-          });
-        } else {
-          setState(() => _voicePlayPosition++);
+      () async {
+        try {
+          await _audioPlayer.setFilePath(_voiceFilePath!);
+          await _audioPlayer.play();
+        } catch (e) {
+          debugPrint('VOICE_PLAYBACK_ERROR: $e');
+          if (mounted) setState(() => _voiceIsPlaying = false);
+          return;
         }
-      });
+        _voicePlayTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+          if (_voicePlayPosition >= _voiceSeconds - 1) {
+            t.cancel();
+            _audioPlayer.stop();
+            if (mounted) {
+              setState(() {
+                _voiceIsPlaying = false;
+                _voicePlayPosition = 0;
+              });
+            }
+          } else {
+            if (mounted) setState(() => _voicePlayPosition++);
+          }
+        });
+      }();
     }
   }
 

@@ -396,7 +396,12 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('vip_code', normalizedCode);
           Navigator.pop(context);
-          Navigator.pushNamed(context, AppRoutes.roleChoiceScreen);
+          // Same reasoning as splash_screen.dart's VIP handler -- a VIP
+          // code always means setting up your own nest, so this skips the
+          // role-choice screen entirely instead of looping back through
+          // it (which previously allowed picking "I'm Family" after a
+          // valid VIP code).
+          Navigator.pushNamed(context, AppRoutes.seniorOnboardingScreen);
           return;
         }
         setState(() {

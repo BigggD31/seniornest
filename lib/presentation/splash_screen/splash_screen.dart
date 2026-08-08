@@ -237,9 +237,15 @@ class _SplashScreenState extends State<SplashScreen>
                   },
                   onVipCode: () {
                     Navigator.pop(sheetContext);
+                    // A VIP code always means the redeemer is setting up
+                    // their own nest -- there's no real role choice to
+                    // make, so this skips straight to senior onboarding
+                    // instead of the generic role-choice screen, which
+                    // previously let someone pick "I'm Family" after a
+                    // valid VIP code, which should never be an option here.
                     Navigator.pushNamed(
                       context,
-                      AppRoutes.roleChoiceScreen,
+                      AppRoutes.seniorOnboardingScreen,
                     );
                   },
                 ),
