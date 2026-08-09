@@ -761,6 +761,16 @@ class _InviteCodeSubmitButtonState extends State<_InviteCodeSubmitButton> {
         if (valid == true) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('vip_code', normalizedCode);
+          // Explicitly clear any leftover invite state from a previous
+          // session on this device -- confirmed real bug: without this, a
+          // stale joined_via_invite=true and nest_id from earlier invite-
+          // code testing silently connected a brand-new VIP redemption to
+          // that OLD nest instead of creating its own new one. The regular
+          // invite path always sets these fresh for its own scenario; VIP
+          // never had the same protection.
+          await prefs.setBool('joined_via_invite', false);
+          await prefs.remove('nest_id');
+          await prefs.remove('invite_code');
           widget.onVipCode();
           return;
         }

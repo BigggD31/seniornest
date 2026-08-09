@@ -395,6 +395,13 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
         if (valid == true && mounted) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('vip_code', normalizedCode);
+          // Explicitly clear any leftover invite state from a previous
+          // session -- same real bug fixed in splash_screen.dart's VIP
+          // handler: without this, stale invite data from earlier testing
+          // silently connected a brand-new VIP redemption to an old nest.
+          await prefs.setBool('joined_via_invite', false);
+          await prefs.remove('nest_id');
+          await prefs.remove('invite_code');
           // The user is already on role_choice_screen underneath this
           // sheet -- popping is enough to let them pick either "I'm the
           // Senior" or "I'm Family," both valid here since neither has an
