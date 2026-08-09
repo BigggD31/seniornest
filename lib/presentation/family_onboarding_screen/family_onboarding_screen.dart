@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -24,6 +25,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     with TickerProviderStateMixin {
   int _currentStep = 0;
   bool _isLoading = false;
+  bool _isAdvancingStep = false;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _preferredNameController = TextEditingController();
@@ -174,6 +176,21 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
   }
 
   Future<void> _nextStep() async {
+    // Guards against repeated taps firing this multiple times overlapping
+    // -- confirmed real symptom from device testing: tapping Continue
+    // repeatedly during any delay (even a brief one) could re-trigger this
+    // whole function again before the first call finished, causing the
+    // page to visibly reset partway through.
+    if (_isAdvancingStep) return;
+    _isAdvancingStep = true;
+    try {
+      await _advanceStep();
+    } finally {
+      _isAdvancingStep = false;
+    }
+  }
+
+  Future<void> _advanceStep() async {
     if (_currentStep == 0) {
       if (_nameController.text.trim().isEmpty) {
         _showError('Please enter your name');
@@ -313,11 +330,14 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     // code, nothing about the user's identity.
     await _fetchAndDisplayRealNestName(inviteCode);
 
-    // Step 2: actually join as this specific person, in the background.
-    // This genuinely does need a resolved user id, so it gets its own
-    // retry loop, separate from name display -- a slow/failed join no
-    // longer holds the correct name hostage.
-    await _joinNestInBackground(inviteCode);
+    // Step 2: actually join as this specific person, genuinely in the
+    // background this time -- previously this was still awaited despite
+    // the comment saying otherwise, which meant the Continue button on
+    // this step silently blocked for the full retry sequence (up to
+    // several real seconds) with no loading indicator at all. Not
+    // awaiting here lets the button advance immediately while this
+    // keeps running independently.
+    unawaited(_joinNestInBackground(inviteCode));
   }
 
   Future<void> _fetchAndDisplayRealNestName(String inviteCode) async {
