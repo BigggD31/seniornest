@@ -238,15 +238,19 @@ class _SplashScreenState extends State<SplashScreen>
                   },
                   onVipCode: () {
                     Navigator.pop(sheetContext);
-                    // A VIP code always means the redeemer is setting up
-                    // their own nest -- there's no real role choice to
-                    // make, so this skips straight to senior onboarding
-                    // instead of the generic role-choice screen, which
-                    // previously let someone pick "I'm Family" after a
-                    // valid VIP code, which should never be an option here.
+                    // Both "I'm the Senior" and "I'm Family" are valid
+                    // here -- neither has an invite code attached, so
+                    // family_onboarding_screen.dart correctly treats
+                    // either choice as creating a brand-new nest as its
+                    // owner, never joining someone else's existing one.
+                    // (Previously this skipped straight to senior
+                    // onboarding, which was too narrow -- a VIP redeemer
+                    // setting up a nest for their own senior relative,
+                    // picking "I'm Family," is just as valid a nest-owner
+                    // path as picking "I'm the Senior" themselves.)
                     Navigator.pushNamed(
                       context,
-                      AppRoutes.seniorOnboardingScreen,
+                      AppRoutes.roleChoiceScreen,
                     );
                   },
                 ),
