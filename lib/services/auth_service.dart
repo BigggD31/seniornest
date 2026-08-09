@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/app_state.dart';
 
 class AuthService {
   static SupabaseClient get _client => Supabase.instance.client;
@@ -255,8 +257,11 @@ class AuthService {
     'story_prompts', 'vip_code',
     'cached_nest_members', 'cached_nest_members_nest_id', 'cached_nest_members_user_id',
     'cached_real_messages', 'cached_real_messages_nest_id',
-    'cached_checkin_nest_id', 'cached_checkin_date', 'cached_checkin_senior_id',
-    'cached_checkin_senior_name', 'cached_checkin_checked_in', 'cached_checkin_time',
+    // cached_checkin_* deliberately excluded -- "has the senior checked in
+    // today" is a nest-level fact, not tied to who's currently viewing it,
+    // same as nest_name/user_role were incorrectly included before. Wiping
+    // it briefly showed "not checked in" right after switching accounts,
+    // even though a live server re-check should correct it shortly after.
   ];
 
   /// Detects a genuine account switch on this device and wipes every
@@ -308,6 +313,16 @@ class AuthService {
         await prefs.remove(key);
       }
     }
+
+    // dark_mode's underlying prefs value gets correctly wiped above, but
+    // the app-wide notifier that actually drives the visible toggle and
+    // theme is a separate, in-memory value -- main.dart only re-syncs it
+    // at cold app launch, not at an in-session sign-out/sign-in cycle
+    // (the exact scenario this whole function exists for). Without this,
+    // the underlying data was correct but the toggle stayed visually
+    // stuck on the previous account's setting until manually tapped.
+    final brightness = SchedulerBinding.instance.platformDispatcher.platformBrightness;
+    appDarkModeNotifier.value = brightness == Brightness.dark;
 
     await prefs.setString('last_known_user_id', currentUserId);
   }

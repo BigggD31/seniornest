@@ -3542,6 +3542,16 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     if (_isSending) return;
     setState(() => _isSending = true);
 
+    // Previously nothing stopped an active preview playback when send was
+    // tapped -- if you were mid-preview of a picked/recorded voice
+    // message, it just kept playing after the message was already sent,
+    // only stopping if you happened to navigate away from the screen.
+    if (_voiceIsPlaying) {
+      _voicePlayTimer?.cancel();
+      await _audioPlayer.stop();
+      _voiceIsPlaying = false;
+    }
+
     try {
       final supabase = Supabase.instance.client;
       // Previously this only checked currentUser?.id once, with no retry --
