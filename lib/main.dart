@@ -149,6 +149,13 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _resolveInitialRoute() async {
     try {
+      // Must run before anything else in this function, including the
+      // dark_mode read two lines down -- detects a genuine account switch
+      // on this device (e.g. the app was relaunched under a different
+      // persisted session) and wipes every locally cached piece of
+      // account-specific data before it can be applied stale.
+      await AuthService.clearStaleAccountDataIfUserChanged();
+
       final prefs = await SharedPreferences.getInstance();
       // Load persisted dark mode preference; if never set, follow system brightness
       final savedDarkMode = prefs.getBool('dark_mode');

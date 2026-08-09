@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   static SupabaseClient get _client => Supabase.instance.client;
@@ -225,6 +226,82 @@ class AuthService {
       debugPrint('getReliableUserId: waiting for auth state event failed/timed out: $e');
       return null;
     }
+  }
+
+  // Every locally-cached key that's tied to a specific account, not the
+  // device -- audited Aug 8 2026 after dark_mode, user_role, and nest_name
+  // were all confirmed bleeding between accounts on the same device
+  // (D Von's normal testing pattern: sign out of one real account, sign
+  // into a different one, often without force-quitting the app in
+  // between). Deliberately excludes things that ARE genuinely fine as
+  // device-wide: text_size, first_load, just_signed_out, and the various
+  // sample_banner_dismissed flags.
+  static const List<String> _accountScopedPrefsKeys = [
+    'nest_id', 'invite_code', 'has_onboarded', 'onboarding_complete',
+    'bookmarks', 'bookmarked_items', 'dark_mode', 'user_role', 'nest_name',
+    'display_name', 'preferred_name', 'user_name', 'senior_name',
+    'relationship', 'relation_type', 'meds_reminders', 'daily_check_in',
+    'notify_check_in', 'notify_messages', 'is_guest', 'joined_via_invite',
+    'birthday', 'anniversary', 'has_real_post', 'has_sent_messages',
+    'has_sent_stories', 'removed_member_ids', 'invite_code_shared',
+    'story_prompts', 'vip_code',
+    'cached_nest_members', 'cached_nest_members_nest_id', 'cached_nest_members_user_id',
+    'cached_real_messages', 'cached_real_messages_nest_id',
+    'cached_checkin_nest_id', 'cached_checkin_date', 'cached_checkin_senior_id',
+    'cached_checkin_senior_name', 'cached_checkin_checked_in', 'cached_checkin_time',
+  ];
+
+  /// Detects a genuine account switch on this device and wipes every
+  /// locally cached piece of account-specific data before anything can
+  /// read a stale value left over from the previous person. This is the
+  /// single, centralized fix for what were previously several separate
+  /// bugs sharing one root cause: local preferences with no connection to
+  /// which account actually set them.
+  ///
+  /// Pass [knownUserId] when it's already available (e.g. straight from a
+  /// sign-in callback) to skip an unnecessary re-resolution; otherwise
+  /// falls back to [getReliableUserId]. Uses the reliable resolver
+  /// specifically, not a raw currentUser?.id check -- a session that's
+  /// still establishing (a real, confirmed race condition in this exact
+  /// codebase) must never be mistaken for "a different user," which would
+  /// wipe a legitimately-signed-in person's own data for no reason.
+  static Future<void> clearStaleAccountDataIfUserChanged({String? knownUserId}) async {
+    final currentUserId = knownUserId ?? await getReliableUserId();
+    if (currentUserId == null) {
+      // Can't reliably determine who's signed in right now -- do nothing
+      // rather than risk wiping real data on an inconclusive check.
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final lastKnownUserId = prefs.getString('last_known_user_id');
+
+    if (lastKnownUserId == null || lastKnownUserId.isEmpty) {
+      // First time this check has ever run on this device (e.g. right
+      // after this feature ships) -- just record who's signed in now,
+      // don't wipe anything, since there's no actual evidence of a switch.
+      await prefs.setString('last_known_user_id', currentUserId);
+      return;
+    }
+
+    if (lastKnownUserId == currentUserId) {
+      return;
+    }
+
+    // Confirmed genuine account switch -- wipe every account-specific key.
+    for (final key in _accountScopedPrefsKeys) {
+      await prefs.remove(key);
+    }
+    // Date-suffixed keys (good_today_2026-08-08, meds_reminder_2026-08-08,
+    // etc.) need prefix matching since the exact key varies by day.
+    final allKeys = prefs.getKeys().toList();
+    for (final key in allKeys) {
+      if (key.startsWith('good_today_') || key.startsWith('meds_reminder_')) {
+        await prefs.remove(key);
+      }
+    }
+
+    await prefs.setString('last_known_user_id', currentUserId);
   }
 
   // ── Friendly error messages ───────────────────────────────────────────────

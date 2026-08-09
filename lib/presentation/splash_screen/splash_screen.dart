@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
+import '../../services/auth_service.dart';
 import './widgets/heartbeat_painter_widget.dart';
 import './widgets/nest_logo_widget.dart';
 import '../../widgets/keyboard_done_bar.dart';
@@ -261,6 +262,14 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<void> _checkExistingSession() async {
     try {
+      // Must run before anything else in this function -- this screen's
+      // own session check is a known duplicate path to main.dart's
+      // _resolveInitialRoute() (documented below), and has been missed by
+      // a fix applied only to the other path before. Applying the
+      // stale-account-data check here too, not just in main.dart, to
+      // avoid that exact mistake happening again.
+      await AuthService.clearStaleAccountDataIfUserChanged();
+
       final session = Supabase.instance.client.auth.currentSession;
       final prefs = await SharedPreferences.getInstance();
       if (session != null) {

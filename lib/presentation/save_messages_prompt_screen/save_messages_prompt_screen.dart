@@ -91,6 +91,15 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
   }
 
   Future<void> _navigateToHome({String? userId}) async {
+    // Must run before anything else in this function -- detects a genuine
+    // account switch on this device and wipes every locally cached piece
+    // of account-specific data before it can be read stale. This is the
+    // single root-cause fix for what were previously several separate bugs
+    // (dark mode, user role, nest name all bleeding between accounts on
+    // the same device) sharing one cause: local prefs with no connection
+    // to which account set them.
+    await AuthService.clearStaleAccountDataIfUserChanged(knownUserId: userId);
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_complete', true);
     await prefs.setBool('first_load', true);
