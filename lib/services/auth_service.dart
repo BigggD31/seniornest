@@ -230,20 +230,28 @@ class AuthService {
 
   // Every locally-cached key that's tied to a specific account, not the
   // device -- audited Aug 8 2026 after dark_mode, user_role, and nest_name
-  // were all confirmed bleeding between accounts on the same device
-  // (D Von's normal testing pattern: sign out of one real account, sign
-  // into a different one, often without force-quitting the app in
-  // between). Deliberately excludes things that ARE genuinely fine as
-  // device-wide: text_size, first_load, just_signed_out, and the various
-  // sample_banner_dismissed flags.
+  // were all confirmed bleeding between accounts on the same device.
+  //
+  // CORRECTED same day after a real regression: this list originally also
+  // included nest_id, invite_code, user_role, joined_via_invite,
+  // display_name, preferred_name, senior_name, relationship, nest_name,
+  // birthday, and anniversary -- all of which get actively SET during the
+  // invite-code/onboarding flow itself, BEFORE sign-in fully completes
+  // (which is when this wipe runs). Wiping them destroyed correct,
+  // freshly-set data for a brand-new account mid-onboarding, not just
+  // stale data from a previous one -- a family member who'd just joined
+  // via invite ended up looking like a nest owner with no invite code at
+  // all. Those fields are deliberately excluded now; has_onboarded /
+  // onboarding_complete staying in this list is what forces a genuinely
+  // different account through onboarding fresh, which naturally and
+  // correctly repopulates all of them anyway -- no separate wipe needed.
   static const List<String> _accountScopedPrefsKeys = [
-    'nest_id', 'invite_code', 'has_onboarded', 'onboarding_complete',
-    'bookmarks', 'bookmarked_items', 'dark_mode', 'user_role', 'nest_name',
-    'display_name', 'preferred_name', 'user_name', 'senior_name',
-    'relationship', 'relation_type', 'meds_reminders', 'daily_check_in',
-    'notify_check_in', 'notify_messages', 'is_guest', 'joined_via_invite',
-    'birthday', 'anniversary', 'has_real_post', 'has_sent_messages',
-    'has_sent_stories', 'removed_member_ids', 'invite_code_shared',
+    'has_onboarded', 'onboarding_complete',
+    'bookmarks', 'bookmarked_items', 'dark_mode',
+    'meds_reminders', 'daily_check_in',
+    'notify_check_in', 'notify_messages', 'is_guest',
+    'has_real_post', 'has_sent_messages',
+    'has_sent_stories', 'removed_member_ids',
     'story_prompts', 'vip_code',
     'cached_nest_members', 'cached_nest_members_nest_id', 'cached_nest_members_user_id',
     'cached_real_messages', 'cached_real_messages_nest_id',
