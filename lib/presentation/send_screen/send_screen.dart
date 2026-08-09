@@ -46,6 +46,13 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   final TextEditingController _videoCaptionController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
   String _selectedType = 'text';
+  // Which tab pill is visually highlighted -- deliberately separate from
+  // _selectedType (which drives what content actually renders below).
+  // Only changes when a tab is explicitly tapped, never as a side effect
+  // of picking a file -- picking an mp3/mp4/photo via "Choose File"
+  // should attach and preview it without moving the highlighted tab,
+  // exactly like picking any other file type already does.
+  String _activeTabId = 'text';
   String? _selectedPhotoBase64;
   // Memoizes the decoded photo bytes so rebuilds (e.g. every time the
   // keyboard opens/closes, since build() reads keyboard height directly)
@@ -2074,7 +2081,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         Row(
           children: List.generate(types.length, (i) {
             final type = types[i];
-            final isSelected = _selectedType == type['id'];
+            final isSelected = _activeTabId == type['id'];
             final color = type['color'] as Color;
             final bgColor = _isDarkMode
                 ? type['bgDark'] as Color
@@ -2085,19 +2092,34 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 onTap: () {
                   final typeId = type['id'] as String;
                   if (typeId == 'voice') {
-                    setState(() => _selectedType = 'voice');
+                    setState(() {
+                      _selectedType = 'voice';
+                      _activeTabId = 'voice';
+                    });
                     _showVoiceRecordingModal().then((_) {
-                      setState(() => _selectedType = 'text');
+                      setState(() {
+                        _selectedType = 'text';
+                        _activeTabId = 'text';
+                      });
                     });
                   } else if (typeId == 'video') {
-                    setState(() => _selectedType = 'video');
+                    setState(() {
+                      _selectedType = 'video';
+                      _activeTabId = 'video';
+                    });
                     _showVideoRecordingModal().then((_) {
-                      setState(() => _selectedType = 'text');
+                      setState(() {
+                        _selectedType = 'text';
+                        _activeTabId = 'text';
+                      });
                     });
                   } else if (typeId == 'photo') {
                     _showPhotoOptionsSheet();
                   } else {
-                    setState(() => _selectedType = typeId);
+                    setState(() {
+                      _selectedType = typeId;
+                      _activeTabId = typeId;
+                    });
                   }
                 },
                 child: AnimatedContainer(
