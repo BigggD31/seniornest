@@ -1316,7 +1316,16 @@ class _AddContactSheetState extends State<_AddContactSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    return GestureDetector(
+    // Wrapped in its own Scaffold so ScaffoldMessenger.of(context) inside
+    // _saveContact() finds THIS sheet's messenger instead of bubbling past
+    // it to the page underneath -- without this, showModalBottomSheet has
+    // no local Scaffold ancestor, so the "include area code" SnackBar was
+    // rendering anchored to the screen behind the sheet, appearing to sit
+    // behind/below it instead of on top where it's actually visible.
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      resizeToAvoidBottomInset: false,
+      body: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -1443,6 +1452,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
         ],
       ),
     ),
+  ),
   );
   }
 }
@@ -1615,7 +1625,14 @@ class _EditContactSheetState extends State<_EditContactSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    return GestureDetector(
+    // Same fix as _AddContactSheet above: wrapped in its own Scaffold so
+    // ScaffoldMessenger.of(context) finds THIS sheet's messenger instead of
+    // bubbling past it to the page underneath, which was rendering the
+    // "include area code" SnackBar behind the sheet instead of on top of it.
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      resizeToAvoidBottomInset: false,
+      body: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -1794,6 +1811,7 @@ class _EditContactSheetState extends State<_EditContactSheet> {
         ],
       ),
     ),
+  ),
   );
   }
 }
