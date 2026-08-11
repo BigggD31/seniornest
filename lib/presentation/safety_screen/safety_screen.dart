@@ -93,6 +93,7 @@ class _SafetyScreenState extends State<SafetyScreen>
             .from('safety_contacts')
             .select()
             .eq('user_id', userId)
+            .order('is_primary', ascending: false)
             .order('created_at');
         final contacts = response as List<dynamic>;
         setState(() {
@@ -1245,6 +1246,22 @@ class _AddContactSheetState extends State<_AddContactSheet> {
         _phoneController.text.trim().isEmpty) {
       return;
     }
+    // The actual call button just strips non-digits and hands whatever's
+    // left straight to the phone dialer with no safeguard -- a 7-digit
+    // number with no area code will very likely fail to connect on most
+    // phones today, since nearly all US areas require 10-digit dialing
+    // now. Catch that here instead, before it's ever saved.
+    final digitCount =
+        _phoneController.text.replaceAll(RegExp(r'[^\d]'), '').length;
+    if (digitCount < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please include the area code (10 digits).'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     setState(() => _isSaving = true);
     try {
       final supabase = Supabase.instance.client;
@@ -1257,11 +1274,23 @@ class _AddContactSheetState extends State<_AddContactSheet> {
       }
       print('SAFETY_CONTACT: userId = $userId');
       if (userId != null) {
+        // The "Set as primary contact" toggle used to be pure decoration --
+        // this insert always hardcoded is_primary: false regardless of the
+        // switch. Now: if this new contact is being set primary, clear
+        // primary off every other existing contact first, so exactly one
+        // contact is ever primary at a time (matches the single red-styled
+        // "Primary" slot the UI actually renders).
+        if (_isPrimary) {
+          await supabase
+              .from('safety_contacts')
+              .update({'is_primary': false})
+              .eq('user_id', userId);
+        }
         await supabase.from('safety_contacts').insert({
           'user_id': userId,
           'name': _nameController.text.trim(),
           'phone': _phoneController.text.trim(),
-          'is_primary': false,
+          'is_primary': _isPrimary,
         });
         print('SAFETY_CONTACT: inserted successfully');
         if (mounted) setState(() => _isSaving = false);
@@ -1465,15 +1494,39 @@ class _EditContactSheetState extends State<_EditContactSheet> {
         _phoneController.text.trim().isEmpty) {
       return;
     }
+    final digitCount =
+        _phoneController.text.replaceAll(RegExp(r'[^\d]'), '').length;
+    if (digitCount < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please include the area code (10 digits).'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     setState(() => _isSaving = true);
     bool succeeded = true;
     try {
       final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
       final contactId = widget.contact['id'];
-      if (contactId != null) {
+      if (contactId != null && userId != null) {
+        // Same missing piece as the add-contact dialog: this update never
+        // included is_primary at all, so the toggle did nothing here
+        // either. Clear primary off every other contact first if this one
+        // is being set primary, same single-primary rule as add.
+        if (_isPrimary) {
+          await supabase
+              .from('safety_contacts')
+              .update({'is_primary': false})
+              .eq('user_id', userId)
+              .neq('id', contactId);
+        }
         await supabase.from('safety_contacts').update({
           'name': _nameController.text.trim(),
           'phone': _phoneController.text.trim(),
+          'is_primary': _isPrimary,
         }).eq('id', contactId);
       }
     } catch (e) {
