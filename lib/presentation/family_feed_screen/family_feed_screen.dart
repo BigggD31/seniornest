@@ -285,24 +285,66 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
   Future<void> _ensureNestId() async {
     final prefs = await SharedPreferences.getInstance();
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
     final existingNestId = prefs.getString('nest_id') ?? '';
-    if (existingNestId.isNotEmpty) return;
+
+    // nest_id is deliberately excluded from the account-switch wipe in
+    // auth_service.dart (it's set during onboarding, before sign-in
+    // completes) -- but that means a STALE nest_id left over from a
+    // previously signed-in account on this device can still be sitting
+    // here when a different account signs in. This function used to
+    // treat ANY non-empty value as good enough and do nothing further --
+    // confirmed root cause of check-in status "resetting" after switching
+    // accounts and coming back same-day: every check-in read was silently
+    // scoped to the WRONG nest because this early-returned without ever
+    // checking whether the cached id actually belongs to this user.
+    if (existingNestId.isNotEmpty) {
+      try {
+        final membership = await supabase
+            .from('nest_members')
+            .select('nest_id')
+            .eq('nest_id', existingNestId)
+            .eq('user_id', userId)
+            .maybeSingle();
+        if (membership != null) return; // still valid, nothing to do
+      } catch (e) {
+        print('NEST_ID VALIDATION ERROR: $e');
+        // Fail open on a network error -- don't discard a possibly-correct
+        // cached id just because we couldn't reach the server to confirm it.
+        return;
+      }
+      // Cached id didn't validate -- fall through and look up the real one.
+    }
 
     try {
-      final supabase = Supabase.instance.client;
-      final userId = supabase.auth.currentUser?.id;
-      if (userId == null) return;
-
-      final result = await supabase
+      final owned = await supabase
           .from('nests')
           .select('id')
           .eq('created_by', userId)
           .maybeSingle();
 
-      if (result != null) {
-        final nestId = result['id'] as String;
+      if (owned != null) {
+        final nestId = owned['id'] as String;
         await prefs.setString('nest_id', nestId);
-        print('NEST_ID: saved = $nestId');
+        print('NEST_ID: saved (owner) = $nestId');
+        return;
+      }
+
+      // Not an owner -- this account is a family member, look up their
+      // actual membership directly instead of leaving nest_id unset.
+      final membership = await supabase
+          .from('nest_members')
+          .select('nest_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (membership != null) {
+        final nestId = membership['nest_id'] as String;
+        await prefs.setString('nest_id', nestId);
+        print('NEST_ID: saved (member) = $nestId');
       }
     } catch (e) {
       print('NEST_ID ERROR: $e');
