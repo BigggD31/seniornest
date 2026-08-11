@@ -220,7 +220,28 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_ready) return const SizedBox.shrink();
+    // SizedBox.shrink() paints nothing at all -- no background color -- so
+    // while _resolveInitialRoute()'s async work (auth check, entitlement
+    // check, nest membership check) is still running, Flutter's raw
+    // default canvas showed through instead of any real background. On a
+    // cold start (including the OS fully suspending and relaunching the
+    // app, which looks identical to a fresh launch from here) that's a
+    // visible black screen before the real UI ever paints. Wrapped in a
+    // ValueListenableBuilder so it matches the resolved dark/light setting
+    // as soon as that's available, rather than an unthemed default.
+    if (!_ready) {
+      return ValueListenableBuilder<bool>(
+        valueListenable: appDarkModeNotifier,
+        builder: (context, isDark, child) {
+          return Directionality(
+            textDirection: TextDirection.ltr,
+            child: ColoredBox(
+              color: isDark ? const Color(0xFF1A1712) : Colors.white,
+            ),
+          );
+        },
+      );
+    }
     return Sizer(
       builder: (context, orientation, screenType) {
         return ValueListenableBuilder<bool>(
