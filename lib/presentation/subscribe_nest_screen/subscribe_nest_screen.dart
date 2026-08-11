@@ -21,9 +21,6 @@ class SubscribeNestScreen extends StatefulWidget {
 class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     with SingleTickerProviderStateMixin {
   bool _isYearly = false;
-  bool _promoApplied = false;
-  String _promoError = '';
-  final TextEditingController _promoController = TextEditingController();
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
@@ -125,7 +122,6 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   void dispose() {
     _purchaseSubscription?.cancel();
     _animController.dispose();
-    _promoController.dispose();
     super.dispose();
   }
 
@@ -151,24 +147,6 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     final returnArgs = args['returnArgs'] as Map<String, dynamic>? ?? {};
     Navigator.pushReplacementNamed(context, returnRoute,
         arguments: {...returnArgs, 'startAtStep': 1});
-  }
-
-  void _applyPromoCode() {
-    final code = _promoController.text.trim().toUpperCase();
-    // NOTE: this hardcoded code is a known open item -- flagged to D Von
-    // Aug 4 2026, not yet decided/resolved. Left functional for now so it
-    // doesn't silently break, but it ships inside the app binary with no
-    // usage limit or expiration.
-    if (code == 'LIFETIME2026') {
-      setState(() { _promoApplied = true; _promoError = ''; });
-      _recordSubscription('promo_lifetime2026', null);
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (!mounted) return;
-        _navigateForward();
-      });
-    } else {
-      setState(() => _promoError = 'Invalid promo code. Please try again.');
-    }
   }
 
   Future<void> _launchUrl(String url) async {

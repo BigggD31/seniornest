@@ -389,6 +389,8 @@ class _SetupScreenState extends State<SetupScreen>
                 slivers: [
                   SliverToBoxAdapter(child: _buildTopBar(isTablet)),
                   SliverToBoxAdapter(child: _buildProfileCard(isTablet)),
+                  if (_isVipMember)
+                    SliverToBoxAdapter(child: _buildVipBadgeCard(isTablet)),
                   SliverToBoxAdapter(
                     child: _buildBirthdayAnniversaryCard(isTablet),
                   ),
@@ -526,31 +528,11 @@ class _SetupScreenState extends State<SetupScreen>
                         color: Colors.white,
                       ),
                     ),
-                    if (_isVipMember)
-                      Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD4AA00).withAlpha(60),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFD4AA00), width: 1),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.workspace_premium_rounded, color: Color(0xFFD4AA00), size: 12),
-                            const SizedBox(width: 4),
-                            Text(
-                              'VIP Lifetime Member',
-                              style: GoogleFonts.nunitoSans(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFFD4AA00),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    // Moved to its own card below (_buildVipBadgeCard) --
+                    // gold-on-translucent-gold sitting directly on the teal
+                    // gradient header was very low contrast and hard to
+                    // read. A light card background matching the rest of
+                    // this screen's cards reads far better.
                     // Clearly labeled role line
                     if (_isSenior)
                       Container(
@@ -599,6 +581,42 @@ class _SetupScreenState extends State<SetupScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildVipBadgeCard(bool isTablet) {
+    // Darker gold reads better on the light cream card; brighter gold
+    // reads better against the dark card, same light/dark split as
+    // _cardBg/_cardBorder above.
+    final vipGold =
+        _isDarkMode ? const Color(0xFFE8C040) : const Color(0xFFB8940A);
+    return Container(
+      margin: EdgeInsets.fromLTRB(
+        isTablet ? 28 : 20,
+        12,
+        isTablet ? 28 : 20,
+        0,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: vipGold, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.workspace_premium_rounded, color: vipGold, size: 20),
+          const SizedBox(width: 10),
+          Text(
+            'VIP Lifetime Member',
+            style: GoogleFonts.nunitoSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: vipGold,
+            ),
+          ),
+        ],
       ),
     );
   }
