@@ -112,6 +112,23 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen>
       await prefs.setString('user_role', role);
       await prefs.setBool('onboarding_complete', false);
 
+      // This screen is reached specifically by someone who does NOT have an
+      // invite or VIP code -- confirmed root cause of the nest_creation
+      // "duplicate key value violates nests_invite_code_key" crash and a
+      // brand-new nest owner silently ending up as a member of a PREVIOUS
+      // test account's nest: joined_via_invite/nest_id/invite_code are all
+      // deliberately excluded from the account-switch wipe in
+      // auth_service.dart (they're legitimately set mid-onboarding, before
+      // that wipe runs), so a stale invite_code left over from a different
+      // account's earlier invite-join on the same device was getting reused
+      // as-is for THIS brand-new nest, colliding with the nest it actually
+      // belongs to. The VIP-code handler in this same file (and in
+      // splash_screen.dart) already clears these three keys for exactly
+      // this reason -- this plain no-code path needs the same protection.
+      await prefs.setBool('joined_via_invite', false);
+      await prefs.remove('nest_id');
+      await prefs.remove('invite_code');
+
       await Future.delayed(const Duration(milliseconds: 200));
 
       if (mounted) {
