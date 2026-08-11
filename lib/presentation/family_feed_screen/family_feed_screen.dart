@@ -885,9 +885,19 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
   void _showWelcomeMessage() {
     if (!mounted) return;
-    final greeting = _displayName.isNotEmpty
-        ? 'Welcome back, $_displayName! Your family is thinking of you 💛'
-        : 'Welcome back! Your family is thinking of you 💛';
+    // _showWelcomeToast is only ever true when first_load was true at read
+    // time -- i.e. this is a brand-new account's very first visit to Home,
+    // not a genuine returning session. The copy previously said "Welcome
+    // back" unconditionally, which is wrong for a signup that has never
+    // been here before.
+    final isGenuinelyFirstVisit = _showWelcomeToast;
+    final greeting = isGenuinelyFirstVisit
+        ? (_displayName.isNotEmpty
+            ? 'Welcome to your Nest, $_displayName! 💛'
+            : 'Welcome to your Nest! 💛')
+        : (_displayName.isNotEmpty
+            ? 'Welcome back, $_displayName! Your family is thinking of you 💛'
+            : 'Welcome back! Your family is thinking of you 💛');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
