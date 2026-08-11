@@ -311,6 +311,29 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     print('NEST_DEBUG: _navigateToHome effectiveUserId = $effectiveUserId');
 
     if (effectiveUserId != null) {
+      // Deferred VIP redemption -- the code was only validated (not
+      // consumed) back at splash/role-choice, before this account existed.
+      // This is the ONLY place in the entire app where a first-time signup
+      // actually gets a real Supabase auth session (save_messages_prompt_
+      // screen.dart's Google/Apple/email handlers) -- senior_onboarding_
+      // screen and family_onboarding_screen both run BEFORE that session
+      // exists for a brand-new user, so their own copies of this exact
+      // redemption call (gated on userId != null) were always dead code
+      // for a fresh signup. That's the actual reason the VIP badge never
+      // appeared: redeem_vip_code was simply never being called at all.
+      final cachedVipCode = prefs.getString('vip_code');
+      if (cachedVipCode != null && cachedVipCode.isNotEmpty) {
+        try {
+          await supabase.rpc('redeem_vip_code', params: {
+            'p_code': cachedVipCode,
+            'p_user_id': effectiveUserId,
+          });
+          await prefs.remove('vip_code');
+        } catch (e) {
+          debugPrint('VIP_REDEMPTION_ERROR: $e');
+        }
+      }
+
       // We already confirmed via the database above that this user has no
       // existing nest membership — clear any stale local nest_id left over
       // from a different account previously signed in on this same device.
