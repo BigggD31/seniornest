@@ -128,6 +128,15 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen>
       await prefs.setBool('joined_via_invite', false);
       await prefs.remove('nest_id');
       await prefs.remove('invite_code');
+      // nest_name has this same problem -- it's deliberately excluded from
+      // the account-switch wipe (auth_service.dart) since it's legitimately
+      // written mid-onboarding by senior_onboarding_screen's own text
+      // field, AFTER this point in the flow. That's exactly why a stale
+      // name from a PREVIOUS test account (e.g. "Popy's Nest") was showing
+      // up pre-filled on a brand-new account's onboarding before they'd
+      // typed anything -- nothing had ever cleared it between accounts on
+      // the same device.
+      await prefs.remove('nest_name');
 
       await Future.delayed(const Duration(milliseconds: 200));
 
@@ -419,6 +428,9 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
           await prefs.setBool('joined_via_invite', false);
           await prefs.remove('nest_id');
           await prefs.remove('invite_code');
+          // nest_name has this same gap -- see the matching comment in
+          // _selectRole above for the full explanation.
+          await prefs.remove('nest_name');
           // The user is already on role_choice_screen underneath this
           // sheet -- popping is enough to let them pick either "I'm the
           // Senior" or "I'm Family," both valid here since neither has an

@@ -313,6 +313,11 @@ class _SplashScreenState extends State<SplashScreen>
             // from the old invite code with no awareness they were removed.
             await prefs.remove('invite_code');
             await prefs.setBool('joined_via_invite', false);
+            // nest_name has this same gap -- see the matching comment in
+            // role_choice_screen.dart's _selectRole for the full
+            // explanation. A removed member re-onboarding fresh shouldn't
+            // see the name of the nest they were just removed from.
+            await prefs.remove('nest_name');
             if (mounted) {
               Navigator.pushNamedAndRemoveUntil(
                 context,
@@ -771,6 +776,9 @@ class _InviteCodeSubmitButtonState extends State<_InviteCodeSubmitButton> {
           await prefs.setBool('joined_via_invite', false);
           await prefs.remove('nest_id');
           await prefs.remove('invite_code');
+          // nest_name has this same gap -- see the matching comment in
+          // role_choice_screen.dart's _selectRole for the full explanation.
+          await prefs.remove('nest_name');
           widget.onVipCode();
           return;
         }
