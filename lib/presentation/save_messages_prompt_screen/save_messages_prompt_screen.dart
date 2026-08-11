@@ -470,7 +470,16 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           }
         } catch (e) {
           print('NEST_DEBUG: error = $e');
+          // Previously this only showed the SnackBar and let execution fall
+          // through to the Home navigation below regardless -- meaning a
+          // failed nest creation (e.g. an invite-code collision) still sent
+          // the person to Home with no valid nest_id at all, silently
+          // broken. senior_onboarding_screen already stops navigation on
+          // this same failure; this redundant fallback path here didn't
+          // match that, and was the reason a broken account could still
+          // reach Home instead of staying put with a visible error.
           if (mounted) {
+            setState(() => _isLoading = false);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('DEBUG: nest creation failed - $e'),
@@ -479,6 +488,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
               ),
             );
           }
+          return;
         }
       } else {
         print('NEST_DEBUG: nest already exists = $existingNestId');
