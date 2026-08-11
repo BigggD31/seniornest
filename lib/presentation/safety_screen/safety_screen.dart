@@ -1388,6 +1388,15 @@ class _AddContactSheetState extends State<_AddContactSheet> {
             style: GoogleFonts.nunitoSans(fontSize: 16, color: _textPrimary),
             decoration: InputDecoration(
               labelText: 'Phone number',
+              // Nothing previously showed the expected 10-digit format
+              // before someone started typing -- the field just looked
+              // blank. This surfaces the area-code requirement up front
+              // instead of only after a failed save.
+              hintText: '(555) 123-4567',
+              hintStyle: GoogleFonts.nunitoSans(
+                fontSize: 16,
+                color: _textSecondary.withOpacity(0.5),
+              ),
               labelStyle: GoogleFonts.nunitoSans(
                 fontSize: 13,
                 color: _textSecondary,
@@ -1730,6 +1739,15 @@ class _EditContactSheetState extends State<_EditContactSheet> {
             style: GoogleFonts.nunitoSans(fontSize: 16, color: _textPrimary),
             decoration: InputDecoration(
               labelText: 'Phone number',
+              // Nothing previously showed the expected 10-digit format
+              // before someone started typing -- the field just looked
+              // blank. This surfaces the area-code requirement up front
+              // instead of only after a failed save.
+              hintText: '(555) 123-4567',
+              hintStyle: GoogleFonts.nunitoSans(
+                fontSize: 16,
+                color: _textSecondary.withOpacity(0.5),
+              ),
               labelStyle: GoogleFonts.nunitoSans(
                 fontSize: 13,
                 color: _textSecondary,
