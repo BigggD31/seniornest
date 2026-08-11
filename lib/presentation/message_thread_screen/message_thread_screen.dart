@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/custom_image_widget.dart';
+import '../../widgets/linkified_text.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../widgets/keyboard_done_bar.dart';
 
@@ -263,12 +264,15 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
             bottomRight: Radius.circular(isMine ? 4 : 16),
           ),
         ),
-        child: Text(
+        child: LinkifiedText(
           m['content'] as String? ?? '',
           style: GoogleFonts.nunitoSans(
             fontSize: 15,
             color: isMine ? Colors.white : _textPrimary,
           ),
+          // "Mine" bubbles are already teal-on-white text, so the default
+          // teal link color would be invisible there -- use white instead.
+          linkColor: isMine ? Colors.white : null,
         ),
       ),
     );
