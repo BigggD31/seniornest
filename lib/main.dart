@@ -18,6 +18,7 @@ import './services/auth_service.dart';
 import './services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import './widgets/custom_error_widget.dart';
+import './widgets/branded_transition_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -238,27 +239,14 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    // SizedBox.shrink() paints nothing at all -- no background color -- so
-    // while _resolveInitialRoute()'s async work (auth check, entitlement
-    // check, nest membership check) is still running, Flutter's raw
-    // default canvas showed through instead of any real background. On a
+    // Previously this showed only a plain solid color matching dark/light
+    // mode (this session's earlier fix for the black-screen flash). Now
+    // shows the actual approved branded transition screen instead, so a
     // cold start (including the OS fully suspending and relaunching the
-    // app, which looks identical to a fresh launch from here) that's a
-    // visible black screen before the real UI ever paints. Wrapped in a
-    // ValueListenableBuilder so it matches the resolved dark/light setting
-    // as soon as that's available, rather than an unthemed default.
+    // app, which looks identical to a fresh launch from here) reads as an
+    // intentional "loading" moment rather than a blank flash.
     if (!_ready) {
-      return ValueListenableBuilder<bool>(
-        valueListenable: appDarkModeNotifier,
-        builder: (context, isDark, child) {
-          return Directionality(
-            textDirection: TextDirection.ltr,
-            child: ColoredBox(
-              color: isDark ? const Color(0xFF1A1712) : Colors.white,
-            ),
-          );
-        },
-      );
+      return const BrandedTransitionScreen();
     }
     return Sizer(
       builder: (context, orientation, screenType) {

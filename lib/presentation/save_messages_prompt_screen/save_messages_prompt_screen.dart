@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import '../splash_screen/widgets/nest_logo_widget.dart';
 import '../../widgets/keyboard_done_bar.dart';
+import '../../widgets/branded_transition_screen.dart';
 
 class SaveMessagesPromptScreen extends StatefulWidget {
   const SaveMessagesPromptScreen({super.key});
@@ -26,6 +27,12 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
   late Animation<Offset> _slideAnim;
   bool _isLoading = false;
   bool _isAuthLoading = false;
+  // True for the whole duration of _navigateToHome's post-auth setup work
+  // (profile upsert, nest lookup/creation, subscription check) -- not just
+  // the OAuth handshake itself, which is all _isAuthLoading ever covered.
+  // That gap (2-4 seconds, no spinner) was what looked like the app had
+  // silently failed after tapping Google/Apple/email sign-in.
+  bool _isNavigatingHome = false;
   StreamSubscription? _authSub;
   String? _authError;
 
@@ -91,6 +98,8 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
   }
 
   Future<void> _navigateToHome({String? userId}) async {
+    if (mounted) setState(() => _isNavigatingHome = true);
+
     // Must run before anything else in this function -- detects a genuine
     // account switch on this device and wipes every locally cached piece
     // of account-specific data before it can be read stale. This is the
@@ -479,7 +488,10 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           // match that, and was the reason a broken account could still
           // reach Home instead of staying put with a visible error.
           if (mounted) {
-            setState(() => _isLoading = false);
+            setState(() {
+              _isLoading = false;
+              _isNavigatingHome = false;
+            });
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('DEBUG: nest creation failed - $e'),
@@ -592,6 +604,12 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isTablet = size.width >= 600;
+
+    // Shown for the whole duration of _navigateToHome's post-auth setup
+    // work, not just the OAuth handshake -- see _isNavigatingHome above.
+    if (_isNavigatingHome) {
+      return const Scaffold(body: BrandedTransitionScreen());
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDFDFD),
