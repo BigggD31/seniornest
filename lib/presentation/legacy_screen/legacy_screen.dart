@@ -18,6 +18,7 @@ import '../../widgets/keyboard_done_bar.dart';
 import '../../widgets/share_preview_widget.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
+import '../../core/app_state.dart';
 
 class LegacyScreen extends StatefulWidget {
   const LegacyScreen({super.key});
@@ -30,7 +31,10 @@ class _LegacyScreenState extends State<LegacyScreen>
     with TickerProviderStateMixin {
   int _currentNavIndex = 2;
   bool _isSenior = false;
-  bool _isDarkMode = false;
+  // Seeded from the already-resolved app-wide notifier instead of a
+  // hardcoded false -- see messages_inbox_screen.dart for the full
+  // explanation of the white-flash bug this fixes.
+  bool _isDarkMode = appDarkModeNotifier.value;
   bool _isLoading = true;
   int _selectedCategory = 0;
   bool _hasSentStories = false; // hides placeholder once first story saved

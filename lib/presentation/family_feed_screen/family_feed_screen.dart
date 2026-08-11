@@ -18,6 +18,7 @@ import './widgets/message_card_widget.dart';
 import './widgets/celebrations_card_widget.dart';
 import './widgets/nest_avatar_row_widget.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
+import '../../core/app_state.dart';
 
 // ── Data Models ────────────────────────────────────────────────
 
@@ -144,7 +145,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   bool _showMedsReminder = true;
   bool _showWelcomeToast = false;
   bool _isLoading = true;
-  bool _isDarkMode = false;
+  // Seeded from the already-resolved app-wide notifier instead of a
+  // hardcoded false -- see messages_inbox_screen.dart for the full
+  // explanation of the white-flash bug this fixes. This screen matters
+  // most of all here, since it's Home -- the screen every tab switch
+  // lands back on.
+  bool _isDarkMode = appDarkModeNotifier.value;
   bool _hasRealPost = false; // tracks if user has made their first real post
   bool _sampleBannerDismissed = false; // tracks if user closed the sample-content explainer banner
   String _seniorName = ''; // display name of the senior in this nest (for the pinned check-in card)

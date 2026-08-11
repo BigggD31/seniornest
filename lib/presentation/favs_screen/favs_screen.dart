@@ -10,6 +10,7 @@ import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
 import '../../widgets/share_preview_widget.dart';
+import '../../core/app_state.dart';
 
 class FavsScreen extends StatefulWidget {
   const FavsScreen({super.key});
@@ -20,7 +21,10 @@ class FavsScreen extends StatefulWidget {
 
 class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
   int _currentNavIndex = 4;
-  bool _isDarkMode = false;
+  // Seeded from the already-resolved app-wide notifier instead of a
+  // hardcoded false -- see messages_inbox_screen.dart for the full
+  // explanation of the white-flash bug this fixes.
+  bool _isDarkMode = appDarkModeNotifier.value;
   bool _isLoading = true;
   int _selectedCategory = 0; // 0=All, 1=Text, 2=Photos, 3=Audio, 4=Video
   Map<String, dynamic>? _profileData;

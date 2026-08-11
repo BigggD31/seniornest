@@ -8,6 +8,7 @@ import '../../widgets/app_navigation.dart';
 import '../message_thread_screen/message_thread_screen.dart';
 import '../../routes/app_routes.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
+import '../../core/app_state.dart';
 
 /// Inbox: one row per person the current user has a private thread with,
 /// showing their last message and whether it's unread.
@@ -22,7 +23,13 @@ class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
   final _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _threads = [];
   bool _isLoading = true;
-  bool _isDarkMode = false;
+  // Seeded from the already-resolved app-wide notifier instead of a
+  // hardcoded false -- the async prefs read below used to be the ONLY
+  // source for this, so every screen briefly rendered light-mode colors
+  // (the white flash) before that read caught up. main.dart already
+  // resolves the real value before the app's first frame ever renders,
+  // so it's always correct here at construction time, no flash needed.
+  bool _isDarkMode = appDarkModeNotifier.value;
   final int _currentNavIndex = 1;
 
   @override

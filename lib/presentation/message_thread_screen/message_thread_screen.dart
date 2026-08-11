@@ -8,6 +8,7 @@ import '../../widgets/custom_image_widget.dart';
 import '../../widgets/linkified_text.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../widgets/keyboard_done_bar.dart';
+import '../../core/app_state.dart';
 
 /// Private 1:1 conversation between the current user and [recipientId].
 /// Reads/writes public.private_messages (RLS: sender/recipient only).
@@ -37,7 +38,10 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
   String? _nestId;
   bool _isLoading = true;
   bool _isSending = false;
-  bool _isDarkMode = false;
+  // Seeded from the already-resolved app-wide notifier instead of a
+  // hardcoded false -- see messages_inbox_screen.dart for the full
+  // explanation of the white-flash bug this fixes.
+  bool _isDarkMode = appDarkModeNotifier.value;
   StreamSubscription<List<Map<String, dynamic>>>? _sub;
 
   @override

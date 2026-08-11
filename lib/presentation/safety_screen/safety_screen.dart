@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/app_navigation.dart';
 import '../../widgets/keyboard_done_bar.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
+import '../../core/app_state.dart';
 
 class SafetyScreen extends StatefulWidget {
   const SafetyScreen({super.key});
@@ -21,7 +22,10 @@ class _SafetyScreenState extends State<SafetyScreen>
     with TickerProviderStateMixin {
   int _currentNavIndex = 3;
   bool _isSenior = false;
-  bool _isDarkMode = false;
+  // Seeded from the already-resolved app-wide notifier instead of a
+  // hardcoded false -- see messages_inbox_screen.dart for the full
+  // explanation of the white-flash bug this fixes.
+  bool _isDarkMode = appDarkModeNotifier.value;
   bool _isLoading = true;
   bool _isSendingAlert = false;
   String _seniorName = '';

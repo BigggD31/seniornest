@@ -24,7 +24,10 @@ class _SetupScreenState extends State<SetupScreen>
     with TickerProviderStateMixin {
   int _currentNavIndex = 5;
   bool _isSenior = false;
-  bool _isDarkMode = false;
+  // Seeded from the already-resolved app-wide notifier instead of a
+  // hardcoded false -- see messages_inbox_screen.dart for the full
+  // explanation of the white-flash bug this fixes.
+  bool _isDarkMode = appDarkModeNotifier.value;
   bool _isLoading = true;
   bool _isNestOwner = false;
   bool _isVipMember = false;

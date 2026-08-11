@@ -21,6 +21,7 @@ import '../../widgets/keyboard_done_bar.dart';
 import '../../services/auth_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'widgets/private_inbox_list_widget.dart';
+import '../../core/app_state.dart';
 
 class SendScreen extends StatefulWidget {
   const SendScreen({super.key});
@@ -34,7 +35,10 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   bool _isSenior = false;
   bool _isNestOwner = false;
   String _displayName = '';
-  bool _isDarkMode = false;
+  // Seeded from the already-resolved app-wide notifier instead of a
+  // hardcoded false -- see messages_inbox_screen.dart for the full
+  // explanation of the white-flash bug this fixes.
+  bool _isDarkMode = appDarkModeNotifier.value;
   bool _isSending = false;
   bool _hasSentMessages = false; // hides placeholder once first message sent
   bool _sampleBannerDismissed = false;
