@@ -1370,7 +1370,11 @@ class _LegacyScreenState extends State<LegacyScreen>
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF5DA399).withAlpha(20),
+                              // Legacy story category tag: intentionally its own
+                              // terracotta tone, distinct from the teal (#5DA399)
+                              // used app-wide for Senior/Family role badges, so a
+                              // "topic" tag and a "role" badge never share a color.
+                              color: const Color(0xFFC97B4A).withAlpha(24),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
@@ -1379,7 +1383,7 @@ class _LegacyScreenState extends State<LegacyScreen>
                                 const Icon(
                                   Icons.sell_outlined,
                                   size: 11,
-                                  color: Color(0xFF5DA399),
+                                  color: Color(0xFFC97B4A),
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
@@ -1387,7 +1391,7 @@ class _LegacyScreenState extends State<LegacyScreen>
                                   style: GoogleFonts.nunitoSans(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF5DA399),
+                                    color: const Color(0xFFC97B4A),
                                   ),
                                 ),
                               ],
@@ -4542,7 +4546,10 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF5DA399).withAlpha(25),
+                                      // Matches the terracotta category tag on the
+                                      // Legacy story cards (kept distinct from the
+                                      // teal Senior/Family role badge color).
+                                      color: const Color(0xFFC97B4A).withAlpha(25),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Row(
@@ -4551,12 +4558,12 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                                         const Icon(
                                           Icons.sell_outlined,
                                           size: 11,
-                                          color: Color(0xFF5DA399),
+                                          color: Color(0xFFC97B4A),
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
                                           story['category'] as String? ?? 'Memories',
-                                          style: GoogleFonts.nunitoSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF5DA399)),
+                                          style: GoogleFonts.nunitoSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFFC97B4A)),
                                         ),
                                       ],
                                     ),
