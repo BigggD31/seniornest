@@ -933,7 +933,6 @@ class _SafetyScreenState extends State<SafetyScreen>
           ),
           const SizedBox(height: 12),
           if (_mockContacts.isEmpty) ...[
-            _buildContactPlaceholder('Primary Contact', '(e.g. Son, Daughter)', isTablet, isPrimary: true),
             _buildContactPlaceholder('Emergency Contact 2', '(e.g. Sibling, Friend)', isTablet),
             _buildContactPlaceholder('Emergency Contact 3', '(e.g. Neighbor, Doctor)', isTablet),
           ],
