@@ -1711,9 +1711,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFAF7F2),
+        // Previously hardcoded to the light-mode colors only -- this had
+        // no dark-mode branching at all, unlike the real feed cards it's
+        // standing in for (message_card_widget.dart), which is why dark
+        // mode showed light/white loading cards on Home specifically.
+        // Same color pair used there for consistency.
+        color: _isDarkMode ? const Color(0xFF242018) : const Color(0xFFFAF7F2),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE8E0D0), width: 1.5),
+        border: Border.all(
+          color: _isDarkMode ? const Color(0xFF3D3428) : const Color(0xFFE8E0D0),
+          width: 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1746,7 +1754,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       width: w,
       height: h,
       decoration: BoxDecoration(
-        color: const Color(0xFFE8E0D0),
+        // Same fix as the card background above -- was hardcoded to the
+        // light tan regardless of dark mode.
+        color: _isDarkMode ? const Color(0xFF3D3428) : const Color(0xFFE8E0D0),
         borderRadius: BorderRadius.circular(r),
       ),
     );
