@@ -247,6 +247,13 @@ class AuthService {
   // onboarding_complete staying in this list is what forces a genuinely
   // different account through onboarding fresh, which naturally and
   // correctly repopulates all of them anyway -- no separate wipe needed.
+  //
+  // vip_code missed that same audit (build 161 fix) -- it's set at
+  // role_choice_screen before the account exists, same as the fields
+  // above, then wiped here before senior/family onboarding ever reads it
+  // back to actually redeem it. Redemption silently never ran: no error,
+  // no row in vip_code_redemptions, no VIP badge, even though the code
+  // was accepted on screen and the account correctly became a Nest Owner.
   static const List<String> _accountScopedPrefsKeys = [
     'has_onboarded', 'onboarding_complete',
     'bookmarks', 'bookmarked_items', 'dark_mode',
@@ -254,7 +261,7 @@ class AuthService {
     'notify_check_in', 'notify_messages', 'is_guest',
     'has_real_post', 'has_sent_messages',
     'has_sent_stories', 'removed_member_ids',
-    'story_prompts', 'vip_code',
+    'story_prompts',
     'cached_nest_members', 'cached_nest_members_nest_id', 'cached_nest_members_user_id',
     'cached_real_messages', 'cached_real_messages_nest_id',
     // cached_checkin_* deliberately excluded -- "has the senior checked in
