@@ -100,25 +100,36 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
-  // Checks whether the signed-in user currently has access. Lifetime/promo
-  // entitlements never expire; regular subscriptions are checked against
+  // Polls briefly for the persisted Supabase session to finish restoring
+  // after a cold start. A single fixed-length wait (this session's earlier
+  // fix) wasn't long enough in all cases -- confirmed by testing: reopening
+  // the app within ~5 seconds of closing it still hit the race and briefly
+  // showed the subscribe screen, while waiting 30+ seconds before reopening
+  // did not. That gap points to variable-length work (token refresh, a
+  // cold network path) sometimes taking longer than a fixed short wait
+  // can cover, not a wrong mechanism -- so this polls in short intervals
+  // up to a real ceiling instead of guessing one fixed number.
+  Future<String?> _waitForRestoredUserId() async {
+    var userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId != null) return userId;
+    const pollInterval = Duration(milliseconds: 250);
+    const maxWait = Duration(milliseconds: 2500);
+    var waited = Duration.zero;
+    while (waited < maxWait) {
+      await Future.delayed(pollInterval);
+      waited += pollInterval;
+      userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null) return userId;
+    }
+    return null;
+  }
+
+  // A subscription with no expiry recorded (lifetime/VIP) never expires;
+  // everything else is checked against its expires_at against now, and
   // their estimated expiry. No row at all means never subscribed.
   Future<bool> _isCurrentlyEntitled() async {
     try {
-      var userId = Supabase.instance.client.auth.currentUser?.id;
-      // On a cold start -- including the OS fully suspending and
-      // relaunching the app, which looks identical to a fresh launch from
-      // here -- there's a brief window where the persisted session hasn't
-      // finished restoring yet, so currentUser is still null even though
-      // the person IS actually signed in. Treating that as "not entitled"
-      // sent people to the subscribe screen for a flash before the real
-      // route corrected itself. senior_onboarding_screen already works
-      // around this identical race with the same wait-and-retry; this
-      // check never had that same protection.
-      if (userId == null) {
-        await Future.delayed(const Duration(milliseconds: 400));
-        userId = Supabase.instance.client.auth.currentUser?.id;
-      }
+      final userId = await _waitForRestoredUserId();
       if (userId == null) return false;
       final row = await Supabase.instance.client
           .from('subscriptions')
@@ -143,12 +154,7 @@ class _MyAppState extends State<MyApp> {
   // this is what actually catches that instead of trusting the cache.
   Future<bool> _hasValidNestMembership(SharedPreferences prefs) async {
     try {
-      var userId = Supabase.instance.client.auth.currentUser?.id;
-      // Same cold-start session-restore race as _isCurrentlyEntitled above.
-      if (userId == null) {
-        await Future.delayed(const Duration(milliseconds: 400));
-        userId = Supabase.instance.client.auth.currentUser?.id;
-      }
+      final userId = await _waitForRestoredUserId();
       final nestId = prefs.getString('nest_id') ?? '';
       if (userId == null || nestId.isEmpty) return false;
       final row = await Supabase.instance.client
