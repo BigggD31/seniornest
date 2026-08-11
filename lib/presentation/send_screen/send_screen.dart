@@ -1932,13 +1932,31 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
             ),
           ),
           const SizedBox(width: 8),
-          ProfileAvatarWidget(
-            profileData: _profileData,
-            displayName: _displayName,
-            size: 40,
-            borderColor: const Color(0xFF5DA399),
-            borderWidth: 2,
-          ),
+          // Same fix as the Home top bar: this screen has no loading gate,
+          // so show a blank neutral circle instead of the "?" initials
+          // fallback while _displayName/_profileData are still loading.
+          _displayName.isEmpty && _profileData == null
+              ? Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF5DA399),
+                      width: 2,
+                    ),
+                    color: _isDarkMode
+                        ? const Color(0xFF2E2820)
+                        : const Color(0xFFF5F0E8),
+                  ),
+                )
+              : ProfileAvatarWidget(
+                  profileData: _profileData,
+                  displayName: _displayName,
+                  size: 40,
+                  borderColor: const Color(0xFF5DA399),
+                  borderWidth: 2,
+                ),
         ],
       ),
     );

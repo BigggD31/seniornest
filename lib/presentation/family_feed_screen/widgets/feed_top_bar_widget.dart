@@ -136,16 +136,35 @@ class _FeedTopBarWidgetState extends State<FeedTopBarWidget> {
             badgeCount: 0, // TODO: wire to real notification count once notifications feature is built
           ),
           const SizedBox(width: 8),
-          // Profile avatar — shows user's chosen photo/emoji or initials
+          // Profile avatar — shows user's chosen photo/emoji or initials.
+          // While _displayName is still loading (fresh state each time this
+          // screen is rebuilt via bottom-nav pushReplacementNamed), show a
+          // blank neutral circle instead of the "?" initials fallback so
+          // nothing incorrect flashes before the real avatar is ready.
           GestureDetector(
             onTap: widget.onProfileTap,
-            child: ProfileAvatarWidget(
-              profileData: _profileData,
-              displayName: _displayName,
-              size: 40,
-              borderColor: const Color(0xFF5DA399),
-              borderWidth: 2,
-            ),
+            child: _displayName.isEmpty && _profileData == null
+                ? Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF5DA399),
+                        width: 2,
+                      ),
+                      color: (widget.isDarkMode
+                              ? const Color(0xFF2E2820)
+                              : const Color(0xFFF5F0E8)),
+                    ),
+                  )
+                : ProfileAvatarWidget(
+                    profileData: _profileData,
+                    displayName: _displayName,
+                    size: 40,
+                    borderColor: const Color(0xFF5DA399),
+                    borderWidth: 2,
+                  ),
           ),
         ],
       ),
