@@ -100,16 +100,43 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
   Future<void> _navigateToHome({String? userId}) async {
     if (mounted) setState(() => _isNavigatingHome = true);
 
-    // Must run before anything else in this function -- detects a genuine
-    // account switch on this device and wipes every locally cached piece
-    // of account-specific data before it can be read stale. This is the
-    // single root-cause fix for what were previously several separate bugs
-    // (dark mode, user role, nest name all bleeding between accounts on
-    // the same device) sharing one cause: local prefs with no connection
-    // to which account set them.
+    // Capture this fresh signup's own just-entered values BEFORE the wipe
+    // below, so they can be restored right after it. nest_name, nest_id,
+    // invite_code, and joined_via_invite are account-scoped and correctly
+    // wiped by clearStaleAccountDataIfUserChanged now (auth_service.dart)
+    // -- previously they were excluded from that wipe entirely, which is
+    // exactly why stale values kept independently resurfacing as "cross
+    // contamination" in different screens all night, even after each
+    // individual display bug got patched. This is the one genuinely
+    // legitimate exception to that: a brand-new signup enters these
+    // values in senior_onboarding_screen/family_onboarding_screen BEFORE
+    // they've ever authenticated, then authenticates and reaches this
+    // exact function -- which is the very first moment a real user id
+    // exists to compare against, so it's also the first moment the wipe
+    // below can possibly fire for them. Without restoring these specific
+    // four immediately after, wiping here would erase what they just
+    // typed moments before this same flow uses it, a few lines down.
+    final preWipePrefs = await SharedPreferences.getInstance();
+    final preWipeNestName = preWipePrefs.getString('nest_name');
+    final preWipeNestId = preWipePrefs.getString('nest_id');
+    final preWipeInviteCode = preWipePrefs.getString('invite_code');
+    final preWipeJoinedViaInvite = preWipePrefs.getBool('joined_via_invite');
+
+    // Must run before anything else that reads account-scoped data --
+    // detects a genuine account switch on this device and wipes every
+    // locally cached piece of account-specific data before it can be read
+    // stale. This is the single root-cause fix for what were previously
+    // several separate bugs (dark mode, user role, nest name all bleeding
+    // between accounts on the same device) sharing one cause: local prefs
+    // with no connection to which account set them.
     await AuthService.clearStaleAccountDataIfUserChanged(knownUserId: userId);
 
     final prefs = await SharedPreferences.getInstance();
+    if (preWipeNestName != null) await prefs.setString('nest_name', preWipeNestName);
+    if (preWipeNestId != null) await prefs.setString('nest_id', preWipeNestId);
+    if (preWipeInviteCode != null) await prefs.setString('invite_code', preWipeInviteCode);
+    if (preWipeJoinedViaInvite != null) await prefs.setBool('joined_via_invite', preWipeJoinedViaInvite);
+
     await prefs.setBool('onboarding_complete', true);
     await prefs.setBool('first_load', true);
     await prefs.setBool('has_onboarded', true);
