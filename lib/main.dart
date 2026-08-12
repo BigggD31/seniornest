@@ -204,6 +204,11 @@ class _MyAppState extends State<MyApp> {
         appNestNameNotifier.value = savedNestName;
       }
 
+      // Resolved once here, before splash_screen (if that's where routing
+      // below ends up) ever builds -- see the comment on
+      // appIsReturningUserNotifier in app_state.dart.
+      appIsReturningUserNotifier.value = prefs.getBool('just_signed_out') ?? false;
+
       final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
       // This is the TRUE origin of the subscribe-screen flash and the
       // "Home flashes twice" jitter, not just the entitlement check below.

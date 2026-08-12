@@ -22,6 +22,17 @@ final ValueNotifier<bool> appDarkModeNotifier = ValueNotifier<bool>(false);
 /// notifier too, so every other screen picks up the change immediately.
 final ValueNotifier<String> appNestNameNotifier = ValueNotifier<String>('');
 
+/// Global returning-user notifier -- resolved once in main.dart's
+/// _resolveInitialRoute(), before any screen ever builds, same pattern as
+/// the two notifiers above. True when this device just signed out (the
+/// only scenario where splash_screen needs to show a lean "Welcome back"
+/// sign-in view instead of the full first-time pitch). Reading the
+/// underlying just_signed_out flag asynchronously inside splash_screen
+/// itself would flash the full pitch briefly before switching layouts --
+/// exactly the class of bug fixed everywhere else tonight -- so it's
+/// resolved here instead and read synchronously at field declaration.
+final ValueNotifier<bool> appIsReturningUserNotifier = ValueNotifier<bool>(false);
+
 /// Maps the stored string to a TextScaler multiplier.
 double textSizeToScale(String size) {
   switch (size) {

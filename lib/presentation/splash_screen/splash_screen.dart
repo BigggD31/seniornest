@@ -8,6 +8,7 @@ import '../../routes/app_routes.dart';
 import './widgets/heartbeat_painter_widget.dart';
 import './widgets/nest_logo_widget.dart';
 import '../../widgets/keyboard_done_bar.dart';
+import '../../core/app_state.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -36,7 +37,6 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    _checkExistingSession();
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -261,37 +261,11 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  bool _showSignInLink = false;
-
-  Future<void> _checkExistingSession() async {
-    try {
-      // REMOVED (Aug 11 2026): this used to independently re-check session +
-      // onboarding + nest membership on every mount and navigate straight to
-      // Home or role-choice on its own -- a second, complete, uncoordinated
-      // copy of main.dart's _resolveInitialRoute(), missing its entitlement
-      // check entirely. main.dart only ever routes here when it has
-      // determined the person is NOT signed in; the only way this screen
-      // could ever find a real session afterward was the exact race
-      // main.dart's routing had (checking isSignedIn before the persisted
-      // session finished restoring on a fast app reopen). That race is now
-      // fixed at its actual origin, in main.dart, by awaiting the restored
-      // session before deciding the route at all -- so a genuinely
-      // signed-in-and-onboarded person is never sent here in the first
-      // place, and this screen doesn't need to guess again. Two independent
-      // deciders racing each other, each able to navigate on their own, was
-      // the actual reason the visible sequence on relaunch was different
-      // every time (branded screen, subscribe screen, or neither, in no
-      // consistent order) -- if this comes back, it means something is
-      // once again routing here for a signed-in user, and the fix belongs
-      // in main.dart's routing decision, not a second copy of it here.
-      final prefs = await SharedPreferences.getInstance();
-      // No active session — check if they just signed out, to show Sign In link
-      final justSignedOut = prefs.getBool('just_signed_out') ?? false;
-      if (justSignedOut && mounted) {
-        setState(() => _showSignInLink = true);
-      }
-    } catch (_) {}
-  }
+  // Seeded synchronously from the already-resolved app-wide notifier --
+  // see appIsReturningUserNotifier in app_state.dart. Correct on the very
+  // first build, so this screen never flashes the full first-time pitch
+  // before switching to the leaner returning-user view.
+  bool _isReturningUser = appIsReturningUserNotifier.value;
 
   @override
   void dispose() {
@@ -377,6 +351,125 @@ class _SplashScreenState extends State<SplashScreen>
 
                     const SizedBox(height: 2),
 
+                    if (_isReturningUser) ...[
+                      // ── Returning-user mode ──
+                      // Shown only when this device just signed out. Skips
+                      // the entire first-time pitch below (trial framing,
+                      // invite-code button, pricing disclaimer, feature
+                      // grid) since none of it applies to someone who
+                      // already has an account and just wants back in --
+                      // it was only ever there for a first-time visitor,
+                      // and made "Sign In" feel bolted onto a page built
+                      // for someone else.
+                      AnimatedBuilder(
+                        animation: _contentController,
+                        builder: (context, child) {
+                          return SlideTransition(
+                            position: _contentSlide,
+                            child: Opacity(
+                              opacity: _contentOpacity.value,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Welcome back',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.nunitoSans(
+                                fontSize: isTablet ? 22 : 20,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF2C2417),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Sign in to pick up right where you left off.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.nunitoSans(
+                                fontSize: 14,
+                                color: const Color(0xFF6B5E4E),
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.pushNamed(
+                                  context,
+                                  '/save-messages-prompt-screen',
+                                  arguments: {'signInMode': true},
+                                );
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFF5DA399),
+                                      Color(0xFF7DBDB5),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(18),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF5DA399)
+                                          .withOpacity(0.35),
+                                      blurRadius: 18,
+                                      offset: const Offset(0, 5),
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  'Sign In',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.nunitoSans(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            // Fallback for a different person picking up the
+                            // same device (e.g. a shared family phone) --
+                            // drops back to the full first-time pitch for
+                            // this session without needing a separate page.
+                            GestureDetector(
+                              onTap: () {
+                                setState(() => _isReturningUser = false);
+                              },
+                              child: RichText(
+                                text: TextSpan(
+                                  style: GoogleFonts.nunitoSans(
+                                    fontSize: 13,
+                                    color: const Color(0xFF9E8E7E),
+                                  ),
+                                  children: [
+                                    const TextSpan(text: 'New here? '),
+                                    TextSpan(
+                                      text: 'Get Started',
+                                      style: GoogleFonts.nunitoSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF5DA399),
+                                        decoration: TextDecoration.underline,
+                                        decorationColor: const Color(0xFF5DA399),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
                     // ── Tagline ──
                     AnimatedBuilder(
                       animation: _taglineController,
@@ -586,52 +679,10 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                             ),
                           ),
-                          if (_showSignInLink)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4, bottom: 8),
-                              child: GestureDetector(
-                                onTap: () {
-                                  Navigator.pushNamed(
-                                    context,
-                                    '/save-messages-prompt-screen',
-                                    arguments: {'signInMode': true},
-                                  );
-                                },
-                                // Matches the treatment already used on the
-                                // sign-in screen itself: only "Sign In" is
-                                // bold/teal/underlined, the rest reads as
-                                // plain sentence text. Previously the whole
-                                // phrase here was bold+underlined, which
-                                // made it stand out from everything else on
-                                // this page (no other text on this screen is
-                                // underlined) and didn't match how the same
-                                // link looks one screen later.
-                                child: RichText(
-                                  text: TextSpan(
-                                    style: GoogleFonts.nunitoSans(
-                                      fontSize: 13,
-                                      color: const Color(0xFF9E8E7E),
-                                    ),
-                                    children: [
-                                      const TextSpan(text: 'Already have an account? '),
-                                      TextSpan(
-                                        text: 'Sign In',
-                                        style: GoogleFonts.nunitoSans(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                          color: const Color(0xFF5DA399),
-                                          decoration: TextDecoration.underline,
-                                          decorationColor: const Color(0xFF5DA399),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
                         ],
                       ),
                     ),
+                    ],
                   ],
                 ),
               ),
