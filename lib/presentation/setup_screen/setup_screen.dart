@@ -118,6 +118,16 @@ class _SetupScreenState extends State<SetupScreen>
     // joined a stranger's nest instead of hers. Fetched live here, same
     // as the name just above, from the exact same nest row.
     String? fetchedInviteCode;
+    // Same early-seed fix as family_feed_screen.dart's top bar: show the
+    // cached name immediately, before the network fetch below, instead of
+    // leaving _nestName at its empty default (which several places in the
+    // app render as a generic placeholder like "My Nest"/"Your Nest") for
+    // the whole round trip. Confirmed happening consistently across tab
+    // switches and app reopens, not just cold starts.
+    final cachedNestNameForEarlySeed = prefs.getString('nest_name') ?? '';
+    if (mounted && cachedNestNameForEarlySeed.isNotEmpty) {
+      setState(() => _nestName = cachedNestNameForEarlySeed);
+    }
     try {
       final supabase = Supabase.instance.client;
       final currentUserId = supabase.auth.currentUser?.id;

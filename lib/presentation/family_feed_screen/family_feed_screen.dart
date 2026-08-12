@@ -371,6 +371,21 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // flow sharing the same nest (e.g. a family member's own device).
     // Now sourced live from Supabase, with local cache as fallback.
     String nestName = prefs.getString('nest_name') ?? '';
+    // Seed the top bar with the cached name immediately, before the slower
+    // network round trips below (_ensureNestId() just ran above, and the
+    // live-fetch verification is right below this). Previously _nestName
+    // stayed at its empty default for the entire duration of both network
+    // calls before the single setState at the end of this function ever
+    // fired, so the top bar's "My Nest" empty-string fallback visibly
+    // flashed on every rebuild of this screen -- confirmed as happening
+    // consistently across tab switches and app reopens, not just cold
+    // starts, since (per an earlier fix this same night) the bottom nav
+    // rebuilds this screen from scratch on every tab switch. The cached
+    // name is already known here and doesn't need to wait on either
+    // network call to be shown correctly.
+    if (mounted && nestName.isNotEmpty) {
+      setState(() => _nestName = nestName);
+    }
     try {
       final nestIdForName = prefs.getString('nest_id') ?? '';
       if (nestIdForName.isNotEmpty) {
