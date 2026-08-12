@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 
 import '../../widgets/custom_image_widget.dart';
 import '../../widgets/linkified_text.dart';
@@ -205,6 +206,23 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
   Color get _textPrimary =>
       _isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417);
 
+  /// Small grayed-out send time shown under each bubble. Time-only for
+  /// anything sent today; otherwise a short date is prefixed so an older
+  /// message in the thread doesn't read as if it just arrived.
+  String _formatMessageTime(Map<String, dynamic> m) {
+    final raw = m['created_at'] as String?;
+    if (raw == null) return '';
+    final sent = DateTime.tryParse(raw)?.toLocal();
+    if (sent == null) return '';
+    final now = DateTime.now();
+    final isToday = sent.year == now.year &&
+        sent.month == now.month &&
+        sent.day == now.day;
+    return isToday
+        ? DateFormat('h:mm a').format(sent)
+        : DateFormat('MMM d, h:mm a').format(sent);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -305,15 +323,29 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
             bottomRight: Radius.circular(isMine ? 4 : 16),
           ),
         ),
-        child: LinkifiedText(
-          m['content'] as String? ?? '',
-          style: GoogleFonts.nunitoSans(
-            fontSize: 15,
-            color: isMine ? Colors.white : _textPrimary,
-          ),
-          // "Mine" bubbles are already teal-on-white text, so the default
-          // teal link color would be invisible there -- use white instead.
-          linkColor: isMine ? Colors.white : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            LinkifiedText(
+              m['content'] as String? ?? '',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 15,
+                color: isMine ? Colors.white : _textPrimary,
+              ),
+              // "Mine" bubbles are already teal-on-white text, so the default
+              // teal link color would be invisible there -- use white instead.
+              linkColor: isMine ? Colors.white : null,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _formatMessageTime(m),
+              style: GoogleFonts.nunitoSans(
+                fontSize: 11,
+                color: (isMine ? Colors.white : _textPrimary).withAlpha(150),
+              ),
+            ),
+          ],
         ),
       ),
     );
