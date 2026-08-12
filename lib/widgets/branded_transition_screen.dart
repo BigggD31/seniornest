@@ -10,6 +10,16 @@ import 'package:flutter/material.dart';
 class BrandedTransitionScreen extends StatelessWidget {
   const BrandedTransitionScreen({super.key});
 
+  // Minimum time this screen should stay visible before being replaced by
+  // real content, even if the underlying work finishes faster -- long
+  // enough to read as intentional rather than a flash, short enough not
+  // to feel slow given this shows on every app open, not just once.
+  // Callers (main.dart's cold-start gate, save_messages_prompt_screen.dart's
+  // post-signup gate) are responsible for actually enforcing this by timing
+  // their own async work against it; this constant just keeps both call
+  // sites in agreement on the one shared value instead of duplicating it.
+  static const Duration minDisplayDuration = Duration(milliseconds: 1500);
+
   static const String _iconAsset = 'assets/images/nest_icon_transparent.png';
 
   // Approved gradient from mockup C -- warm mid-tone, gold-leaning.

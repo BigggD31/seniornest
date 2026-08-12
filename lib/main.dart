@@ -173,6 +173,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _resolveInitialRoute() async {
+    final startTime = DateTime.now();
     try {
       // Must run before anything else in this function, including the
       // dark_mode read two lines down -- detects a genuine account switch
@@ -266,6 +267,18 @@ class _MyAppState extends State<MyApp> {
       }
     } catch (_) {
       _initialRoute = AppRoutes.splashScreen;
+    }
+    final elapsed = DateTime.now().difference(startTime);
+    // Confirmed the actual remaining complaint after the subscribe-screen
+    // race itself was fixed: display duration was inconsistent -- a fast
+    // connection could resolve everything in a couple hundred
+    // milliseconds, barely long enough to register, while a slow one
+    // could take much longer. This applies to every reopen regardless of
+    // how long the app was in the background -- a second, an hour, a day
+    // -- since nothing in this app signs someone out on its own; only an
+    // explicit sign-out does that.
+    if (elapsed < BrandedTransitionScreen.minDisplayDuration) {
+      await Future.delayed(BrandedTransitionScreen.minDisplayDuration - elapsed);
     }
     if (mounted) setState(() => _ready = true);
   }

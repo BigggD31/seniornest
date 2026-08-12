@@ -99,6 +99,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
 
   Future<void> _navigateToHome({String? userId}) async {
     if (mounted) setState(() => _isNavigatingHome = true);
+    final navigateStartTime = DateTime.now();
 
     // Capture this fresh signup's own just-entered values BEFORE the wipe
     // below, so they can be restored right after it. nest_name, nest_id,
@@ -559,6 +560,12 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       print('NEST_DEBUG: effectiveUserId still null in _navigateToHome');
     }
 
+    if (mounted) {
+      final elapsed = DateTime.now().difference(navigateStartTime);
+      if (elapsed < BrandedTransitionScreen.minDisplayDuration) {
+        await Future.delayed(BrandedTransitionScreen.minDisplayDuration - elapsed);
+      }
+    }
     if (mounted) {
       Navigator.pushReplacementNamed(
         context,
