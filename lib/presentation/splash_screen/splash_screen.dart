@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
-import '../../services/auth_service.dart';
 import './widgets/heartbeat_painter_widget.dart';
 import './widgets/nest_logo_widget.dart';
 import '../../widgets/keyboard_done_bar.dart';
