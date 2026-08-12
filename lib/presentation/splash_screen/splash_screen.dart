@@ -679,6 +679,48 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                             ),
                           ),
+                          // Always present here, unlike the returning-user
+                          // view above -- this branch is also what a
+                          // fresh install or a different device shows to
+                          // someone who already has an account but never
+                          // explicitly signed out on this exact device, so
+                          // just_signed_out/appIsReturningUserNotifier
+                          // wouldn't have caught them. Without this, that
+                          // person would have no way back into their
+                          // account from this screen at all.
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4, bottom: 8),
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.pushNamed(
+                                  context,
+                                  '/save-messages-prompt-screen',
+                                  arguments: {'signInMode': true},
+                                );
+                              },
+                              child: RichText(
+                                text: TextSpan(
+                                  style: GoogleFonts.nunitoSans(
+                                    fontSize: 13,
+                                    color: const Color(0xFF9E8E7E),
+                                  ),
+                                  children: [
+                                    const TextSpan(text: 'Already have an account? '),
+                                    TextSpan(
+                                      text: 'Sign In',
+                                      style: GoogleFonts.nunitoSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF5DA399),
+                                        decoration: TextDecoration.underline,
+                                        decorationColor: const Color(0xFF5DA399),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
