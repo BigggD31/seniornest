@@ -933,8 +933,9 @@ class _SafetyScreenState extends State<SafetyScreen>
           ),
           const SizedBox(height: 12),
           if (_mockContacts.isEmpty) ...[
-            _buildContactPlaceholder('Emergency Contact 2', '(e.g. Sibling, Friend)', isTablet),
-            _buildContactPlaceholder('Emergency Contact 3', '(e.g. Neighbor, Doctor)', isTablet),
+            _buildContactPlaceholder('Emergency Contact 1', '(e.g. Son, Daughter)', isTablet),
+            _buildContactPlaceholder('Emergency Contact 2', '(e.g. Spouse, Sibling)', isTablet),
+            _buildContactPlaceholder('Emergency Contact 3', '(e.g. Niece, Friend)', isTablet),
           ],
           ..._mockContacts.asMap().entries.map((entry) {
             final index = entry.key;
