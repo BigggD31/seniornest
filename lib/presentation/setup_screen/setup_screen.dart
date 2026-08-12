@@ -107,6 +107,17 @@ class _SetupScreenState extends State<SetupScreen>
     // Now sourced live from Supabase, with local cache only as an
     // offline/loading-moment fallback.
     String? fetchedNestName;
+    // Invite code had this exact same bug, and it's the more serious one:
+    // this screen was showing whatever invite_code happened to be cached
+    // locally, with no connection at all to this nest's real, current
+    // invite_code in the database. Confirmed directly against the DB: an
+    // owner's Setup screen was displaying a completely different nest's
+    // invite code (one that, unbeknownst to her, had ended up cached
+    // locally from an earlier, unrelated interaction) -- meaning she
+    // unknowingly shared the WRONG code, and the person who used it
+    // joined a stranger's nest instead of hers. Fetched live here, same
+    // as the name just above, from the exact same nest row.
+    String? fetchedInviteCode;
     try {
       final supabase = Supabase.instance.client;
       final currentUserId = supabase.auth.currentUser?.id;
@@ -115,13 +126,18 @@ class _SetupScreenState extends State<SetupScreen>
         try {
           final nestRow = await supabase
               .from('nests')
-              .select('name, created_by')
+              .select('name, created_by, invite_code')
               .eq('id', nestId)
               .maybeSingle();
           final remoteName = nestRow?['name'] as String?;
           if (remoteName != null && remoteName.isNotEmpty) {
             fetchedNestName = remoteName;
             await prefs.setString('nest_name', remoteName);
+          }
+          final remoteInviteCode = nestRow?['invite_code'] as String?;
+          if (remoteInviteCode != null && remoteInviteCode.isNotEmpty) {
+            fetchedInviteCode = remoteInviteCode;
+            await prefs.setString('invite_code', remoteInviteCode);
           }
           // Real ownership check. Previously "am I the nest owner" was
           // derived only from a local "joined via invite" flag -- fragile
@@ -272,7 +288,7 @@ class _SetupScreenState extends State<SetupScreen>
       _profileData = profileData;
       _birthday = birthday;
       _anniversary = anniversary;
-      _inviteCode = prefs.getString('invite_code') ?? '';
+      _inviteCode = fetchedInviteCode ?? prefs.getString('invite_code') ?? '';
       if (removedIds.isNotEmpty) {
         realFamilyMembers = realFamilyMembers
             .where((m) => !removedIds.contains(m['id'] as String))
