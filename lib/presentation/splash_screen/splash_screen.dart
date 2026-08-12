@@ -266,79 +266,26 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<void> _checkExistingSession() async {
     try {
-      // Must run before anything else in this function -- this screen's
-      // own session check is a known duplicate path to main.dart's
-      // _resolveInitialRoute() (documented below), and has been missed by
-      // a fix applied only to the other path before. Applying the
-      // stale-account-data check here too, not just in main.dart, to
-      // avoid that exact mistake happening again.
-      await AuthService.clearStaleAccountDataIfUserChanged();
-
-      final session = Supabase.instance.client.auth.currentSession;
+      // REMOVED (Aug 11 2026): this used to independently re-check session +
+      // onboarding + nest membership on every mount and navigate straight to
+      // Home or role-choice on its own -- a second, complete, uncoordinated
+      // copy of main.dart's _resolveInitialRoute(), missing its entitlement
+      // check entirely. main.dart only ever routes here when it has
+      // determined the person is NOT signed in; the only way this screen
+      // could ever find a real session afterward was the exact race
+      // main.dart's routing had (checking isSignedIn before the persisted
+      // session finished restoring on a fast app reopen). That race is now
+      // fixed at its actual origin, in main.dart, by awaiting the restored
+      // session before deciding the route at all -- so a genuinely
+      // signed-in-and-onboarded person is never sent here in the first
+      // place, and this screen doesn't need to guess again. Two independent
+      // deciders racing each other, each able to navigate on their own, was
+      // the actual reason the visible sequence on relaunch was different
+      // every time (branded screen, subscribe screen, or neither, in no
+      // consistent order) -- if this comes back, it means something is
+      // once again routing here for a signed-in user, and the fix belongs
+      // in main.dart's routing decision, not a second copy of it here.
       final prefs = await SharedPreferences.getInstance();
-      if (session != null) {
-        final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
-        if (hasOnboarded && mounted) {
-          // Re-check the cached nest membership against Supabase before
-          // trusting it -- this mirrors the same fix already applied to
-          // main.dart's cold-start routing. That fix only covered the app's
-          // very first launch; this splash screen runs again on its own
-          // whenever someone signs back in mid-session, and had the exact
-          // same "trust the local has_onboarded flag" bug, which is why a
-          // removed member could sign back in and land straight back in
-          // the nest they'd just been removed from.
-          final nestId = prefs.getString('nest_id') ?? '';
-          final userId = Supabase.instance.client.auth.currentUser?.id;
-          bool stillAMember = true; // fail open on error/no data, same as main.dart
-          if (userId != null && nestId.isNotEmpty) {
-            try {
-              final row = await Supabase.instance.client
-                  .from('nest_members')
-                  .select('nest_id')
-                  .eq('nest_id', nestId)
-                  .eq('user_id', userId)
-                  .maybeSingle();
-              stillAMember = row != null;
-            } catch (e) {
-              debugPrint('SPLASH_MEMBERSHIP_CHECK_ERROR: $e');
-              stillAMember = true;
-            }
-          }
-          if (!stillAMember) {
-            await prefs.remove('nest_id');
-            await prefs.setBool('has_onboarded', false);
-            await prefs.setBool('onboarding_complete', false);
-            // Also clear cached invite state -- otherwise onboarding or
-            // save-messages-prompt will silently re-join the same nest
-            // from the old invite code with no awareness they were removed.
-            await prefs.remove('invite_code');
-            await prefs.setBool('joined_via_invite', false);
-            // nest_name has this same gap -- see the matching comment in
-            // role_choice_screen.dart's _selectRole for the full
-            // explanation. A removed member re-onboarding fresh shouldn't
-            // see the name of the nest they were just removed from.
-            await prefs.remove('nest_name');
-            if (mounted) {
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                AppRoutes.roleChoiceScreen,
-                (route) => false,
-              );
-            }
-            return;
-          }
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) {
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/family-feed-screen',
-                (route) => false,
-              );
-            }
-          });
-          return;
-        }
-      }
       // No active session — check if they just signed out, to show Sign In link
       final justSignedOut = prefs.getBool('just_signed_out') ?? false;
       if (justSignedOut && mounted) {
