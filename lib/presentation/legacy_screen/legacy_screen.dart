@@ -256,22 +256,31 @@ class _LegacyScreenState extends State<LegacyScreen>
       String? userId = supabase.auth.currentUser?.id;
       if (userId == null) userId = supabase.auth.currentSession?.user.id;
       if (userId != null) {
-        // Resolve the real senior's name for this nest (the nest creator is
-        // always the senior owner) instead of the hardcoded "Eleanor" placeholder.
+        // Resolve the real senior's name for this nest instead of the
+        // hardcoded "Eleanor" placeholder.
         try {
           final nestId = prefs.getString('nest_id') ?? '';
           if (nestId.isNotEmpty) {
-            final nestRow = await supabase
-                .from('nests')
-                .select('created_by')
-                .eq('id', nestId)
-                .maybeSingle();
-            final seniorId = nestRow?['created_by'] as String?;
-            if (seniorId != null) {
+            // Previously assumed the nest's creator is always the senior --
+            // true for a senior setting up their own nest, but false for
+            // the VIP "family nest owner" flow, where a family member
+            // creates and owns the nest and the actual senior joins later
+            // via invite code. Same bug, same fix, as safety_screen.dart:
+            // look up whoever in this nest actually has the senior role,
+            // not whoever created it.
+            final memberRows = await supabase
+                .from('nest_members')
+                .select('user_id')
+                .eq('nest_id', nestId);
+            final memberIds = (memberRows as List)
+                .map((r) => r['user_id'] as String)
+                .toList();
+            if (memberIds.isNotEmpty) {
               final seniorProfile = await supabase
                   .from('user_profiles')
                   .select('display_name, preferred_name')
-                  .eq('id', seniorId)
+                  .inFilter('id', memberIds)
+                  .eq('role', 'senior')
                   .maybeSingle();
               final seniorPreferred = seniorProfile?['preferred_name'] as String? ?? '';
               final seniorDisplay = seniorProfile?['display_name'] as String? ?? '';

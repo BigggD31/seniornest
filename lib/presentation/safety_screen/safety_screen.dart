@@ -116,8 +116,7 @@ class _SafetyScreenState extends State<SafetyScreen>
     // Resolve the real senior's name from Supabase for family members.
     // The local 'senior_name' SharedPreferences key is never written
     // anywhere in the app -- confirmed via full codebase search -- so it
-    // was always blank. Same proven pattern already working in Legacy
-    // screen: the nest's creator is always the senior owner.
+    // was always blank.
     String resolvedSeniorName = prefs.getString('senior_name') ?? '';
     final isSeniorRoleForLookup =
         (prefs.getString('user_role') ?? 'senior') == 'senior';
@@ -126,17 +125,29 @@ class _SafetyScreenState extends State<SafetyScreen>
         final supabase = Supabase.instance.client;
         final nestId = prefs.getString('nest_id') ?? '';
         if (nestId.isNotEmpty) {
-          final nestRow = await supabase
-              .from('nests')
-              .select('created_by')
-              .eq('id', nestId)
-              .maybeSingle();
-          final seniorId = nestRow?['created_by'] as String?;
-          if (seniorId != null) {
+          // Previously assumed the nest's creator is always the senior --
+          // true for a senior setting up their own nest, but false for the
+          // VIP "family nest owner" flow, where a family member creates
+          // and owns the nest and the actual senior joins later via invite
+          // code. That wrong assumption meant this screen's "This is what
+          // ___ sees" banner showed the family owner's own name instead of
+          // the senior's, confirmed directly: a family nest owner named
+          // Devon saw "This is what Devon sees" on her own Safety screen.
+          // Correct lookup: whoever in this nest actually has the senior
+          // role, not whoever created it.
+          final memberRows = await supabase
+              .from('nest_members')
+              .select('user_id')
+              .eq('nest_id', nestId);
+          final memberIds = (memberRows as List)
+              .map((r) => r['user_id'] as String)
+              .toList();
+          if (memberIds.isNotEmpty) {
             final seniorProfile = await supabase
                 .from('user_profiles')
                 .select('display_name, preferred_name')
-                .eq('id', seniorId)
+                .inFilter('id', memberIds)
+                .eq('role', 'senior')
                 .maybeSingle();
             final seniorPreferred =
                 seniorProfile?['preferred_name'] as String? ?? '';
