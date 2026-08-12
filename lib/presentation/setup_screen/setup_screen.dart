@@ -2472,7 +2472,16 @@ class _EditNestSheetState extends State<_EditNestSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    return Container(
+    // Same pattern as Legacy's story-writing field (the one place in the
+    // app that already handles this correctly): the checkmark bar above
+    // the keyboard, plus tap-anywhere-else-in-the-sheet as a backup. This
+    // sheet previously had neither -- the only way out of the keyboard
+    // was closing the entire sheet by tapping the dimmed background
+    // behind it, losing whatever was being edited.
+    return KeyboardDoneBar(
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: EdgeInsets.only(
         left: 24,
@@ -2511,6 +2520,8 @@ class _EditNestSheetState extends State<_EditNestSheet> {
           TextField(
             controller: _nestController,
             textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
             style: GoogleFonts.nunitoSans(fontSize: 18, color: _textPrimary),
             decoration: InputDecoration(
               labelText: 'Nest name',
@@ -2565,6 +2576,8 @@ class _EditNestSheetState extends State<_EditNestSheet> {
             ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }
