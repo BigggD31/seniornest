@@ -193,6 +193,16 @@ class _MyAppState extends State<MyApp> {
         appDarkModeNotifier.value = brightness == Brightness.dark;
       }
 
+      // Resolved once here, before any screen ever builds -- see the
+      // comment on appNestNameNotifier in app_state.dart for the full
+      // reasoning. Once someone has named their nest, every screen should
+      // show that name instantly, every time, with zero wait regardless
+      // of connection speed.
+      final savedNestName = prefs.getString('nest_name');
+      if (savedNestName != null && savedNestName.isNotEmpty) {
+        appNestNameNotifier.value = savedNestName;
+      }
+
       final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
       // This is the TRUE origin of the subscribe-screen flash and the
       // "Home flashes twice" jitter, not just the entitlement check below.

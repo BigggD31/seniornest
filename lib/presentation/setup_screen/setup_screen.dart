@@ -36,7 +36,10 @@ class _SetupScreenState extends State<SetupScreen>
   // If a preferred name has been set, show that everywhere; otherwise fall back to first name.
   String get _effectiveName =>
       _preferredName.trim().isNotEmpty ? _preferredName.trim() : _displayName;
-  String _nestName = '';
+  // Seeded from the already-resolved app-wide notifier instead of an
+  // empty default -- see appNestNameNotifier in app_state.dart and the
+  // matching fix in family_feed_screen.dart.
+  String _nestName = appNestNameNotifier.value;
   String _relationship = '';
   bool _medsReminders = true;
   bool _dailyCheckIn = true;
@@ -118,16 +121,9 @@ class _SetupScreenState extends State<SetupScreen>
     // joined a stranger's nest instead of hers. Fetched live here, same
     // as the name just above, from the exact same nest row.
     String? fetchedInviteCode;
-    // Same early-seed fix as family_feed_screen.dart's top bar: show the
-    // cached name immediately, before the network fetch below, instead of
-    // leaving _nestName at its empty default (which several places in the
-    // app render as a generic placeholder like "My Nest"/"Your Nest") for
-    // the whole round trip. Confirmed happening consistently across tab
-    // switches and app reopens, not just cold starts.
-    final cachedNestNameForEarlySeed = prefs.getString('nest_name') ?? '';
-    if (mounted && cachedNestNameForEarlySeed.isNotEmpty) {
-      setState(() => _nestName = cachedNestNameForEarlySeed);
-    }
+    // _nestName is now seeded synchronously from appNestNameNotifier at
+    // field declaration (see the comment there), so it's already correct
+    // from the very first build -- no early setState needed here anymore.
     try {
       final supabase = Supabase.instance.client;
       final currentUserId = supabase.auth.currentUser?.id;
@@ -143,6 +139,9 @@ class _SetupScreenState extends State<SetupScreen>
           if (remoteName != null && remoteName.isNotEmpty) {
             fetchedNestName = remoteName;
             await prefs.setString('nest_name', remoteName);
+            // Keep the shared notifier in sync too, so every other screen
+            // that reads it picks up a real rename immediately.
+            appNestNameNotifier.value = remoteName;
           }
           final remoteInviteCode = nestRow?['invite_code'] as String?;
           if (remoteInviteCode != null && remoteInviteCode.isNotEmpty) {
@@ -1575,6 +1574,10 @@ class _SetupScreenState extends State<SetupScreen>
             debugPrint('NEST_NAME_SAVE_ERROR: $e');
           }
           setState(() => _nestName = name);
+          // Update the shared notifier immediately too, so Home's top bar
+          // (and any other screen reading it) reflects a manual rename
+          // right away, not just this screen.
+          appNestNameNotifier.value = name;
         },
       ),
     );

@@ -139,7 +139,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   int _currentNavIndex = 0;
   bool _isSenior = false;
   String _displayName = '';
-  String _nestName = '';
+  // Seeded from the already-resolved app-wide notifier instead of an
+  // empty default -- see appNestNameNotifier in app_state.dart. Once
+  // someone has named their nest, this is correct on the very first
+  // build, before any async work even starts, so nothing below it (the
+  // "My Nest" placeholder) is ever visible, regardless of connection
+  // speed.
+  String _nestName = appNestNameNotifier.value;
   bool _isGoodTodaySent = false;
   bool _justCheckedIn = false; // true only briefly right after tapping, to show the "Sent!" confirmation
   bool _showMedsReminder = true;
@@ -371,21 +377,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // flow sharing the same nest (e.g. a family member's own device).
     // Now sourced live from Supabase, with local cache as fallback.
     String nestName = prefs.getString('nest_name') ?? '';
-    // Seed the top bar with the cached name immediately, before the slower
-    // network round trips below (_ensureNestId() just ran above, and the
-    // live-fetch verification is right below this). Previously _nestName
-    // stayed at its empty default for the entire duration of both network
-    // calls before the single setState at the end of this function ever
-    // fired, so the top bar's "My Nest" empty-string fallback visibly
-    // flashed on every rebuild of this screen -- confirmed as happening
-    // consistently across tab switches and app reopens, not just cold
-    // starts, since (per an earlier fix this same night) the bottom nav
-    // rebuilds this screen from scratch on every tab switch. The cached
-    // name is already known here and doesn't need to wait on either
-    // network call to be shown correctly.
-    if (mounted && nestName.isNotEmpty) {
-      setState(() => _nestName = nestName);
-    }
+    // _nestName is now seeded synchronously from appNestNameNotifier at
+    // field declaration (see the comment there), so it's already correct
+    // from the very first build -- no early setState needed here anymore.
     try {
       final nestIdForName = prefs.getString('nest_id') ?? '';
       if (nestIdForName.isNotEmpty) {
@@ -398,6 +392,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         if (remoteName != null && remoteName.isNotEmpty) {
           nestName = remoteName;
           await prefs.setString('nest_name', remoteName);
+          // Keep the shared notifier in sync too, so every other screen
+          // that reads it (Setup, and any future screen) picks up a real
+          // rename immediately, not just this one.
+          appNestNameNotifier.value = remoteName;
         }
       }
     } catch (e) {
