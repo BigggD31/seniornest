@@ -35,6 +35,8 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
 
   List<Map<String, dynamic>> _messages = [];
   String? _myUserId;
+  String? _myAvatarUrl;
+  String _myDisplayName = 'You';
   String? _nestId;
   bool _isLoading = true;
   bool _isSending = false;
@@ -63,6 +65,32 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     _isDarkMode = prefs.getBool('dark_mode') ?? false;
     _myUserId = _supabase.auth.currentUser?.id;
     _nestId = prefs.getString('nest_id');
+
+    // Fetches the same profile fields, from the same table, that
+    // messages_inbox_screen.dart already fetches for the OTHER person
+    // (widget.recipientAvatarUrl) -- needed so each bubble in the thread
+    // below can show whose message it actually is, not just infer it from
+    // bubble color/alignment alone.
+    if (_myUserId != null) {
+      try {
+        final myProfile = await _supabase
+            .from('user_profiles')
+            .select('display_name, preferred_name, avatar_url')
+            .eq('id', _myUserId!)
+            .maybeSingle();
+        if (myProfile != null && mounted) {
+          final preferred = myProfile['preferred_name'] as String? ?? '';
+          final display = myProfile['display_name'] as String? ?? '';
+          setState(() {
+            _myAvatarUrl = myProfile['avatar_url'] as String?;
+            _myDisplayName =
+                preferred.isNotEmpty ? preferred : (display.isNotEmpty ? display : 'You');
+          });
+        }
+      } catch (e) {
+        debugPrint('MY_PROFILE_LOAD_ERROR: $e');
+      }
+    }
 
     if (_nestId == null || _nestId!.isEmpty) {
       final result = await _supabase
@@ -253,12 +281,21 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
   }
 
   Widget _buildBubble(Map<String, dynamic> m, bool isMine) {
-    return Align(
-      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+    // Avatar sits on the outer edge of each bubble (left for theirs, right
+    // for mine) so who-said-what is obvious at a glance instead of relying
+    // on bubble color/alignment alone -- especially important for a mostly
+    // one-sided thread, where every bubble being the same color made it
+    // read as one undivided block with no visible separation at all.
+    final avatar = ProfileAvatarWidget(
+      avatarUrl: isMine ? _myAvatarUrl : widget.recipientAvatarUrl,
+      displayName: isMine ? _myDisplayName : widget.recipientName,
+      size: 30,
+      borderWidth: 1.5,
+    );
+    final bubble = Flexible(
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.68),
         decoration: BoxDecoration(
           color: isMine ? _bubbleMine : _bubbleTheirs,
           borderRadius: BorderRadius.only(
@@ -278,6 +315,16 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
           // teal link color would be invisible there -- use white instead.
           linkColor: isMine ? Colors.white : null,
         ),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: isMine
+            ? [bubble, const SizedBox(width: 8), avatar]
+            : [avatar, const SizedBox(width: 8), bubble],
       ),
     );
   }
