@@ -597,13 +597,34 @@ class _SplashScreenState extends State<SplashScreen>
                                     arguments: {'signInMode': true},
                                   );
                                 },
-                                child: Text(
-                                  'Already have an account? Sign In',
-                                  style: GoogleFonts.nunitoSans(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF5DA399),
-                                    decoration: TextDecoration.underline,
+                                // Matches the treatment already used on the
+                                // sign-in screen itself: only "Sign In" is
+                                // bold/teal/underlined, the rest reads as
+                                // plain sentence text. Previously the whole
+                                // phrase here was bold+underlined, which
+                                // made it stand out from everything else on
+                                // this page (no other text on this screen is
+                                // underlined) and didn't match how the same
+                                // link looks one screen later.
+                                child: RichText(
+                                  text: TextSpan(
+                                    style: GoogleFonts.nunitoSans(
+                                      fontSize: 13,
+                                      color: const Color(0xFF9E8E7E),
+                                    ),
+                                    children: [
+                                      const TextSpan(text: 'Already have an account? '),
+                                      TextSpan(
+                                        text: 'Sign In',
+                                        style: GoogleFonts.nunitoSans(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF5DA399),
+                                          decoration: TextDecoration.underline,
+                                          decorationColor: const Color(0xFF5DA399),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
