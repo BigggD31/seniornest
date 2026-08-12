@@ -194,7 +194,24 @@ class _MyAppState extends State<MyApp> {
       }
 
       final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
-      final isSignedIn = AuthService.isSignedIn;
+      // This is the TRUE origin of the subscribe-screen flash and the
+      // "Home flashes twice" jitter, not just the entitlement check below.
+      // AuthService.isSignedIn is a raw, instant, unprotected read of
+      // currentUser -- checked here BEFORE _waitForRestoredUserId() ever
+      // gets a chance to run downstream. On a fast reopen, if the session
+      // hasn't finished restoring at this exact synchronous instant, this
+      // was false even for an actually-signed-in person, sending the whole
+      // branch below to the splashScreen route instead -- which ALSO ran
+      // its own independent, competing session check on mount
+      // (splash_screen.dart's _checkExistingSession), with no entitlement
+      // check of its own, and its own navigation to Home. Two uncoordinated
+      // deciders racing against each other, each capable of navigating on
+      // their own, is why the visible sequence was different every time
+      // depending on which one's timing won. Awaiting the restored session
+      // HERE, at the actual point of origin, means this branch is decided
+      // correctly the first time and splash_screen's competing path (fixed
+      // separately) never has a real session left to find.
+      final isSignedIn = await _waitForRestoredUserId() != null;
 
       if (isSignedIn && hasOnboarded) {
         // Signed in and onboarded -- but only let them straight into the
