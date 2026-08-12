@@ -12,6 +12,7 @@ import './widgets/feed_empty_state_widget.dart';
 import './widgets/feed_top_bar_widget.dart';
 import './widgets/im_good_today_orb_widget.dart';
 import './widgets/daily_checkin_card_widget.dart';
+import './widgets/daily_meds_card_widget.dart';
 import './widgets/legacy_prompt_card_widget.dart';
 import './widgets/meds_reminder_card_widget.dart';
 import './widgets/message_card_widget.dart';
@@ -163,6 +164,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   String _seniorUserId = '';
   bool _seniorCheckedInToday = false;
   DateTime? _seniorCheckinTime;
+  bool _seniorMedsTakenToday = false;
+  DateTime? _seniorMedsTakenTime;
   bool _inviteCodeShared =
       true; // tracks if family owner has shared invite code
   bool _isGuest = false;
@@ -568,6 +571,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     String initialSeniorName = '';
     bool initialSeniorCheckedIn = false;
     DateTime? initialSeniorCheckinTime;
+    bool initialSeniorMedsTaken = false;
+    DateTime? initialSeniorMedsTakenTime;
     if (cachedCheckinNestId.isNotEmpty &&
         cachedCheckinNestId == _currentNestIdForCache &&
         cachedCheckinDate == _todayDateString()) {
@@ -577,6 +582,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       final cachedTimeStr = prefs.getString('cached_checkin_time');
       initialSeniorCheckinTime =
           cachedTimeStr != null ? DateTime.tryParse(cachedTimeStr) : null;
+      initialSeniorMedsTaken = prefs.getBool('cached_checkin_meds_taken') ?? false;
+      final cachedMedsTimeStr = prefs.getString('cached_checkin_meds_time');
+      initialSeniorMedsTakenTime =
+          cachedMedsTimeStr != null ? DateTime.tryParse(cachedMedsTimeStr) : null;
     }
 
     setState(() {
@@ -604,6 +613,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         _seniorName = initialSeniorName;
         _seniorCheckedInToday = initialSeniorCheckedIn;
         _seniorCheckinTime = initialSeniorCheckinTime;
+        _seniorMedsTakenToday = initialSeniorMedsTaken;
+        _seniorMedsTakenTime = initialSeniorMedsTakenTime;
       }
     });
 
@@ -727,6 +738,18 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           .eq('checkin_date', _todayDateString())
           .maybeSingle();
 
+      // Check if that senior has logged their medications today. Reuses
+      // the seniorId/seniorName already resolved above rather than a
+      // second nest_members lookup, same table shape and RLS as
+      // daily_checkins (nest members can read, each user can only insert
+      // their own row).
+      final medsResponse = await supabase
+          .from('daily_medications')
+          .select('created_at')
+          .eq('user_id', seniorId)
+          .eq('med_date', _todayDateString())
+          .maybeSingle();
+
       if (mounted) {
         setState(() {
           _seniorUserId = seniorId;
@@ -734,6 +757,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           _seniorCheckedInToday = checkinResponse != null;
           _seniorCheckinTime = checkinResponse != null
               ? DateTime.parse(checkinResponse['created_at'] as String)
+              : null;
+          _seniorMedsTakenToday = medsResponse != null;
+          _seniorMedsTakenTime = medsResponse != null
+              ? DateTime.parse(medsResponse['created_at'] as String)
               : null;
           _topCardsAnimatedOnceThisSession = true;
           // Reconcile the local-only good_today_* flag (drives the
@@ -771,6 +798,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               'cached_checkin_time', checkinResponse['created_at'] as String);
         } else {
           await prefs.remove('cached_checkin_time');
+        }
+        await prefs.setBool('cached_checkin_meds_taken', medsResponse != null);
+        if (medsResponse != null) {
+          await prefs.setString(
+              'cached_checkin_meds_time', medsResponse['created_at'] as String);
+        } else {
+          await prefs.remove('cached_checkin_meds_time');
         }
       } catch (_) {}
     } catch (e) {
@@ -1018,10 +1052,36 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   Future<void> _handleMedsTaken() async {
-    // TODO: Replace with Supabase daily reset logic for production
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('meds_reminder_${_todayKey()}', false);
     setState(() => _showMedsReminder = false);
+
+    // Previously this was purely local -- it dismissed the reminder card
+    // on this one device only, with nothing written anywhere shared and
+    // nobody else in the nest ever finding out. Now saves a real record
+    // (same daily_medications table/RLS shape as daily_checkins) and
+    // reloads status so the pinned meds card family members see updates
+    // immediately, the same way the "I'm Good" check-in already works.
+    try {
+      final supabase = Supabase.instance.client;
+      final nestId = prefs.getString('nest_id') ?? '';
+      final userId = supabase.auth.currentUser?.id;
+      if (nestId.isNotEmpty && userId != null) {
+        await supabase.from('daily_medications').upsert(
+          {
+            'nest_id': nestId,
+            'user_id': userId,
+            'med_date': _todayDateString(),
+          },
+          onConflict: 'user_id,med_date',
+        );
+        if (mounted) {
+          await _loadCheckinStatus();
+        }
+      }
+    } catch (e) {
+      debugPrint('MEDS_TAKEN_SEND_ERROR: $e');
+    }
   }
 
   Future<void> _toggleHeart(int index) async {
@@ -1443,6 +1503,14 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                               seniorName: _seniorName,
                               checkedIn: _seniorCheckedInToday,
                               checkinTime: _seniorCheckinTime,
+                            ),
+                            const SizedBox(height: 10),
+                            DailyMedsCardWidget(
+                              isDarkMode: _isDarkMode,
+                              isSenior: _isSenior,
+                              seniorName: _seniorName,
+                              takenToday: _seniorMedsTakenToday,
+                              takenTime: _seniorMedsTakenTime,
                             ),
                             const SizedBox(height: 14),
                           ],

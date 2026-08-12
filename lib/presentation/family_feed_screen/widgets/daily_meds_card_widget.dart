@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class DailyCheckinCardWidget extends StatelessWidget {
-  const DailyCheckinCardWidget({
+/// Pinned status card showing whether the senior has logged their
+/// medications today, visible to everyone in the nest -- same pattern as
+/// DailyCheckinCardWidget, backed by the daily_medications table.
+class DailyMedsCardWidget extends StatelessWidget {
+  const DailyMedsCardWidget({
     super.key,
     required this.isDarkMode,
     required this.isSenior,
     required this.seniorName,
-    required this.checkedIn,
-    this.checkinTime,
+    required this.takenToday,
+    this.takenTime,
   });
 
   final bool isDarkMode;
   final bool isSenior;
   final String seniorName;
-  final bool checkedIn;
-  final DateTime? checkinTime;
+  final bool takenToday;
+  final DateTime? takenTime;
 
   String _relativeTime(DateTime time) {
     final diff = DateTime.now().difference(time);
@@ -27,25 +30,27 @@ class DailyCheckinCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final headline = checkedIn
+    final headline = takenToday
         ? (isSenior
-              ? 'You\'re doing good today ✓'
-              : '$seniorName is doing good today')
+              ? 'You took your medications today ✓'
+              : '$seniorName took their medications today')
         : (isSenior
-              ? 'You haven\'t checked in yet today'
-              : '$seniorName hasn\'t checked in yet today');
+              ? 'Medications not logged yet today'
+              : '$seniorName hasn\'t logged medications yet today');
 
-    final subtext = checkedIn
+    final subtext = takenToday
         ? (isSenior
-              ? 'Your family knows you\'re doing great.'
-              : checkinTime != null
-                  ? 'Checked in ${_relativeTime(checkinTime!)}.'
-                  : 'Everything\'s good.')
+              ? 'Your family knows you\'re on track.'
+              : takenTime != null
+                  ? 'Logged ${_relativeTime(takenTime!)}.'
+                  : 'All set for today.')
         : (isSenior
-              ? 'Tap the heart button below when you\'re ready.'
+              ? 'Tap the button below once you\'ve taken them.'
               : 'No news is usually good news — check back later.');
 
-    final Color accentColor = const Color(0xFF5DA399);
+    // Distinct accent from the check-in card's teal, so the two pinned
+    // cards read as separate at a glance rather than blending together.
+    final Color accentColor = const Color(0xFF8A6FB0);
 
     return Container(
       width: double.infinity,
@@ -68,7 +73,7 @@ class DailyCheckinCardWidget extends StatelessWidget {
               color: accentColor.withAlpha(31),
             ),
             child: Icon(
-              checkedIn ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              takenToday ? Icons.medication_rounded : Icons.medication_outlined,
               color: accentColor,
               size: 22,
             ),
