@@ -265,10 +265,30 @@ class AuthService {
     'cached_nest_members', 'cached_nest_members_nest_id', 'cached_nest_members_user_id',
     'cached_real_messages', 'cached_real_messages_nest_id',
     // cached_checkin_* deliberately excluded -- "has the senior checked in
-    // today" is a nest-level fact, not tied to who's currently viewing it,
-    // same as nest_name/user_role were incorrectly included before. Wiping
-    // it briefly showed "not checked in" right after switching accounts,
-    // even though a live server re-check should correct it shortly after.
+    // today" is a nest-level fact, not tied to who's currently viewing it.
+    // Wiping it briefly showed "not checked in" right after switching
+    // accounts, even though a live server re-check should correct it
+    // shortly after.
+    //
+    // nest_name, nest_id, invite_code, and joined_via_invite were
+    // PREVIOUSLY excluded from this list entirely, on the reasoning that
+    // they're legitimately set mid-onboarding, before the account-switch
+    // check downstream (in _navigateToHome) even runs, and wiping them
+    // there would destroy a fresh signup's own just-entered values. That
+    // reasoning was correct for that ONE call site, but the fix was too
+    // broad: excluding them HERE meant they never got wiped for a genuine
+    // switch ANYWHERE else in the app either -- which is exactly why they
+    // kept independently resurfacing all night as "cross contamination" in
+    // different specific screens (a fresh onboarding field pre-filled with
+    // a stale nest name; a Setup screen showing a different account's real
+    // invite code) even after each individual display bug was patched.
+    // Each fix closed one leak; this list was the actual source feeding
+    // all of them. Now included here like everything else, with the one
+    // legitimate exception (a fresh signup's own in-progress values)
+    // handled locally at its one real call site in _navigateToHome
+    // instead, via capture-before-wipe/restore-after -- see the comment
+    // there for the full explanation.
+    'nest_name', 'nest_id', 'invite_code', 'joined_via_invite',
   ];
 
   /// Detects a genuine account switch on this device and wipes every
