@@ -723,7 +723,28 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               ? DateTime.parse(checkinResponse['created_at'] as String)
               : null;
           _topCardsAnimatedOnceThisSession = true;
+          // Reconcile the local-only good_today_* flag (drives the
+          // floating "I'm Good" button) against this real database check
+          // (drives the "You checked in today" card above) whenever this
+          // is the senior's own device. These were two completely
+          // separate, never-reconciled sources of truth for the same
+          // fact -- one purely local, one server-verified -- so if the
+          // local flag ever fell out of sync for any reason (a fresh
+          // install, a cleared cache, or anything else), the card and
+          // the button could permanently disagree with each other for
+          // the rest of the day, showing "checked in" and the button to
+          // check in again at the same time. The server record is
+          // authoritative; sync the local flag to match it either way.
+          if (_isSenior) {
+            _isGoodTodaySent = checkinResponse != null;
+          }
         });
+        if (_isSenior) {
+          await prefs.setBool(
+            'good_today_${_todayKey()}',
+            checkinResponse != null,
+          );
+        }
       }
 
       try {
