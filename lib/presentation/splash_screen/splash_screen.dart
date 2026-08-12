@@ -389,7 +389,7 @@ class _SplashScreenState extends State<SplashScreen>
                               'Sign in to pick up right where you left off.',
                               textAlign: TextAlign.center,
                               style: GoogleFonts.nunitoSans(
-                                fontSize: 14,
+                                fontSize: 20,
                                 color: const Color(0xFF6B5E4E),
                                 height: 1.4,
                               ),
@@ -447,7 +447,7 @@ class _SplashScreenState extends State<SplashScreen>
                               child: RichText(
                                 text: TextSpan(
                                   style: GoogleFonts.nunitoSans(
-                                    fontSize: 13,
+                                    fontSize: 18,
                                     color: const Color(0xFF9E8E7E),
                                   ),
                                   children: [
@@ -455,7 +455,7 @@ class _SplashScreenState extends State<SplashScreen>
                                     TextSpan(
                                       text: 'Get Started',
                                       style: GoogleFonts.nunitoSans(
-                                        fontSize: 13,
+                                        fontSize: 18,
                                         fontWeight: FontWeight.w700,
                                         color: const Color(0xFF5DA399),
                                         decoration: TextDecoration.underline,
@@ -674,7 +674,7 @@ class _SplashScreenState extends State<SplashScreen>
                             child: Text(
                               'No commitment • Cancel anytime',
                               style: GoogleFonts.nunitoSans(
-                                fontSize: 11,
+                                fontSize: 16,
                                 color: const Color(0xFFA8A090),
                               ),
                             ),
@@ -701,7 +701,7 @@ class _SplashScreenState extends State<SplashScreen>
                               child: RichText(
                                 text: TextSpan(
                                   style: GoogleFonts.nunitoSans(
-                                    fontSize: 13,
+                                    fontSize: 18,
                                     color: const Color(0xFF9E8E7E),
                                   ),
                                   children: [
@@ -709,7 +709,7 @@ class _SplashScreenState extends State<SplashScreen>
                                     TextSpan(
                                       text: 'Sign In',
                                       style: GoogleFonts.nunitoSans(
-                                        fontSize: 13,
+                                        fontSize: 18,
                                         fontWeight: FontWeight.w700,
                                         color: const Color(0xFF5DA399),
                                         decoration: TextDecoration.underline,
