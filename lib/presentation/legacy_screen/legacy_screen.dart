@@ -222,7 +222,6 @@ class _LegacyScreenState extends State<LegacyScreen>
 
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
-    await Future.delayed(const Duration(milliseconds: 400));
     final profileJson = prefs.getString(kProfilePhotoKey);
     Map<String, dynamic>? profileData;
     if (profileJson != null) {
@@ -249,7 +248,62 @@ class _LegacyScreenState extends State<LegacyScreen>
       } catch (_) {}
     }
 
-    // Load real stories from Supabase BEFORE setState
+    // Cache-first: show the last-loaded stories instantly (same pattern as
+    // Home's nest members / checkin cache), then refresh the full
+    // assembled list (stories + authors + hearts) from Supabase quietly in
+    // the background. Previously this screen had no cache and an
+    // unconditional 400ms delay before even starting the network work --
+    // guaranteed empty-box time on every visit. Removed the delay; added
+    // the cache.
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id ?? '';
+    final cachedStoriesUserId = prefs.getString('cached_legacy_stories_user_id') ?? '';
+    List<Map<String, dynamic>> initialStories = [];
+    if (cachedStoriesUserId.isNotEmpty && cachedStoriesUserId == currentUserId) {
+      final cachedStoriesJson = prefs.getString('cached_legacy_stories');
+      if (cachedStoriesJson != null && cachedStoriesJson.isNotEmpty) {
+        try {
+          final List<dynamic> cachedList = jsonDecode(cachedStoriesJson) as List<dynamic>;
+          initialStories = cachedList.map((s) {
+            final m = Map<String, dynamic>.from(s as Map);
+            // Bookmark state can change between visits even if the cached
+            // story list itself hasn't -- always re-derive it from the
+            // current bookmarks set rather than trusting the cached value.
+            m['isBookmarked'] = bookmarkedIds.contains(m['id'] as String);
+            return m;
+          }).toList();
+        } catch (_) {}
+      }
+    }
+    final isSeniorInitial = (prefs.getString('user_role') ?? 'senior') == 'senior';
+
+    setState(() {
+      _isSenior = isSeniorInitial;
+      _isDarkMode = prefs.getBool('dark_mode') ?? false;
+      _hasSentStories = prefs.getBool('has_sent_stories') ?? false;
+      _sampleBannerDismissed = prefs.getBool('legacy_sample_banner_dismissed') ?? false;
+      _stories = initialStories.isNotEmpty
+          ? initialStories
+          : (isSeniorInitial
+              ? _mockStories.map((s) {
+                  final m = Map<String, dynamic>.from(s);
+                  m['isBookmarked'] = bookmarkedIds.contains(m['id'] as String);
+                  return m;
+                }).toList()
+              : <Map<String, dynamic>>[]);
+      _submittedPrompts = loadedPrompts;
+      _isLoading = false;
+      _profileData = profileData;
+      _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
+          ? prefs.getString('preferred_name')!
+          : (prefs.getString('display_name') ?? '');
+      // Best guess until the live lookup below resolves the real senior.
+      _seniorName = prefs.getString('senior_name') ?? 'Your Loved One';
+    });
+    _setupAnimations();
+    _entranceController.forward();
+
+    // Live refresh from Supabase -- updates quietly in place, no second
+    // entrance animation (same pattern as Home's background refresh).
     List<Map<String, dynamic>> realStories = [];
     String resolvedSeniorName = 'Your Loved One';
     try {
@@ -373,37 +427,22 @@ class _LegacyScreenState extends State<LegacyScreen>
           'authorName': authorNames[e['user_id']] ?? '',
           'authorAvatarUrl': authorAvatars[e['user_id']] ?? '',
         }).toList();
+
+        if (mounted) {
+          setState(() {
+            if (realStories.isNotEmpty) {
+              _stories = realStories;
+            }
+            _seniorName = resolvedSeniorName;
+          });
+          _setupAnimations();
+          await prefs.setString('cached_legacy_stories', jsonEncode(realStories));
+          await prefs.setString('cached_legacy_stories_user_id', userId);
+        }
       }
     } catch (e) {
       print('LEGACY LOAD ERROR: $e');
     }
-
-    setState(() {
-      _isSenior = (prefs.getString('user_role') ?? 'senior') == 'senior';
-      _isDarkMode = prefs.getBool('dark_mode') ?? false;
-      _hasSentStories = prefs.getBool('has_sent_stories') ?? false;
-      _sampleBannerDismissed = prefs.getBool('legacy_sample_banner_dismissed') ?? false;
-
-      // Show real stories if any exist, otherwise show mock placeholders
-      _stories = realStories.isNotEmpty
-          ? realStories
-          : (_isSenior
-              ? _mockStories.map((s) {
-                  final m = Map<String, dynamic>.from(s);
-                  m['isBookmarked'] = bookmarkedIds.contains(m['id'] as String);
-                  return m;
-                }).toList()
-              : <Map<String, dynamic>>[]);
-      _submittedPrompts = loadedPrompts;
-      _isLoading = false;
-      _profileData = profileData;
-      _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
-          ? prefs.getString('preferred_name')!
-          : (prefs.getString('display_name') ?? '');
-      _seniorName = resolvedSeniorName;
-    });
-    _setupAnimations();
-    _entranceController.forward();
   }
 
   void _setupAnimations() {
@@ -4631,7 +4670,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                           child: _LegacyVideoCardPlayer(videoUrl: mediaUrl, isDarkMode: widget.isDarkMode),
                         )
                       else
-                        Text(
+                        LinkifiedText(
                           story['excerpt'] as String? ?? '',
                           style: GoogleFonts.nunitoSans(fontSize: 14, color: _textSecondary, height: 1.5),
                           maxLines: 2,

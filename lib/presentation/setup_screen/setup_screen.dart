@@ -71,7 +71,6 @@ class _SetupScreenState extends State<SetupScreen>
 
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
-    await Future.delayed(const Duration(milliseconds: 300));
     final role = prefs.getString('user_role') ?? 'senior';
     final isSenior = role == 'senior';
     final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
@@ -80,6 +79,97 @@ class _SetupScreenState extends State<SetupScreen>
 
     String savedName = prefs.getString('display_name') ?? '';
     String savedPreferredName = prefs.getString('preferred_name') ?? '';
+
+    final hasRealPost = prefs.getBool('has_real_post') ?? false;
+    final inviteCodeShared = prefs.getBool('invite_code_shared') ?? false;
+    final isGuest = prefs.getBool('is_guest') ?? false;
+    final removedIds = prefs.getStringList('removed_member_ids') ?? [];
+
+    final profileJson = prefs.getString(kProfilePhotoKey);
+    Map<String, dynamic>? profileData;
+    if (profileJson != null) {
+      try {
+        profileData = jsonDecode(profileJson) as Map<String, dynamic>;
+      } catch (_) {}
+    }
+
+    DateTime? birthday;
+    DateTime? anniversary;
+    final birthdayStr = prefs.getString('birthday');
+    final anniversaryStr = prefs.getString('anniversary');
+    if (birthdayStr != null) {
+      try {
+        birthday = DateTime.parse(birthdayStr);
+      } catch (_) {}
+    }
+    if (anniversaryStr != null) {
+      try {
+        anniversary = DateTime.parse(anniversaryStr);
+      } catch (_) {}
+    }
+
+    // Cache-first: show the last-loaded family member list instantly (same
+    // pattern as Home's nest members cache), then refresh from Supabase
+    // quietly in the background. Previously this screen had no cache and
+    // an unconditional 300ms delay before even starting FOUR sequential
+    // network round-trips (nest info, birthday/name, VIP check) with
+    // nothing on screen the whole time. Removed the delay; added the
+    // cache for the one real content list (family members) -- everything
+    // else here already had a local-prefs fallback baked in.
+    final currentUserIdForCache = Supabase.instance.client.auth.currentUser?.id ?? '';
+    final nestIdForCache = prefs.getString('nest_id') ?? '';
+    final cachedFamilyNestId = prefs.getString('cached_setup_family_nest_id') ?? '';
+    final cachedFamilyUserId = prefs.getString('cached_setup_family_user_id') ?? '';
+    List<Map<String, dynamic>> initialFamilyMembers = [];
+    if (cachedFamilyNestId.isNotEmpty &&
+        cachedFamilyNestId == nestIdForCache &&
+        cachedFamilyUserId.isNotEmpty &&
+        cachedFamilyUserId == currentUserIdForCache) {
+      final cachedFamilyJson = prefs.getString('cached_setup_family_members');
+      if (cachedFamilyJson != null && cachedFamilyJson.isNotEmpty) {
+        try {
+          final List<dynamic> cachedList = jsonDecode(cachedFamilyJson) as List<dynamic>;
+          initialFamilyMembers = cachedList.map((m) => Map<String, dynamic>.from(m as Map)).toList();
+          if (removedIds.isNotEmpty) {
+            initialFamilyMembers = initialFamilyMembers
+                .where((m) => !removedIds.contains(m['id'] as String))
+                .toList();
+          }
+        } catch (_) {}
+      }
+    }
+    final initialIsVip = prefs.getBool('cached_is_vip_member') ?? false;
+
+    setState(() {
+      _isSenior = isSenior;
+      _isNestOwner = isNestOwner;
+      _isVipMember = initialIsVip;
+      _displayName = savedName;
+      _preferredName = savedPreferredName;
+      _nestName = prefs.getString('nest_name') ?? 'Your Nest';
+      _relationship = prefs.getString('relationship') ?? '';
+      _isDarkMode = prefs.getBool('dark_mode') ?? false;
+      _medsReminders = prefs.getBool('meds_reminders') ?? true;
+      _dailyCheckIn = prefs.getBool('daily_check_in') ?? true;
+      _notifyMessages = prefs.getBool('notify_messages') ?? true;
+      _notifyCheckIn = prefs.getBool('notify_check_in') ?? true;
+      _textSize = prefs.getString('text_size') ?? defaultSize;
+      _isGuest = prefs.getBool('is_guest') ?? false;
+      _isLoading = false;
+      _profileData = profileData;
+      _birthday = birthday;
+      _anniversary = anniversary;
+      _inviteCode = prefs.getString('invite_code') ?? '';
+      _familyMembers = initialFamilyMembers;
+    });
+    _setupAnimations();
+    _entranceController.forward();
+
+    // From here down: the same three network blocks this screen always
+    // had, unchanged in logic, just each doing its own quiet follow-up
+    // setState as it completes instead of all accumulating into local
+    // variables for one big setState at the very end.
+
     if (savedName.isEmpty) {
       try {
         final user = Supabase.instance.client.auth.currentUser;
@@ -91,15 +181,12 @@ class _SetupScreenState extends State<SetupScreen>
         if (metaName.isNotEmpty) {
           savedName = metaName;
           await prefs.setString('display_name', savedName);
+          if (mounted) {
+            setState(() => _displayName = savedName);
+          }
         }
       } catch (_) {}
     }
-
-    final hasRealPost = prefs.getBool('has_real_post') ?? false;
-    final inviteCodeShared = prefs.getBool('invite_code_shared') ?? false;
-    final isGuest = prefs.getBool('is_guest') ?? false;
-
-    final removedIds = prefs.getStringList('removed_member_ids') ?? [];
 
     // Family Members was previously always an empty list -- nothing ever
     // populated it from real data, so it silently showed "0 members" no
@@ -121,9 +208,6 @@ class _SetupScreenState extends State<SetupScreen>
     // joined a stranger's nest instead of hers. Fetched live here, same
     // as the name just above, from the exact same nest row.
     String? fetchedInviteCode;
-    // _nestName is now seeded synchronously from appNestNameNotifier at
-    // field declaration (see the comment there), so it's already correct
-    // from the very first build -- no early setState needed here anymore.
     try {
       final supabase = Supabase.instance.client;
       final currentUserId = supabase.auth.currentUser?.id;
@@ -192,32 +276,29 @@ class _SetupScreenState extends State<SetupScreen>
           });
         }
       }
+      if (removedIds.isNotEmpty) {
+        realFamilyMembers = realFamilyMembers
+            .where((m) => !removedIds.contains(m['id'] as String))
+            .toList();
+      }
+      if (mounted) {
+        setState(() {
+          if (fetchedNestName != null) _nestName = fetchedNestName!;
+          if (fetchedInviteCode != null) _inviteCode = fetchedInviteCode!;
+          _isNestOwner = isNestOwner;
+          _familyMembers = realFamilyMembers;
+        });
+        _setupAnimations();
+        if (currentUserId != null && nestId.isNotEmpty) {
+          await prefs.setString('cached_setup_family_members', jsonEncode(realFamilyMembers));
+          await prefs.setString('cached_setup_family_nest_id', nestId);
+          await prefs.setString('cached_setup_family_user_id', currentUserId);
+        }
+      }
     } catch (e) {
       print('FAMILY_MEMBERS_LOAD_ERROR: $e');
     }
 
-    final profileJson = prefs.getString(kProfilePhotoKey);
-    Map<String, dynamic>? profileData;
-    if (profileJson != null) {
-      try {
-        profileData = jsonDecode(profileJson) as Map<String, dynamic>;
-      } catch (_) {}
-    }
-
-    DateTime? birthday;
-    DateTime? anniversary;
-    final birthdayStr = prefs.getString('birthday');
-    final anniversaryStr = prefs.getString('anniversary');
-    if (birthdayStr != null) {
-      try {
-        birthday = DateTime.parse(birthdayStr);
-      } catch (_) {}
-    }
-    if (anniversaryStr != null) {
-      try {
-        anniversary = DateTime.parse(anniversaryStr);
-      } catch (_) {}
-    }
     // Saving a birthday/anniversary already wrote to Supabase, but loading
     // this screen only ever checked local storage. That meant the real
     // data was safe in the database (which is why Home's Celebrations kept
@@ -237,15 +318,17 @@ class _SetupScreenState extends State<SetupScreen>
         final remoteAnniversary = profileRow?['anniversary'] as String?;
         final remoteDisplayName = profileRow?['display_name'] as String?;
         final remotePreferredName = profileRow?['preferred_name'] as String?;
+        DateTime? updatedBirthday;
+        DateTime? updatedAnniversary;
         if (remoteBirthday != null && remoteBirthday.isNotEmpty) {
           try {
-            birthday = DateTime.parse(remoteBirthday);
+            updatedBirthday = DateTime.parse(remoteBirthday);
             await prefs.setString('birthday', remoteBirthday);
           } catch (_) {}
         }
         if (remoteAnniversary != null && remoteAnniversary.isNotEmpty) {
           try {
-            anniversary = DateTime.parse(remoteAnniversary);
+            updatedAnniversary = DateTime.parse(remoteAnniversary);
             await prefs.setString('anniversary', remoteAnniversary);
           } catch (_) {}
         }
@@ -261,52 +344,33 @@ class _SetupScreenState extends State<SetupScreen>
           savedPreferredName = remotePreferredName;
           await prefs.setString('preferred_name', remotePreferredName);
         }
+        if (mounted) {
+          setState(() {
+            if (updatedBirthday != null) _birthday = updatedBirthday;
+            if (updatedAnniversary != null) _anniversary = updatedAnniversary;
+            _displayName = savedName;
+            _preferredName = savedPreferredName;
+          });
+        }
       }
     } catch (e) {
       debugPrint('BIRTHDAY_ANNIVERSARY_LOAD_ERROR: $e');
     }
 
-    bool isVip = false;
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId != null) {
         final result = await Supabase.instance.client
             .rpc('is_vip_member', params: {'p_user_id': userId});
-        isVip = result == true;
+        final isVip = result == true;
+        if (mounted) {
+          setState(() => _isVipMember = isVip);
+        }
+        await prefs.setBool('cached_is_vip_member', isVip);
       }
     } catch (e) {
       debugPrint('VIP_CHECK_ERROR: $e');
     }
-
-    setState(() {
-      _isSenior = isSenior;
-      _isNestOwner = isNestOwner;
-      _isVipMember = isVip;
-      _displayName = savedName;
-      _preferredName = savedPreferredName;
-      _nestName = fetchedNestName ?? prefs.getString('nest_name') ?? 'Your Nest';
-      _relationship = prefs.getString('relationship') ?? '';
-      _isDarkMode = prefs.getBool('dark_mode') ?? false;
-      _medsReminders = prefs.getBool('meds_reminders') ?? true;
-      _dailyCheckIn = prefs.getBool('daily_check_in') ?? true;
-      _notifyMessages = prefs.getBool('notify_messages') ?? true;
-      _notifyCheckIn = prefs.getBool('notify_check_in') ?? true;
-      _textSize = prefs.getString('text_size') ?? defaultSize;
-      _isGuest = prefs.getBool('is_guest') ?? false;
-      _isLoading = false;
-      _profileData = profileData;
-      _birthday = birthday;
-      _anniversary = anniversary;
-      _inviteCode = fetchedInviteCode ?? prefs.getString('invite_code') ?? '';
-      if (removedIds.isNotEmpty) {
-        realFamilyMembers = realFamilyMembers
-            .where((m) => !removedIds.contains(m['id'] as String))
-            .toList();
-      }
-      _familyMembers = realFamilyMembers;
-    });
-    _setupAnimations();
-    _entranceController.forward();
   }
 
   void _setupAnimations() {
@@ -2478,10 +2542,15 @@ class _EditNestSheetState extends State<_EditNestSheet> {
     // sheet previously had neither -- the only way out of the keyboard
     // was closing the entire sheet by tapping the dimmed background
     // behind it, losing whatever was being edited.
-    return KeyboardDoneBar(
-      child: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        child: Container(
+    // The parent setup_screen already has a global KeyboardDoneBarOverlay
+    // in its root Stack, which stays active for modals shown on top of it
+    // (like this sheet) since MediaQuery's keyboard inset is ambient, not
+    // scoped per-route. Wrapping this sheet in its own KeyboardDoneBar on
+    // top of that produced two overlapping checkmark bars. Keep the
+    // tap-anywhere-to-dismiss behavior, just not a second bar.
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: EdgeInsets.only(
         left: 24,
@@ -2578,8 +2647,7 @@ class _EditNestSheetState extends State<_EditNestSheet> {
         ],
       ),
         ),
-      ),
-    );
+      );
   }
 }
 

@@ -87,8 +87,72 @@ class _SafetyScreenState extends State<SafetyScreen>
 
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
-    await Future.delayed(const Duration(milliseconds: 300));
-    // Load contacts from Supabase
+
+    // Cache-first: show cached contacts instantly (same pattern as Home's
+    // nest members / checkin cache), then refresh from Supabase quietly in
+    // the background. Previously this screen had no cache at all and an
+    // unconditional 300ms delay before even starting the network fetch --
+    // guaranteed empty-box time on every visit. Removed the delay; added
+    // the cache.
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id ?? '';
+    final cachedContactsUserId = prefs.getString('cached_safety_contacts_user_id') ?? '';
+    List<Map<String, dynamic>> initialContacts = [];
+    if (cachedContactsUserId.isNotEmpty && cachedContactsUserId == currentUserId) {
+      final cachedContactsJson = prefs.getString('cached_safety_contacts');
+      if (cachedContactsJson != null && cachedContactsJson.isNotEmpty) {
+        try {
+          final List<dynamic> cachedList = jsonDecode(cachedContactsJson) as List<dynamic>;
+          initialContacts = cachedList.map((c) => Map<String, dynamic>.from(c as Map)).toList();
+        } catch (_) {}
+      }
+    }
+
+    // Everything else this screen needs before the senior-name network
+    // lookup is a synchronous SharedPreferences read -- no reason to wait
+    // on a network round-trip to paint the screen with these.
+    final systemDark =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+        Brightness.dark;
+    final profileJson = prefs.getString(kProfilePhotoKey);
+    Map<String, dynamic>? profileData;
+    if (profileJson != null) {
+      try {
+        profileData = jsonDecode(profileJson) as Map<String, dynamic>;
+      } catch (_) {}
+    }
+    final isSeniorRole = (prefs.getString('user_role') ?? 'senior') == 'senior';
+    String initialSeniorName;
+    if (isSeniorRole) {
+      initialSeniorName = (prefs.getString('preferred_name') ?? '').isNotEmpty
+          ? prefs.getString('preferred_name')!
+          : (prefs.getString('display_name') ?? prefs.getString('user_name') ?? '');
+    } else {
+      // Best guess until the live nest_members lookup below resolves the
+      // real senior -- 'senior_name' is never actually written anywhere in
+      // the app (confirmed via full codebase search), so this is usually
+      // blank on first paint and gets filled in moments later.
+      initialSeniorName = prefs.getString('senior_name') ?? '';
+    }
+
+    setState(() {
+      if (initialContacts.isNotEmpty) {
+        _mockContacts = initialContacts;
+      }
+      _isSenior = isSeniorRole;
+      _isDarkMode = prefs.getBool('dark_mode') ?? systemDark;
+      _seniorName = initialSeniorName;
+      _nestName = prefs.getString('nest_name') ?? '';
+      _isLoading = false;
+      _profileData = profileData;
+      _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
+          ? prefs.getString('preferred_name')!
+          : (prefs.getString('display_name') ?? '');
+    });
+    _setupAnimations();
+    _entranceController.forward();
+
+    // Live refresh from Supabase -- updates quietly in place, no second
+    // entrance animation (same pattern as Home's background refresh).
     try {
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
@@ -100,41 +164,39 @@ class _SafetyScreenState extends State<SafetyScreen>
             .order('is_primary', ascending: false)
             .order('created_at');
         final contacts = response as List<dynamic>;
+        final freshContacts = contacts.map((c) => {
+          'id': c['id'],
+          'name': c['name'],
+          'phone': c['phone'],
+          'relation': c['relation'] ?? '',
+          'isPrimary': c['is_primary'] ?? false,
+        }).toList();
         setState(() {
-          _mockContacts = contacts.map((c) => {
-            'id': c['id'],
-            'name': c['name'],
-            'phone': c['phone'],
-            'relation': c['relation'] ?? '',
-            'isPrimary': c['is_primary'] ?? false,
-          }).toList();
+          _mockContacts = freshContacts;
         });
+        _setupAnimations();
+        await prefs.setString('cached_safety_contacts', jsonEncode(freshContacts));
+        await prefs.setString('cached_safety_contacts_user_id', userId);
       }
     } catch (e) {
       debugPrint('Load contacts error: $e');
     }
+
     // Resolve the real senior's name from Supabase for family members.
-    // The local 'senior_name' SharedPreferences key is never written
-    // anywhere in the app -- confirmed via full codebase search -- so it
-    // was always blank.
-    String resolvedSeniorName = prefs.getString('senior_name') ?? '';
-    final isSeniorRoleForLookup =
-        (prefs.getString('user_role') ?? 'senior') == 'senior';
-    if (!isSeniorRoleForLookup) {
+    // Previously assumed the nest's creator is always the senior -- true
+    // for a senior setting up their own nest, but false for the VIP
+    // "family nest owner" flow, where a family member creates and owns the
+    // nest and the actual senior joins later via invite code. That wrong
+    // assumption meant this screen's "This is what ___ sees" banner showed
+    // the family owner's own name instead of the senior's, confirmed
+    // directly: a family nest owner named Devon saw "This is what Devon
+    // sees" on her own Safety screen. Correct lookup: whoever in this nest
+    // actually has the senior role, not whoever created it.
+    if (!isSeniorRole) {
       try {
         final supabase = Supabase.instance.client;
         final nestId = prefs.getString('nest_id') ?? '';
         if (nestId.isNotEmpty) {
-          // Previously assumed the nest's creator is always the senior --
-          // true for a senior setting up their own nest, but false for the
-          // VIP "family nest owner" flow, where a family member creates
-          // and owns the nest and the actual senior joins later via invite
-          // code. That wrong assumption meant this screen's "This is what
-          // ___ sees" banner showed the family owner's own name instead of
-          // the senior's, confirmed directly: a family nest owner named
-          // Devon saw "This is what Devon sees" on her own Safety screen.
-          // Correct lookup: whoever in this nest actually has the senior
-          // role, not whoever created it.
           final memberRows = await supabase
               .from('nest_members')
               .select('user_id')
@@ -155,50 +217,15 @@ class _SafetyScreenState extends State<SafetyScreen>
                 seniorProfile?['display_name'] as String? ?? '';
             final name =
                 seniorPreferred.isNotEmpty ? seniorPreferred : seniorDisplay;
-            if (name.isNotEmpty) resolvedSeniorName = name;
+            if (name.isNotEmpty && mounted) {
+              setState(() => _seniorName = name);
+            }
           }
         }
       } catch (e) {
         debugPrint('SAFETY SENIOR NAME LOAD ERROR: $e');
       }
     }
-    final systemDark =
-        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-        Brightness.dark;
-    final profileJson = prefs.getString(kProfilePhotoKey);
-    Map<String, dynamic>? profileData;
-    if (profileJson != null) {
-      try {
-        profileData = jsonDecode(profileJson) as Map<String, dynamic>;
-      } catch (_) {}
-    }
-    setState(() {
-      _isSenior = (prefs.getString('user_role') ?? 'senior') == 'senior';
-      // Default light mode; auto-switch to dark if system is dark and no manual pref saved
-      _isDarkMode = prefs.getBool('dark_mode') ?? systemDark;
-      // For seniors, use their own display_name; for family members, use the saved senior_name key
-      final isSeniorRole =
-          (prefs.getString('user_role') ?? 'senior') == 'senior';
-      if (isSeniorRole) {
-        _seniorName =
-            (prefs.getString('preferred_name') ?? '').isNotEmpty
-            ? prefs.getString('preferred_name')!
-            : (prefs.getString('display_name') ??
-                  prefs.getString('user_name') ??
-                  '');
-      } else {
-        _seniorName = resolvedSeniorName;
-      }
-      // Load nest name from family nest setup
-      _nestName = prefs.getString('nest_name') ?? '';
-      _isLoading = false;
-      _profileData = profileData;
-      _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
-          ? prefs.getString('preferred_name')!
-          : (prefs.getString('display_name') ?? '');
-    });
-    _setupAnimations();
-    _entranceController.forward();
   }
 
   void _setupAnimations() {
