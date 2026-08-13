@@ -8,6 +8,7 @@ import '../family_feed_screen.dart';
 import '../../../widgets/custom_image_widget.dart';
 import '../../../widgets/share_preview_widget.dart';
 import '../../../widgets/fullscreen_media_viewer.dart';
+import '../../../widgets/linkified_text.dart';
 import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 class MessageCardWidget extends StatefulWidget {
@@ -384,7 +385,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    LinkifiedText(
                       msg.content,
                       style: GoogleFonts.nunitoSans(
                         fontSize: 15,
@@ -1217,7 +1218,7 @@ class _MessagePreviewSheet extends StatelessWidget {
                       padding: EdgeInsets.only(
                         top: msg.type == MessageType.text ? 0 : 16,
                       ),
-                      child: Text(
+                      child: LinkifiedText(
                         msg.content,
                         style: GoogleFonts.nunitoSans(
                           fontSize: 16,

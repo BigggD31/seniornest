@@ -618,22 +618,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       }
     });
 
-    // Load bookmarks from Supabase
-    try {
-      final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
-      if (bookmarkUserId != null) {
-        final rows = await Supabase.instance.client
-            .from('user_favourites')
-            .select('item_id')
-            .eq('user_id', bookmarkUserId);
-        setState(() {
-          _bookmarkedIds = (rows as List<dynamic>)
-              .map((e) => e['item_id'] as String)
-              .toSet();
-        });
-      }
-    } catch (_) {}
-
     _setupItemAnimations();
     _listEntranceController.forward();
     _hasPlayedEntranceOnce = true;
@@ -651,14 +635,35 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       }
     }
 
-    // These three loads are independent of each other, so run them
-    // concurrently. Previously they ran in sequence, which made the avatar
+    // These four loads are independent of each other, so run them
+    // concurrently. Previously they ran in sequence (bookmarks ran alone,
+    // separately, before this block even started), which made the avatar
     // row (loaded last) visibly pop in after everything else.
     await Future.wait([
       _loadFeedFromSupabase(),
       _loadCheckinStatus(),
       _loadNestMembers(),
+      _loadBookmarks(),
     ]);
+  }
+
+  Future<void> _loadBookmarks() async {
+    try {
+      final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
+      if (bookmarkUserId != null) {
+        final rows = await Supabase.instance.client
+            .from('user_favourites')
+            .select('item_id')
+            .eq('user_id', bookmarkUserId);
+        if (mounted) {
+          setState(() {
+            _bookmarkedIds = (rows as List<dynamic>)
+                .map((e) => e['item_id'] as String)
+                .toSet();
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   void _setupItemAnimations() {
@@ -730,25 +735,30 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       if (seniorId.isEmpty) return;
       if (seniorName.isEmpty) seniorName = 'Your senior';
 
-      // Check if that senior has checked in today
-      final checkinResponse = await supabase
-          .from('daily_checkins')
-          .select('created_at')
-          .eq('user_id', seniorId)
-          .eq('checkin_date', _todayDateString())
-          .maybeSingle();
-
-      // Check if that senior has logged their medications today. Reuses
+      // Check if that senior has checked in today, and whether they've
+      // logged their medications today. Two independent queries against
+      // different tables with no data dependency between them, so run
+      // them concurrently rather than one after the other. Meds reuses
       // the seniorId/seniorName already resolved above rather than a
       // second nest_members lookup, same table shape and RLS as
       // daily_checkins (nest members can read, each user can only insert
       // their own row).
-      final medsResponse = await supabase
-          .from('daily_medications')
-          .select('created_at')
-          .eq('user_id', seniorId)
-          .eq('med_date', _todayDateString())
-          .maybeSingle();
+      final results = await Future.wait([
+        supabase
+            .from('daily_checkins')
+            .select('created_at')
+            .eq('user_id', seniorId)
+            .eq('checkin_date', _todayDateString())
+            .maybeSingle(),
+        supabase
+            .from('daily_medications')
+            .select('created_at')
+            .eq('user_id', seniorId)
+            .eq('med_date', _todayDateString())
+            .maybeSingle(),
+      ]);
+      final checkinResponse = results[0];
+      final medsResponse = results[1];
 
       if (mounted) {
         setState(() {

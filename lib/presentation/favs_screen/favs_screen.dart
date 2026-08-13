@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
+import '../../widgets/linkified_text.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
@@ -1109,7 +1110,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                     if ((mediaUrl.isNotEmpty || imageUrl.isNotEmpty) && content2.isNotEmpty)
                       const SizedBox(height: 16),
                     if (content2.isNotEmpty)
-                      Text(content2,
+                      LinkifiedText(content2,
                           style: GoogleFonts.nunitoSans(
                               fontSize: 16,
                               color: _isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417),
@@ -1301,7 +1302,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                       _FavsVideoPlayer(videoUrl: mediaUrl, isDarkMode: _isDarkMode),
                     if (subtitle.isNotEmpty) ...[
                       if (mediaUrl.isNotEmpty) const SizedBox(height: 10),
-                      Text(subtitle,
+                      LinkifiedText(subtitle,
                         style: GoogleFonts.nunitoSans(fontSize: 13, color: _textSecondary, height: 1.5),
                         maxLines: 3, overflow: TextOverflow.ellipsis),
                       if (subtitle.length > 160)

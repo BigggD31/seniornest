@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
 import '../../widgets/keyboard_done_bar.dart';
+import '../../widgets/linkified_text.dart';
 import '../../widgets/share_preview_widget.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
@@ -1452,7 +1453,7 @@ class _LegacyScreenState extends State<LegacyScreen>
                           ),
                         )
                       else
-                        Text(
+                        LinkifiedText(
                           story['excerpt'] as String,
                           style: GoogleFonts.nunitoSans(
                             fontSize: 14,
@@ -2988,7 +2989,7 @@ class _StoryDetailSheet extends StatelessWidget {
                         story['excerpt'] != 'Video story')
                       Padding(
                         padding: const EdgeInsets.only(top: 16),
-                        child: Text(
+                        child: LinkifiedText(
                           story['excerpt'] as String,
                           style: GoogleFonts.nunitoSans(
                             fontSize: 16,
@@ -3008,7 +3009,7 @@ class _StoryDetailSheet extends StatelessWidget {
                         story['excerpt'] != 'Video story')
                       Padding(
                         padding: const EdgeInsets.only(top: 16),
-                        child: Text(
+                        child: LinkifiedText(
                           story['excerpt'] as String,
                           style: GoogleFonts.nunitoSans(
                             fontSize: 16,
@@ -3018,7 +3019,7 @@ class _StoryDetailSheet extends StatelessWidget {
                         ),
                       ),
                   ] else
-                    Text(
+                    LinkifiedText(
                       story['excerpt'] as String? ?? '',
                       style: GoogleFonts.nunitoSans(
                         fontSize: 16,
