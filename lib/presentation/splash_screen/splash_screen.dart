@@ -284,7 +284,7 @@ class _SplashScreenState extends State<SplashScreen>
     final logoSize = isTablet ? 285.0 : 266.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFDF9F4),
+      backgroundColor: const Color(0xFFE9F1EE),
       body: Stack(
         children: [
           Container(
@@ -294,7 +294,7 @@ class _SplashScreenState extends State<SplashScreen>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFFFDF9F4), Color(0xFFFAF3EC), Color(0xFFF7EDE4)],
+            colors: [Color(0xFFE9F1EE), Color(0xFFF3E7C4), Color(0xFFF8E9E1)],
           ),
         ),
         child: SafeArea(
