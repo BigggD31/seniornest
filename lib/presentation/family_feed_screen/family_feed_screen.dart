@@ -293,7 +293,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     super.initState();
     _listEntranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 260),
+      duration: const Duration(milliseconds: 600),
     );
     _loadData();
   }
@@ -1760,7 +1760,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           return AnimatedBuilder(
             animation: anim,
             builder: (context, child) => Transform.translate(
-              offset: Offset(0, 8 * (1 - anim.value)),
+              offset: Offset(0, 20 * (1 - anim.value)),
               child: Opacity(opacity: anim.value, child: child),
             ),
             child: Padding(
@@ -1798,7 +1798,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           return AnimatedBuilder(
             animation: anim,
             builder: (context, child) => Transform.translate(
-              offset: Offset(0, 8 * (1 - anim.value)),
+              offset: Offset(0, 20 * (1 - anim.value)),
               child: Opacity(opacity: anim.value, child: child),
             ),
             child: MessageCardWidget(
