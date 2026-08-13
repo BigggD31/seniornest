@@ -18,6 +18,7 @@ class LinkifiedText extends StatelessWidget {
     this.linkColor,
     this.maxLines,
     this.overflow,
+    this.showLinkBackground = true,
   });
 
   final String text;
@@ -29,6 +30,14 @@ class LinkifiedText extends StatelessWidget {
 
   final int? maxLines;
   final TextOverflow? overflow;
+
+  /// Paints a soft highlighted background behind link text, like an inset
+  /// chip, so links stand out from the surrounding body text on a plain
+  /// card background. Defaults on. Turned off in contexts that already
+  /// have their own colored backdrop behind the text (the DM thread's
+  /// "mine" message bubbles), where a second background would fight with
+  /// the bubble color instead of helping.
+  final bool showLinkBackground;
 
   // Matches http/https URLs. Intentionally simple/conservative: stops at
   // whitespace, so it won't mis-grab trailing punctuation like a sentence's
@@ -79,6 +88,9 @@ class LinkifiedText extends StatelessWidget {
             color: effectiveLinkColor,
             decoration: TextDecoration.underline,
             decorationColor: effectiveLinkColor,
+            background: showLinkBackground
+                ? (Paint()..color = effectiveLinkColor.withValues(alpha: 0.14))
+                : null,
           ),
           recognizer: TapGestureRecognizer()..onTap = () => _openLink(url),
         ),

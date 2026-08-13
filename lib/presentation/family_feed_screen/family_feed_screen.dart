@@ -1527,8 +1527,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                         )
                       : const SizedBox.shrink(key: ValueKey('checkinEmpty')),
                 ),
-                // Meds reminder (senior only)
-                if (_isSenior && _showMedsReminder) ...[
+                // Meds reminder (senior only). Previously this only
+                // checked _showMedsReminder, never the real
+                // _seniorMedsTakenToday (sourced from Supabase) -- so this
+                // card's own internal _isTaken flag, which always starts
+                // false on every load/re-sign-in, would show the "have you
+                // taken your medications" prompt again even directly
+                // underneath the confirmed "You took your medications
+                // today" card above it. Now it hides once the real record
+                // says today's dose is already logged, same as every other
+                // confirmed-state card on this screen.
+                if (_isSenior && _showMedsReminder && !_seniorMedsTakenToday) ...[
                   MedsReminderCardWidget(
                     isDarkMode: _isDarkMode,
                     onTaken: _handleMedsTaken,

@@ -335,7 +335,11 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
               ),
               // "Mine" bubbles are already teal-on-white text, so the default
               // teal link color would be invisible there -- use white instead.
+              // Also skip the highlighted link background there specifically;
+              // it already has its own solid teal backdrop, so a second
+              // background would double up rather than help it stand out.
               linkColor: isMine ? Colors.white : null,
+              showLinkBackground: !isMine,
             ),
             const SizedBox(height: 4),
             Text(

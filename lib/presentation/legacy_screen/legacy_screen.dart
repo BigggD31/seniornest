@@ -4672,7 +4672,7 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                       else
                         LinkifiedText(
                           story['excerpt'] as String? ?? '',
-                          style: GoogleFonts.nunitoSans(fontSize: 14, color: _textSecondary, height: 1.5),
+                          style: GoogleFonts.nunitoSans(fontSize: 15, color: _textSecondary, height: 1.5),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
