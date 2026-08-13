@@ -19,6 +19,7 @@ class LinkifiedText extends StatelessWidget {
     this.maxLines,
     this.overflow,
     this.showLinkBackground = true,
+    this.interactive = true,
   });
 
   final String text;
@@ -38,6 +39,14 @@ class LinkifiedText extends StatelessWidget {
   /// "mine" message bubbles), where a second background would fight with
   /// the bubble color instead of helping.
   final bool showLinkBackground;
+
+  /// Whether the link portion is actually tappable. Defaults on. Turn off
+  /// for preview/summary contexts already wrapped in their own tap target
+  /// (e.g. a conversation list row that opens the thread on tap) -- a live
+  /// link there would compete with the row's own tap behavior and open the
+  /// URL instead of the conversation. When off, the link still gets its
+  /// color/background styling, just no recognizer attached.
+  final bool interactive;
 
   // Matches http/https URLs. Intentionally simple/conservative: stops at
   // whitespace, so it won't mis-grab trailing punctuation like a sentence's
@@ -73,6 +82,11 @@ class LinkifiedText extends StatelessWidget {
     }
 
     final effectiveLinkColor = linkColor ?? const Color(0xFF5DA399);
+    // The highlight background is intentionally a different color (gold)
+    // from the link text (teal) -- a same-color tint blended into the text
+    // color and didn't read as a distinct highlight. Gold-on-teal separates
+    // the two visually.
+    const linkHighlightColor = Color(0xFFD4AA00);
     final spans = <TextSpan>[];
     var lastEnd = 0;
 
@@ -89,10 +103,12 @@ class LinkifiedText extends StatelessWidget {
             decoration: TextDecoration.underline,
             decorationColor: effectiveLinkColor,
             background: showLinkBackground
-                ? (Paint()..color = effectiveLinkColor.withValues(alpha: 0.14))
+                ? (Paint()..color = linkHighlightColor.withValues(alpha: 0.14))
                 : null,
           ),
-          recognizer: TapGestureRecognizer()..onTap = () => _openLink(url),
+          recognizer: interactive
+              ? (TapGestureRecognizer()..onTap = () => _openLink(url))
+              : null,
         ),
       );
       lastEnd = match.end;

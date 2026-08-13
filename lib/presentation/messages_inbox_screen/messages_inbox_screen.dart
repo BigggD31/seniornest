@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/custom_image_widget.dart';
+import '../../widgets/linkified_text.dart';
 import '../../widgets/app_navigation.dart';
 import '../message_thread_screen/message_thread_screen.dart';
 import '../../routes/app_routes.dart';
@@ -242,10 +243,12 @@ class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
           color: _textPrimary,
         ),
       ),
-      subtitle: Text(
+      subtitle: LinkifiedText(
         thread['lastMessage'] as String,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
+        showLinkBackground: false,
+        interactive: false,
         style: GoogleFonts.nunitoSans(
           fontSize: 13,
           fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.w400,
