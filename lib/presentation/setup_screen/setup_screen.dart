@@ -283,8 +283,8 @@ class _SetupScreenState extends State<SetupScreen>
       }
       if (mounted) {
         setState(() {
-          if (fetchedNestName != null) _nestName = fetchedNestName!;
-          if (fetchedInviteCode != null) _inviteCode = fetchedInviteCode!;
+          if (fetchedNestName != null) _nestName = fetchedNestName;
+          if (fetchedInviteCode != null) _inviteCode = fetchedInviteCode;
           _isNestOwner = isNestOwner;
           _familyMembers = realFamilyMembers;
         });
