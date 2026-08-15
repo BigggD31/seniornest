@@ -101,6 +101,13 @@ class LinkifiedText extends StatelessWidget {
           text: url,
           style: style.copyWith(
             color: effectiveLinkColor,
+            // D Von's feedback after the background was removed: plain
+            // link text read as too thin/plain. FontWeight steps from
+            // w100 (thinnest) to w900 (black) in increments of 100 --
+            // w600 (semi-bold) is noticeably bolder than the inherited
+            // default (usually w400) without reaching full bold (w700)
+            // or black (w900), which D Von didn't want.
+            fontWeight: FontWeight.w600,
             decoration: TextDecoration.underline,
             decorationColor: effectiveLinkColor,
             background: showLinkBackground
