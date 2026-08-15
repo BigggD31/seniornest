@@ -80,6 +80,31 @@ void suppressKeyboardBarWhileFocused(FocusNode node) {
   });
 }
 
+// ── Flash-of-wrong-content fix, rollout to remaining fields ──────────────
+// Same pattern as appIsNestOwnerNotifier/appSeniorCheckedInTodayNotifier
+// above, proven clean on-device (build 171). Each of these was previously
+// declared independently, per-screen, as "bool _x = false;" -- a hardcoded
+// guess corrected only after an async cache/network read finished, causing
+// at least one wrong-content frame on every screen build. Resolved once in
+// main.dart's _resolveInitialRoute() before any screen builds; screens read
+// the notifier's value at field declaration instead of guessing, and write
+// the real value back once their own live check resolves.
+
+/// isSenior was independently duplicated across 5 screens (family_feed,
+/// legacy, safety, send, setup), all deriving it from the same
+/// prefs.getString('user_role') key -- one shared notifier fixes the flash
+/// in all 5 at once instead of five separate patches.
+final ValueNotifier<bool> appIsSeniorNotifier = ValueNotifier<bool>(false);
+
+final ValueNotifier<bool> appIsGuestNotifier = ValueNotifier<bool>(false);
+final ValueNotifier<bool> appHasRealPostNotifier = ValueNotifier<bool>(false);
+final ValueNotifier<bool> appHasSentStoriesNotifier = ValueNotifier<bool>(false);
+final ValueNotifier<bool> appIsVipMemberNotifier = ValueNotifier<bool>(false);
+
+/// Date-scoped like appSeniorCheckedInTodayNotifier -- only meaningful for
+/// today, resolved from the same cached_checkin_* prefs family.
+final ValueNotifier<bool> appSeniorMedsTakenTodayNotifier = ValueNotifier<bool>(false);
+
 /// Maps the stored string to a TextScaler multiplier.
 double textSizeToScale(String size) {
   switch (size) {

@@ -239,7 +239,24 @@ class _MyAppState extends State<MyApp> {
           cachedCheckinDate == todayDateString) {
         appSeniorCheckedInTodayNotifier.value =
             prefs.getBool('cached_checkin_checked_in') ?? false;
+        // Same cache family, same scoping -- meds-taken-today is only
+        // meaningful for today, same as check-in status above.
+        appSeniorMedsTakenTodayNotifier.value =
+            prefs.getBool('cached_checkin_meds_taken') ?? false;
       }
+
+      // Resolved once here -- see the "Flash-of-wrong-content fix, rollout
+      // to remaining fields" section of app_state.dart. isSenior was
+      // independently duplicated across 5 screens, all deriving it from
+      // this same prefs key; one resolution here fixes the flash in all 5.
+      appIsSeniorNotifier.value =
+          (prefs.getString('user_role') ?? 'senior') == 'senior';
+      appIsGuestNotifier.value = prefs.getBool('is_guest') ?? false;
+      appHasRealPostNotifier.value = prefs.getBool('has_real_post') ?? false;
+      appHasSentStoriesNotifier.value =
+          prefs.getBool('has_sent_stories') ?? false;
+      appIsVipMemberNotifier.value =
+          prefs.getBool('cached_is_vip_member') ?? false;
 
       final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
       // This is the TRUE origin of the subscribe-screen flash and the

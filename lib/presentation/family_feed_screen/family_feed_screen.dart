@@ -147,7 +147,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     with TickerProviderStateMixin {
   // TODO: Replace with Riverpod/Bloc for production — feed state, user state
   int _currentNavIndex = 0;
-  bool _isSenior = false;
+  bool _isSenior = appIsSeniorNotifier.value;
   String _displayName = '';
   // Seeded from the already-resolved app-wide notifier instead of an
   // empty default -- see appNestNameNotifier in app_state.dart. Once
@@ -167,17 +167,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // most of all here, since it's Home -- the screen every tab switch
   // lands back on.
   bool _isDarkMode = appDarkModeNotifier.value;
-  bool _hasRealPost = false; // tracks if user has made their first real post
+  bool _hasRealPost = appHasRealPostNotifier.value; // tracks if user has made their first real post
   bool _sampleBannerDismissed = false; // tracks if user closed the sample-content explainer banner
   String _seniorName = ''; // display name of the senior in this nest (for the pinned check-in card)
   String _seniorUserId = '';
   bool _seniorCheckedInToday = appSeniorCheckedInTodayNotifier.value;
   DateTime? _seniorCheckinTime;
-  bool _seniorMedsTakenToday = false;
+  bool _seniorMedsTakenToday = appSeniorMedsTakenTodayNotifier.value;
   DateTime? _seniorMedsTakenTime;
   bool _inviteCodeShared =
       true; // tracks if family owner has shared invite code
-  bool _isGuest = false;
+  bool _isGuest = appIsGuestNotifier.value;
   bool _isNestOwner = appIsNestOwnerNotifier.value;
   // Author IDs of anyone removed from this nest -- used only to gate the
   // post-delete icon for the nest owner (delete a removed member's post).
@@ -853,6 +853,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         // cached_checkin_checked_in/nest_id/date already happens a few
         // lines below in the existing try block -- no need to duplicate it.
         appSeniorCheckedInTodayNotifier.value = checkinResponse != null;
+        appSeniorMedsTakenTodayNotifier.value = medsResponse != null;
       }
 
       try {
@@ -1326,6 +1327,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             _hasRealPost = true;
             _messages = loaded;
           });
+          // Wasn't previously persisted anywhere -- without this, every
+          // cold launch would still guess false here regardless of history,
+          // defeating the point of the notifier fix.
+          appHasRealPostNotifier.value = true;
+          await prefs.setBool('has_real_post', true);
           // The entrance animation already played once on first load — just
           // rebuild the per-item animations to match the new list length so
           // any additional cards render at full opacity immediately, with no

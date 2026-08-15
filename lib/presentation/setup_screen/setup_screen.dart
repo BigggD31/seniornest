@@ -23,14 +23,14 @@ class SetupScreen extends StatefulWidget {
 class _SetupScreenState extends State<SetupScreen>
     with TickerProviderStateMixin {
   int _currentNavIndex = 5;
-  bool _isSenior = false;
+  bool _isSenior = appIsSeniorNotifier.value;
   // Seeded from the already-resolved app-wide notifier instead of a
   // hardcoded false -- see messages_inbox_screen.dart for the full
   // explanation of the white-flash bug this fixes.
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _isLoading = true;
   bool _isNestOwner = appIsNestOwnerNotifier.value;
-  bool _isVipMember = false;
+  bool _isVipMember = appIsVipMemberNotifier.value;
   String _displayName = '';
   String _preferredName = '';
   // If a preferred name has been set, show that everywhere; otherwise fall back to first name.
@@ -46,7 +46,7 @@ class _SetupScreenState extends State<SetupScreen>
   bool _notifyMessages = true;
   bool _notifyCheckIn = true;
   String _textSize = 'Large';
-  bool _isGuest = false;
+  bool _isGuest = appIsGuestNotifier.value;
   String _inviteCode = '';
   Map<String, dynamic>? _profileData;
   DateTime? _birthday;
@@ -373,6 +373,7 @@ class _SetupScreenState extends State<SetupScreen>
         if (mounted) {
           setState(() => _isVipMember = isVip);
         }
+        appIsVipMemberNotifier.value = isVip;
         await prefs.setBool('cached_is_vip_member', isVip);
       }
     } catch (e) {

@@ -31,14 +31,14 @@ class LegacyScreen extends StatefulWidget {
 class _LegacyScreenState extends State<LegacyScreen>
     with TickerProviderStateMixin {
   int _currentNavIndex = 2;
-  bool _isSenior = false;
+  bool _isSenior = appIsSeniorNotifier.value;
   // Seeded from the already-resolved app-wide notifier instead of a
   // hardcoded false -- see messages_inbox_screen.dart for the full
   // explanation of the white-flash bug this fixes.
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _isLoading = true;
   int _selectedCategory = 0;
-  bool _hasSentStories = false; // hides placeholder once first story saved
+  bool _hasSentStories = appHasSentStoriesNotifier.value; // hides placeholder once first story saved
   bool _sampleBannerDismissed = false;
 
   // Family-submitted story prompts (persisted via SharedPreferences)
@@ -1858,6 +1858,7 @@ class _LegacyScreenState extends State<LegacyScreen>
         _submittedPrompts = updated;
         _hasSentStories = true;
       });
+      appHasSentStoriesNotifier.value = true;
       // Reload stories from Supabase
       _loadData();
     }
@@ -2136,6 +2137,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
           'is_custom': true,
         });
         await prefs.setBool('has_sent_stories', true);
+        appHasSentStoriesNotifier.value = true;
         print('LEGACY: story saved successfully');
       }
     } catch (e) {
@@ -3270,6 +3272,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
           'is_custom': true,
         });
         await prefs.setBool('has_sent_stories', true);
+        appHasSentStoriesNotifier.value = true;
       }
     } catch (e) {
       print('LEGACY AUDIO SEND ERROR: $e');
@@ -3866,6 +3869,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
           'is_custom': true,
         });
         await prefs.setBool('has_sent_stories', true);
+        appHasSentStoriesNotifier.value = true;
       }
     } catch (e) {
       print('LEGACY VIDEO SEND ERROR: $e');
