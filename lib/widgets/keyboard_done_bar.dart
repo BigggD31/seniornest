@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/app_state.dart';
 
 /// Wraps [child] so that whenever the keyboard is open, a thin bar with a
 /// blue checkmark "Done" button is pinned directly above the keyboard.
@@ -9,6 +10,12 @@ import 'package:flutter/material.dart';
 /// This matches the standard iOS "keyboard accessory bar" pattern (seen in
 /// Notes, Messages, Instagram, etc.) so every text field in the app gets an
 /// identical, familiar way to close the keyboard.
+///
+/// Stays hidden while appSuppressKeyboardDoneBarNotifier is true -- see
+/// app_state.dart's suppressKeyboardBarWhileFocused() for why: single-line
+/// fields already have their own native "Done" key, and without this check
+/// this bar would show up alongside it, producing two checkmark-style
+/// controls on screen at once.
 class KeyboardDoneBar extends StatelessWidget {
   final Widget child;
 
@@ -23,13 +30,19 @@ class KeyboardDoneBar extends StatelessWidget {
       children: [
         child,
         if (keyboardVisible)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: bottomInset,
-            child: _DoneBar(
-              onDone: () => FocusScope.of(context).unfocus(),
-            ),
+          ValueListenableBuilder<bool>(
+            valueListenable: appSuppressKeyboardDoneBarNotifier,
+            builder: (context, suppressed, _) {
+              if (suppressed) return const SizedBox.shrink();
+              return Positioned(
+                left: 0,
+                right: 0,
+                bottom: bottomInset,
+                child: _DoneBar(
+                  onDone: () => FocusScope.of(context).unfocus(),
+                ),
+              );
+            },
           ),
       ],
     );
@@ -39,7 +52,8 @@ class KeyboardDoneBar extends StatelessWidget {
 /// For screens that already have their own root [Stack] (so wrapping with
 /// [KeyboardDoneBar] would create a redundant nested Stack). Drop this in
 /// as one more child of that existing Stack — it positions itself and
-/// hides itself automatically when the keyboard is closed.
+/// hides itself automatically when the keyboard is closed, or when
+/// appSuppressKeyboardDoneBarNotifier is true (see KeyboardDoneBar above).
 class KeyboardDoneBarOverlay extends StatelessWidget {
   const KeyboardDoneBarOverlay({super.key});
 
@@ -47,13 +61,19 @@ class KeyboardDoneBarOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
     if (bottomInset <= 0) return const SizedBox.shrink();
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: bottomInset,
-      child: _DoneBar(
-        onDone: () => FocusScope.of(context).unfocus(),
-      ),
+    return ValueListenableBuilder<bool>(
+      valueListenable: appSuppressKeyboardDoneBarNotifier,
+      builder: (context, suppressed, _) {
+        if (suppressed) return const SizedBox.shrink();
+        return Positioned(
+          left: 0,
+          right: 0,
+          bottom: bottomInset,
+          child: _DoneBar(
+            onDone: () => FocusScope.of(context).unfocus(),
+          ),
+        );
+      },
     );
   }
 }

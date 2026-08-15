@@ -56,6 +56,30 @@ final ValueNotifier<bool> appIsNestOwnerNotifier = ValueNotifier<bool>(false);
 /// async cache read that couldn't finish before the first frame painted.
 final ValueNotifier<bool> appSeniorCheckedInTodayNotifier = ValueNotifier<bool>(false);
 
+/// Suppresses the ambient KeyboardDoneBar/KeyboardDoneBarOverlay while a
+/// single-line field with its own native "Done" key has focus. The bar
+/// exists specifically for multi-line fields, where Return can't also mean
+/// "close the keyboard" -- but because the bar is ambient (MediaQuery's
+/// keyboard inset isn't scoped per-field), it was showing up even on
+/// single-line fields that already have their own native done button,
+/// producing two checkmark-style controls on screen at once. D Von
+/// reported this on Setup's Rename Nest sheet (Aug 15 2026 build 171
+/// follow-up). Single-line fields call suppressKeyboardBarWhileFocused()
+/// on their FocusNode once, in initState, to opt into hiding the bar
+/// while they're focused; nothing else needs to change at any call site.
+final ValueNotifier<bool> appSuppressKeyboardDoneBarNotifier = ValueNotifier<bool>(false);
+
+/// Attach to a single-line field's FocusNode (one that already has its own
+/// native TextInputAction.done key) so the ambient KeyboardDoneBar hides
+/// itself while that field is focused, instead of showing alongside the
+/// native done key. Call once, in initState, right after creating the
+/// FocusNode -- no other changes needed at the call site.
+void suppressKeyboardBarWhileFocused(FocusNode node) {
+  node.addListener(() {
+    appSuppressKeyboardDoneBarNotifier.value = node.hasFocus;
+  });
+}
+
 /// Maps the stored string to a TextScaler multiplier.
 double textSizeToScale(String size) {
   switch (size) {

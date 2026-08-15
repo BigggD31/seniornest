@@ -2519,17 +2519,30 @@ class _EditNestSheet extends StatefulWidget {
 
 class _EditNestSheetState extends State<_EditNestSheet> {
   late TextEditingController _nestController;
+  // Single-line field with its own native "Done" key -- this FocusNode
+  // exists solely to tell the parent screen's ambient KeyboardDoneBarOverlay
+  // to hide itself while this field is focused, so the native done key and
+  // the custom bar don't both show at once. See suppressKeyboardBarWhileFocused
+  // in app_state.dart for why this is needed at all.
+  final FocusNode _nestFieldFocusNode = FocusNode();
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     _nestController = TextEditingController(text: widget.nestName);
+    suppressKeyboardBarWhileFocused(_nestFieldFocusNode);
   }
 
   @override
   void dispose() {
     _nestController.dispose();
+    _nestFieldFocusNode.dispose();
+    // Reset in case this sheet is closed while the field still has focus
+    // (e.g. tapping the dimmed background) -- otherwise the notifier could
+    // stay stuck "suppressed" and hide the bar on the next screen that
+    // actually needs it.
+    appSuppressKeyboardDoneBarNotifier.value = false;
     super.dispose();
   }
 
@@ -2543,18 +2556,17 @@ class _EditNestSheetState extends State<_EditNestSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    // Same pattern as Legacy's story-writing field (the one place in the
-    // app that already handles this correctly): the checkmark bar above
-    // the keyboard, plus tap-anywhere-else-in-the-sheet as a backup. This
-    // sheet previously had neither -- the only way out of the keyboard
-    // was closing the entire sheet by tapping the dimmed background
-    // behind it, losing whatever was being edited.
-    // The parent setup_screen already has a global KeyboardDoneBarOverlay
-    // in its root Stack, which stays active for modals shown on top of it
-    // (like this sheet) since MediaQuery's keyboard inset is ambient, not
-    // scoped per-route. Wrapping this sheet in its own KeyboardDoneBar on
-    // top of that produced two overlapping checkmark bars. Keep the
-    // tap-anywhere-to-dismiss behavior, just not a second bar.
+    // This is a single-line field with its own native "Done" key
+    // (textInputAction: TextInputAction.done below) -- it doesn't need the
+    // custom checkmark bar at all. But the parent setup_screen's
+    // KeyboardDoneBarOverlay is ambient (MediaQuery's keyboard inset isn't
+    // scoped per-route), so it was showing up here too, alongside the
+    // native done key -- two checkmark-style controls on screen for one
+    // field, reported by D Von (build 171 follow-up, Aug 15 2026).
+    // _nestFieldFocusNode below tells that ambient bar to hide itself
+    // while this field is focused (see suppressKeyboardBarWhileFocused in
+    // app_state.dart). Tap-anywhere-in-the-sheet stays as a backup way to
+    // dismiss the keyboard, same as before.
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
@@ -2595,6 +2607,7 @@ class _EditNestSheetState extends State<_EditNestSheet> {
           const SizedBox(height: 20),
           TextField(
             controller: _nestController,
+            focusNode: _nestFieldFocusNode,
             textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => FocusScope.of(context).unfocus(),
