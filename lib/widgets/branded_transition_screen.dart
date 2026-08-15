@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// Shared branded loading/transition screen, approved design (mockup C):
-/// a warm mid-tone gradient (not light, not dark) with the SeniorNest
-/// icon centered, no wordmark. Used anywhere the app has a few seconds
-/// of async work with nothing else to show -- app resume/cold start
-/// while the initial route resolves, and the gap after "Create Account"
-/// while the auth provider verifies -- instead of a black screen, a
-/// stale previous screen, or nothing at all.
+/// Shared branded loading/transition screen: the same golden-green
+/// gradient as splash_screen.dart, with the SeniorNest icon centered, no
+/// wordmark. Used anywhere the app has a few seconds of async work with
+/// nothing else to show -- app resume/cold start while the initial route
+/// resolves, and the gap after "Create Account" while the auth provider
+/// verifies -- instead of a black screen, a stale previous screen, or
+/// nothing at all.
 class BrandedTransitionScreen extends StatelessWidget {
   const BrandedTransitionScreen({super.key});
 
@@ -22,9 +22,16 @@ class BrandedTransitionScreen extends StatelessWidget {
 
   static const String _iconAsset = 'assets/images/nest_icon_transparent.png';
 
-  // Approved gradient from mockup C -- warm mid-tone, gold-leaning.
-  static const Color _gradientTop = Color(0xFFC9BC9E);
-  static const Color _gradientBottom = Color(0xFF8A7B5E);
+  // Same golden-green gradient as splash_screen.dart (candidate B, chosen
+  // Aug 2026) -- D Von wants every logo-only transition moment (cold
+  // start/resume, post-account-creation) using the same palette as the
+  // splash/sign-in screen, not the earlier brown "mockup C" gradient.
+  // Deliberately NOT applied to the actual onboarding flow screens
+  // (role choice, senior/family onboarding, etc.) -- those keep their own
+  // original near-white gradient, unrelated to this decision.
+  static const Color _gradientTop = Color(0xFFE9F1EE);
+  static const Color _gradientMiddle = Color(0xFFF3E7C4);
+  static const Color _gradientBottom = Color(0xFFF8E9E1);
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +48,7 @@ class BrandedTransitionScreen extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [_gradientTop, _gradientBottom],
+            colors: [_gradientTop, _gradientMiddle, _gradientBottom],
           ),
         ),
         child: Center(
