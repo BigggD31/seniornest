@@ -1277,13 +1277,29 @@ class _AddContactSheet extends StatefulWidget {
 class _AddContactSheetState extends State<_AddContactSheet> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  // Both single-line fields with their own native done key -- see
+  // suppressKeyboardBarWhileFocused in app_state.dart. This screen's root
+  // Stack has a KeyboardDoneBarOverlay (ambient), which would otherwise
+  // show up alongside the native done key on both fields.
+  final FocusNode _nameFocusNode = FocusNode();
+  final FocusNode _phoneFocusNode = FocusNode();
   bool _isPrimary = false;
   bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    suppressKeyboardBarWhileFocused(_nameFocusNode);
+    suppressKeyboardBarWhileFocused(_phoneFocusNode);
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _nameFocusNode.dispose();
+    _phoneFocusNode.dispose();
+    appSuppressKeyboardDoneBarNotifier.value = false;
     super.dispose();
   }
 
@@ -1418,7 +1434,10 @@ class _AddContactSheetState extends State<_AddContactSheet> {
           const SizedBox(height: 20),
           TextField(
             controller: _nameController,
+            focusNode: _nameFocusNode,
             textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => FocusScope.of(context).requestFocus(_phoneFocusNode),
             style: GoogleFonts.nunitoSans(fontSize: 16, color: _textPrimary),
             decoration: InputDecoration(
               labelText: 'Name',
@@ -1437,7 +1456,10 @@ class _AddContactSheetState extends State<_AddContactSheet> {
           const SizedBox(height: 16),
           TextField(
             controller: _phoneController,
+            focusNode: _phoneFocusNode,
             keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
             style: GoogleFonts.nunitoSans(fontSize: 16, color: _textPrimary),
             decoration: InputDecoration(
               labelText: 'Phone number',
@@ -1531,6 +1553,10 @@ class _EditContactSheet extends StatefulWidget {
 class _EditContactSheetState extends State<_EditContactSheet> {
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
+  // Both single-line fields with their own native done key -- see
+  // suppressKeyboardBarWhileFocused in app_state.dart.
+  final FocusNode _nameFocusNode = FocusNode();
+  final FocusNode _phoneFocusNode = FocusNode();
   late bool _isPrimary;
   bool _isSaving = false;
   bool _isDeleting = false;
@@ -1545,12 +1571,17 @@ class _EditContactSheetState extends State<_EditContactSheet> {
       text: widget.contact['phone'] as String? ?? '',
     );
     _isPrimary = widget.contact['isPrimary'] as bool? ?? false;
+    suppressKeyboardBarWhileFocused(_nameFocusNode);
+    suppressKeyboardBarWhileFocused(_phoneFocusNode);
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _nameFocusNode.dispose();
+    _phoneFocusNode.dispose();
+    appSuppressKeyboardDoneBarNotifier.value = false;
     super.dispose();
   }
 
@@ -1769,7 +1800,10 @@ class _EditContactSheetState extends State<_EditContactSheet> {
           const SizedBox(height: 20),
           TextField(
             controller: _nameController,
+            focusNode: _nameFocusNode,
             textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => FocusScope.of(context).requestFocus(_phoneFocusNode),
             style: GoogleFonts.nunitoSans(fontSize: 16, color: _textPrimary),
             decoration: InputDecoration(
               labelText: 'Name',
@@ -1788,7 +1822,10 @@ class _EditContactSheetState extends State<_EditContactSheet> {
           const SizedBox(height: 16),
           TextField(
             controller: _phoneController,
+            focusNode: _phoneFocusNode,
             keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
             style: GoogleFonts.nunitoSans(fontSize: 16, color: _textPrimary),
             decoration: InputDecoration(
               labelText: 'Phone number',

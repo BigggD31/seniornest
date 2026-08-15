@@ -2176,6 +2176,10 @@ class _EditProfileSheet extends StatefulWidget {
 class _EditProfileSheetState extends State<_EditProfileSheet> {
   late TextEditingController _nameController;
   late TextEditingController _preferredNameController;
+  // Both single-line fields with their own native done key -- see
+  // suppressKeyboardBarWhileFocused in app_state.dart.
+  final FocusNode _nameFocusNode = FocusNode();
+  final FocusNode _preferredNameFocusNode = FocusNode();
   bool _isSaving = false;
   DateTime? _birthday;
   DateTime? _anniversary;
@@ -2189,6 +2193,8 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
     _birthday = widget.birthday;
     _anniversary = widget.anniversary;
     _profileData = widget.profileData;
+    suppressKeyboardBarWhileFocused(_nameFocusNode);
+    suppressKeyboardBarWhileFocused(_preferredNameFocusNode);
   }
 
   Future<void> _openAvatarPicker() async {
@@ -2206,6 +2212,9 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   void dispose() {
     _nameController.dispose();
     _preferredNameController.dispose();
+    _nameFocusNode.dispose();
+    _preferredNameFocusNode.dispose();
+    appSuppressKeyboardDoneBarNotifier.value = false;
     super.dispose();
   }
 
@@ -2292,7 +2301,10 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
           const SizedBox(height: 20),
           TextField(
             controller: _nameController,
+            focusNode: _nameFocusNode,
             textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => FocusScope.of(context).requestFocus(_preferredNameFocusNode),
             style: GoogleFonts.nunitoSans(fontSize: 18, color: _textPrimary),
             decoration: InputDecoration(
               labelText: 'Your name',
@@ -2311,7 +2323,10 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
           const SizedBox(height: 16),
           TextField(
             controller: _preferredNameController,
+            focusNode: _preferredNameFocusNode,
             textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
             style: GoogleFonts.nunitoSans(fontSize: 18, color: _textPrimary),
             decoration: InputDecoration(
               labelText: 'Preferred name (optional)',
