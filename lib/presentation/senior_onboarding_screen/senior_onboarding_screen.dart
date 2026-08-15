@@ -436,7 +436,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
     final isTablet = size.width >= 600;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFE9F1EE),
+      backgroundColor: const Color(0xFFFDFDFD),
       body: Stack(
         children: [
           Container(
@@ -446,7 +446,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFFE9F1EE), Color(0xFFF3E7C4), Color(0xFFF8E9E1)],
+            colors: [Color(0xFFFDFDFD), Color(0xFFF5F0E8)],
           ),
         ),
         child: SafeArea(
