@@ -1054,7 +1054,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               ),
             ],
           ),
-          backgroundColor: const Color(0xFFD4AA00),
+          backgroundColor: const Color(0xFF5DA399),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
