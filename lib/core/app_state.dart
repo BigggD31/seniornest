@@ -33,6 +33,29 @@ final ValueNotifier<String> appNestNameNotifier = ValueNotifier<String>('');
 /// resolved here instead and read synchronously at field declaration.
 final ValueNotifier<bool> appIsReturningUserNotifier = ValueNotifier<bool>(false);
 
+/// Global nest-ownership notifier -- resolved once in main.dart's
+/// _resolveInitialRoute(), before any screen ever builds, same pattern as
+/// the notifiers above. Two screens (setup_screen and family_feed_screen)
+/// each independently declared their own "bool _isNestOwner = false;" and
+/// corrected it asynchronously after mount -- the exact flash-of-wrong-
+/// content pattern documented Aug 14 2026 (Popy's role badge showing
+/// "Member" for a frame before flipping to "Nest Owner"). One shared,
+/// synchronously-readable source of truth fixes the flash on both screens
+/// at once instead of patching each screen's timing independently, and
+/// keeps them from ever disagreeing with each other.
+final ValueNotifier<bool> appIsNestOwnerNotifier = ValueNotifier<bool>(false);
+
+/// Global today's-check-in-status notifier -- resolved once in main.dart's
+/// _resolveInitialRoute() from the existing date-scoped
+/// cached_checkin_checked_in/cached_checkin_date prefs (see
+/// family_feed_screen's _loadData for the original per-screen version of
+/// this same scoping logic). Fixes the "I'm Good" button flashing on
+/// screen for a frame before hiding, documented Aug 14 2026 -- same root
+/// cause as appIsNestOwnerNotifier above: family_feed_screen declared
+/// "bool _seniorCheckedInToday = false;" and only corrected it after an
+/// async cache read that couldn't finish before the first frame painted.
+final ValueNotifier<bool> appSeniorCheckedInTodayNotifier = ValueNotifier<bool>(false);
+
 /// Maps the stored string to a TextScaler multiplier.
 double textSizeToScale(String size) {
   switch (size) {

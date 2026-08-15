@@ -29,7 +29,7 @@ class _SetupScreenState extends State<SetupScreen>
   // explanation of the white-flash bug this fixes.
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _isLoading = true;
-  bool _isNestOwner = false;
+  bool _isNestOwner = appIsNestOwnerNotifier.value;
   bool _isVipMember = false;
   String _displayName = '';
   String _preferredName = '';
@@ -288,6 +288,13 @@ class _SetupScreenState extends State<SetupScreen>
           _isNestOwner = isNestOwner;
           _familyMembers = realFamilyMembers;
         });
+        // Update the shared notifier too, so any other screen currently
+        // showing this value (e.g. family_feed_screen's own role-gated UI)
+        // picks up the confirmed answer immediately, and persist it so the
+        // next app launch starts from this confirmed value instead of the
+        // instant joined-via-invite guess.
+        appIsNestOwnerNotifier.value = isNestOwner;
+        await prefs.setBool('cached_is_nest_owner', isNestOwner);
         _setupAnimations();
         if (currentUserId != null && nestId.isNotEmpty) {
           await prefs.setString('cached_setup_family_members', jsonEncode(realFamilyMembers));

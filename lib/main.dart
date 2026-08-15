@@ -209,6 +209,38 @@ class _MyAppState extends State<MyApp> {
       // appIsReturningUserNotifier in app_state.dart.
       appIsReturningUserNotifier.value = prefs.getBool('just_signed_out') ?? false;
 
+      // Resolved once here, before setup_screen or family_feed_screen ever
+      // build -- see the comment on appIsNestOwnerNotifier in app_state.dart.
+      // Prefer the confirmed value from a prior session if one was ever
+      // saved; fall back to the instant joined-via-invite proxy for a
+      // genuinely first-ever resolve, same fallback either screen used
+      // locally before this fix.
+      final cachedIsNestOwner = prefs.getBool('cached_is_nest_owner');
+      if (cachedIsNestOwner != null) {
+        appIsNestOwnerNotifier.value = cachedIsNestOwner;
+      } else {
+        final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
+        appIsNestOwnerNotifier.value = !joinedViaInvite;
+      }
+
+      // Resolved once here, before family_feed_screen ever builds -- see
+      // the comment on appSeniorCheckedInTodayNotifier in app_state.dart.
+      // Mirrors the exact date/nest scoping family_feed_screen already used
+      // locally: only trust the cached checked-in flag if it was cached for
+      // this same nest, on this same calendar day.
+      final cachedCheckinNestId = prefs.getString('cached_checkin_nest_id') ?? '';
+      final cachedCheckinDate = prefs.getString('cached_checkin_date') ?? '';
+      final currentNestId = prefs.getString('nest_id') ?? '';
+      final now = DateTime.now();
+      final todayDateString =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      if (cachedCheckinNestId.isNotEmpty &&
+          cachedCheckinNestId == currentNestId &&
+          cachedCheckinDate == todayDateString) {
+        appSeniorCheckedInTodayNotifier.value =
+            prefs.getBool('cached_checkin_checked_in') ?? false;
+      }
+
       final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
       // This is the TRUE origin of the subscribe-screen flash and the
       // "Home flashes twice" jitter, not just the entitlement check below.

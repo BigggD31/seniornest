@@ -162,14 +162,14 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   bool _sampleBannerDismissed = false; // tracks if user closed the sample-content explainer banner
   String _seniorName = ''; // display name of the senior in this nest (for the pinned check-in card)
   String _seniorUserId = '';
-  bool _seniorCheckedInToday = false;
+  bool _seniorCheckedInToday = appSeniorCheckedInTodayNotifier.value;
   DateTime? _seniorCheckinTime;
   bool _seniorMedsTakenToday = false;
   DateTime? _seniorMedsTakenTime;
   bool _inviteCodeShared =
       true; // tracks if family owner has shared invite code
   bool _isGuest = false;
-  bool _isNestOwner = false;
+  bool _isNestOwner = appIsNestOwnerNotifier.value;
   List<CelebrationEvent> _todayCelebrations = [];
   List<CelebrationEvent> _upcomingCelebrations = [];
   List<Map<String, dynamic>> _nestMembers = []; // for avatar row (excludes current user)
@@ -795,6 +795,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             checkinResponse != null,
           );
         }
+        // Update the shared notifier so any other screen currently showing
+        // this value picks it up immediately. Persistence to
+        // cached_checkin_checked_in/nest_id/date already happens a few
+        // lines below in the existing try block -- no need to duplicate it.
+        appSeniorCheckedInTodayNotifier.value = checkinResponse != null;
       }
 
       try {
