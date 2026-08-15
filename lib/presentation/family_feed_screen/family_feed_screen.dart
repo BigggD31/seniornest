@@ -28,6 +28,7 @@ enum MessageType { text, photo, video, voice }
 class MessageModel {
   MessageModel({
     required this.id,
+    this.authorId = '',
     required this.senderName,
     required this.senderRelationship,
     this.senderRole = 'family',
@@ -47,6 +48,12 @@ class MessageModel {
   });
 
   final String id;
+  // Needed to decide whether the current user can delete this post (their
+  // own posts, or -- for a nest owner -- a post from someone they've
+  // removed). Defaults to empty for older cached entries written before
+  // this field existed; those simply won't show a delete option until the
+  // cache refreshes from Supabase.
+  final String authorId;
   final String senderName;
   final String senderRelationship;
   final String senderRole;
@@ -74,6 +81,7 @@ class MessageModel {
   factory MessageModel.fromMap(Map<String, dynamic> map) {
     return MessageModel(
       id: map['id'] as String,
+      authorId: map['authorId'] as String? ?? '',
       senderName: map['senderName'] as String,
       senderRelationship: map['senderRelationship'] as String,
       senderRole: map['senderRole'] as String? ?? 'family',
@@ -107,6 +115,7 @@ class MessageModel {
 
   Map<String, dynamic> toMap() => {
     'id': id,
+    'authorId': authorId,
     'senderName': senderName,
     'senderRelationship': senderRelationship,
     'senderRole': senderRole,
@@ -170,6 +179,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       true; // tracks if family owner has shared invite code
   bool _isGuest = false;
   bool _isNestOwner = appIsNestOwnerNotifier.value;
+  // Author IDs of anyone removed from this nest -- used only to gate the
+  // post-delete icon for the nest owner (delete a removed member's post).
+  // Not critical-path, so a plain fetch after the main load is enough;
+  // doesn't need the cache-first treatment the rest of this screen uses.
+  Set<String> _removedMemberIds = {};
   List<CelebrationEvent> _todayCelebrations = [];
   List<CelebrationEvent> _upcomingCelebrations = [];
   List<Map<String, dynamic>> _nestMembers = []; // for avatar row (excludes current user)
@@ -296,6 +310,45 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       duration: const Duration(milliseconds: 260),
     );
     _loadData();
+    _loadRemovedMemberIds();
+  }
+
+  Future<void> _loadRemovedMemberIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isEmpty) return;
+      final rows = await Supabase.instance.client
+          .from('nest_removed_members')
+          .select('user_id')
+          .eq('nest_id', nestId);
+      final ids = (rows as List<dynamic>)
+          .map((r) => r['user_id'] as String?)
+          .whereType<String>()
+          .toSet();
+      if (mounted) {
+        setState(() => _removedMemberIds = ids);
+      }
+    } catch (e) {
+      debugPrint('REMOVED_MEMBER_IDS_LOAD_ERROR: $e');
+    }
+  }
+
+  // Own posts, or -- for the nest owner -- a post from someone they've
+  // removed. Matches the RLS policies exactly (delete_own_post,
+  // owner_delete_removed_members_post), so this only ever controls whether
+  // the icon shows; RLS is still the real enforcement.
+  bool _canDeletePost(MessageModel msg) {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (currentUserId == null || msg.authorId.isEmpty) return false;
+    if (msg.authorId == currentUserId) return true;
+    return _isNestOwner && _removedMemberIds.contains(msg.authorId);
+  }
+
+  void _deletePost(String messageId) {
+    setState(() {
+      _messages.removeWhere((m) => m.id == messageId);
+    });
   }
 
   Future<void> _ensureNestId() async {
@@ -1243,6 +1296,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         }
         return MessageModel(
           id: post['id'] as String,
+          authorId: authorId,
           senderName: senderName,
           senderRelationship: relation,
           senderRole: senderRole,
@@ -1778,6 +1832,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 isBookmarked: _bookmarkedIds.contains(_messages[index].id),
                 onBookmark: () => _toggleBookmark(_messages[index]),
                 senderAvatarJson: _messages[index].senderAvatarJson,
+                canDelete: _canDeletePost(_messages[index]),
+                onDelete: () => _deletePost(_messages[index].id),
               ),
             ),
           );
@@ -1814,6 +1870,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               isBookmarked: _bookmarkedIds.contains(_messages[index].id),
               onBookmark: () => _toggleBookmark(_messages[index]),
               senderAvatarJson: _messages[index].senderAvatarJson,
+              canDelete: _canDeletePost(_messages[index]),
+              onDelete: () => _deletePost(_messages[index].id),
             ),
           );
         }, childCount: _messages.length),

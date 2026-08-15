@@ -606,6 +606,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       Navigator.pushReplacementNamed(
         context,
         AppRoutes.saveMessagesPromptScreen,
+        arguments: {'cameFrom': 'family'},
       );
     }
   }

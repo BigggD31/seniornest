@@ -421,6 +421,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
       Navigator.pushReplacementNamed(
         context,
         AppRoutes.saveMessagesPromptScreen,
+        arguments: {'cameFrom': 'senior'},
       );
     }
   }

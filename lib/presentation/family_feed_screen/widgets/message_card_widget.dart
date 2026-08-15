@@ -20,6 +20,9 @@ class MessageCardWidget extends StatefulWidget {
     this.isBookmarked = false,
     this.onBookmark,
     this.senderAvatarJson,
+    this.currentUserId,
+    this.canDelete = false,
+    this.onDelete,
   });
 
   final MessageModel message;
@@ -28,6 +31,15 @@ class MessageCardWidget extends StatefulWidget {
   final bool isBookmarked;
   final VoidCallback? onBookmark;
   final String? senderAvatarJson;
+  final String? currentUserId;
+  // Resolved by the parent screen per-card: true if this is the current
+  // user's own post, or if the current user is the nest owner and this
+  // post's author is in nest_removed_members for this nest. Kept as a
+  // simple bool here rather than re-deriving nest-owner/removed-member
+  // state inside this widget, since the parent already has that context
+  // loaded once per screen rather than per card.
+  final bool canDelete;
+  final VoidCallback? onDelete;
 
   @override
   State<MessageCardWidget> createState() => _MessageCardWidgetState();
@@ -138,6 +150,65 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
   void _onHeartTap() {
     _heartController.forward(from: 0);
     widget.onHeart();
+  }
+
+  Future<void> _confirmDelete(BuildContext context, bool isDark) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF241D14) : const Color(0xFFFDFDFD),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Delete this post?',
+          style: GoogleFonts.nunitoSans(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: isDark ? const Color(0xFFF5F0E8) : const Color(0xFF2C2417),
+          ),
+        ),
+        content: Text(
+          'This can\'t be undone.',
+          style: GoogleFonts.nunitoSans(
+            fontSize: 14,
+            color: isDark ? const Color(0xFFB8AD9A) : const Color(0xFF6B5E4E),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.nunitoSans(color: const Color(0xFF6B5E4E))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Delete',
+              style: GoogleFonts.nunitoSans(color: const Color(0xFFC0392B), fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      // RLS enforces who is actually allowed to do this (own post, or nest
+      // owner deleting a removed member's post) -- the client-side
+      // widget.canDelete check just controls whether the icon shows at
+      // all. If RLS were ever to disagree, this affects 0 rows rather than
+      // erroring, which is the correct, safe failure mode.
+      await Supabase.instance.client
+          .from('feed_posts')
+          .delete()
+          .eq('id', widget.message.id);
+      widget.onDelete?.call();
+    } catch (e) {
+      debugPrint('POST_DELETE_ERROR: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not delete this post. Please try again.')),
+        );
+      }
+    }
   }
 
   void _openPreview(BuildContext context) {
@@ -529,6 +600,24 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                         : const Color(0xFFA8A090),
                   ),
                 ),
+                // Delete icon -- only rendered at all when the parent has
+                // resolved that this specific card is deletable (own post,
+                // or nest owner deleting a removed member's post). Stays
+                // fully invisible on every other card rather than showing
+                // a disabled/grayed-out icon most people can't use.
+                if (widget.canDelete) ...[
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () => _confirmDelete(context, isDark),
+                    child: Icon(
+                      Icons.delete_outline_rounded,
+                      size: 22,
+                      color: isDark
+                          ? const Color(0xFF6B5E4E)
+                          : const Color(0xFFA8A090),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

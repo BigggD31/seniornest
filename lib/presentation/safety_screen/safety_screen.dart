@@ -266,6 +266,13 @@ class _SafetyScreenState extends State<SafetyScreen>
       _isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E);
 
   void _showSOSConfirmation() {
+    // Guards against a fast double-tap firing _sendMessageToContacts twice
+    // before Navigator.pop(ctx) has a chance to close the dialog -- this is
+    // a plain closure-captured flag, not widget state, because the dialog
+    // itself isn't a StatefulWidget; the check-and-set below is synchronous
+    // so it's safe against a rapid double-tap even though the send itself
+    // is async.
+    bool actionTaken = false;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -316,6 +323,8 @@ class _SafetyScreenState extends State<SafetyScreen>
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () {
+                    if (actionTaken) return;
+                    actionTaken = true;
                     Navigator.pop(ctx);
                     _sendMessageToContacts(
                       "I'm okay right now, but please check on me when you can.",
@@ -347,6 +356,8 @@ class _SafetyScreenState extends State<SafetyScreen>
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () {
+                    if (actionTaken) return;
+                    actionTaken = true;
                     Navigator.pop(ctx);
                     _sendMessageToContacts(
                       "EMERGENCY – I need help right now. Please call me immediately.",

@@ -668,6 +668,17 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       return const Scaffold(body: BrandedTransitionScreen());
     }
 
+    // This screen is reached via pushReplacementNamed from either onboarding
+    // flow, which removes that screen from the navigation stack entirely --
+    // a plain Navigator.pop(context) here would have nothing to return to.
+    // D Von reported being unable to get back off this screen at all; the
+    // fix is to explicitly re-navigate to whichever onboarding screen sent
+    // us here, tagged via the 'cameFrom' route argument set at both call
+    // sites (senior_onboarding_screen.dart, family_onboarding_screen.dart).
+    final args = ModalRoute.of(context)?.settings.arguments
+        as Map<String, dynamic>?;
+    final cameFrom = args?['cameFrom'] as String?;
+
     return Scaffold(
       backgroundColor: const Color(0xFFE9F1EE),
       body: Stack(
@@ -886,6 +897,33 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           ),
         ),
       ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            left: isTablet ? 60 : 20,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.pushReplacementNamed(
+                  context,
+                  cameFrom == 'senior'
+                      ? AppRoutes.seniorOnboardingScreen
+                      : AppRoutes.familyOnboardingScreen,
+                );
+              },
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF5DA399).withAlpha(31),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.arrow_back_rounded,
+                  color: Color(0xFF5DA399),
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
           const KeyboardDoneBarOverlay(),
         ],
       ),
