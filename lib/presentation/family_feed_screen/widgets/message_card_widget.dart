@@ -605,16 +605,22 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                 // or nest owner deleting a removed member's post). Stays
                 // fully invisible on every other card rather than showing
                 // a disabled/grayed-out icon most people can't use.
+                //
+                // D Von's build 171 feedback: it worked correctly but blended
+                // in too much next to the other muted icons, and the outline
+                // glyph didn't read clearly as a trash can. Switched to the
+                // filled glyph and a distinct coral tone (not the harsher
+                // alarm-red already used for Remove Member/SOS, which felt
+                // too aggressive for this) -- first pass, flagged for D Von
+                // to confirm the exact shade once he sees it on-device.
                 if (widget.canDelete) ...[
                   const SizedBox(width: 10),
                   GestureDetector(
                     onTap: () => _confirmDelete(context, isDark),
-                    child: Icon(
-                      Icons.delete_outline_rounded,
+                    child: const Icon(
+                      Icons.delete_rounded,
                       size: 22,
-                      color: isDark
-                          ? const Color(0xFF6B5E4E)
-                          : const Color(0xFFA8A090),
+                      color: Color(0xFFE0704F),
                     ),
                   ),
                 ],
