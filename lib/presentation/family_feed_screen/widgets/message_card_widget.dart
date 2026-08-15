@@ -609,10 +609,11 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                 // D Von's build 171 feedback: it worked correctly but blended
                 // in too much next to the other muted icons, and the outline
                 // glyph didn't read clearly as a trash can. Switched to the
-                // filled glyph and a distinct coral tone (not the harsher
-                // alarm-red already used for Remove Member/SOS, which felt
-                // too aggressive for this) -- first pass, flagged for D Von
-                // to confirm the exact shade once he sees it on-device.
+                // filled glyph. Color: D Von asked for the same terracotta
+                // (#C97B4A) already used for the Legacy category tags,
+                // rather than a new one-off color -- it's soft but should
+                // still stand out here since it's the only colored icon in
+                // this row.
                 if (widget.canDelete) ...[
                   const SizedBox(width: 10),
                   GestureDetector(
@@ -620,7 +621,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                     child: const Icon(
                       Icons.delete_rounded,
                       size: 22,
-                      color: Color(0xFFE0704F),
+                      color: Color(0xFFC97B4A),
                     ),
                   ),
                 ],
