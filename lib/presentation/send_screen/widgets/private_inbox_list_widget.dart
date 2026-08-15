@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../widgets/custom_image_widget.dart';
+import '../../../widgets/linkified_text.dart';
 import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../message_thread_screen/message_thread_screen.dart';
 import '../../family_feed_screen/widgets/nest_avatar_row_widget.dart';
@@ -261,10 +262,11 @@ class _PrivateInboxListWidgetState extends State<PrivateInboxListWidget> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
+                  LinkifiedText(
                     thread['lastMessage'] as String,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    interactive: false,
                     style: GoogleFonts.nunitoSans(
                       fontSize: 13,
                       fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.w400,

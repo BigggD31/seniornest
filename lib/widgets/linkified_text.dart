@@ -18,15 +18,16 @@ class LinkifiedText extends StatelessWidget {
     this.linkColor,
     this.maxLines,
     this.overflow,
-    this.showLinkBackground = true,
+    this.showLinkBackground = false,
     this.interactive = true,
   });
 
   final String text;
   final TextStyle style;
 
-  /// Color used for the tappable link portions. Defaults to the app's
-  /// teal (#5DA399) if not supplied.
+  /// Color used for the tappable link portions. Defaults to a deeper teal
+  /// (#3D6E63) for better contrast against plain card/body text than the
+  /// app's lighter primary teal.
   final Color? linkColor;
 
   final int? maxLines;
@@ -34,10 +35,10 @@ class LinkifiedText extends StatelessWidget {
 
   /// Paints a soft highlighted background behind link text, like an inset
   /// chip, so links stand out from the surrounding body text on a plain
-  /// card background. Defaults on. Turned off in contexts that already
-  /// have their own colored backdrop behind the text (the DM thread's
-  /// "mine" message bubbles), where a second background would fight with
-  /// the bubble color instead of helping.
+  /// card background. Defaults OFF -- tried on (teal tint, then gold tint)
+  /// across builds 168/169 and D Von preferred plain colored text with no
+  /// background at all. Left available for any future context that wants
+  /// it, just opt-in now instead of opt-out.
   final bool showLinkBackground;
 
   /// Whether the link portion is actually tappable. Defaults on. Turn off
@@ -81,7 +82,7 @@ class LinkifiedText extends StatelessWidget {
       );
     }
 
-    final effectiveLinkColor = linkColor ?? const Color(0xFF5DA399);
+    final effectiveLinkColor = linkColor ?? const Color(0xFF3D6E63);
     // The highlight background is intentionally a different color (gold)
     // from the link text (teal) -- a same-color tint blended into the text
     // color and didn't read as a distinct highlight. Gold-on-teal separates
