@@ -2186,6 +2186,21 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
         MediaQuery.of(context).viewInsets.bottom +
         MediaQuery.of(context).padding.bottom;
 
+    // Was a fixed 85% of the full screen height, regardless of whether the
+    // keyboard was open -- so KeyboardDoneBar (anchored to THIS container's
+    // own bottom edge) never actually tracked the keyboard's real position,
+    // just wherever this fixed-size box happened to end. With the keyboard
+    // open, the sheet needs to be shorter than 85% of the full screen to
+    // correctly leave room for it; this shrinks the sheet by the keyboard's
+    // own height so its bottom edge -- and the bar on it -- genuinely sits
+    // right above the keyboard, not floating above it with a gap
+    // (D Von's screenshot, Aug 16).
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    final maxSheetHeight = MediaQuery.of(context).size.height * 0.85;
+    final sheetHeight = keyboardInset > 0
+        ? (maxSheetHeight - keyboardInset).clamp(300.0, maxSheetHeight)
+        : maxSheetHeight;
+
     final Color sectionBg = widget.isDarkMode
         ? const Color(0xFF2E2820)
         : const Color(0xFFF7F3EE);
@@ -2200,7 +2215,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
       child: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
-        height: MediaQuery.of(context).size.height * 0.85,
+        height: sheetHeight,
         margin: const EdgeInsets.symmetric(horizontal: 8),
       padding: EdgeInsets.only(bottom: bottomPadding),
       decoration: BoxDecoration(

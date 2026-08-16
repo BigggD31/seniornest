@@ -2130,6 +2130,16 @@ class _SetupScreenState extends State<SetupScreen>
               await prefs.remove('profile_photo_owner_id');
               await prefs.remove('birthday');
               await prefs.remove('anniversary');
+              // These three were missing from this list -- meaning a
+              // regular Sign Out (as opposed to full account deletion,
+              // which does prefs.clear()) left them sitting on the device
+              // indefinitely. Found while investigating D Von's report of
+              // the wrong nest name appearing on a fresh invite-code
+              // attempt, Aug 16 2026 -- confirmed as a real, separate gap
+              // regardless of whether it's the exact cause of that report.
+              await prefs.remove('invite_code');
+              await prefs.remove('joined_via_invite');
+              await prefs.remove('nest_name');
               await prefs.setBool('just_signed_out', true);
               if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(
@@ -2228,7 +2238,10 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    return Container(
+    // See the matching comment on the Rename Nest sheet -- modals need
+    // their own KeyboardDoneBar, not the parent screen's ambient overlay.
+    return KeyboardDoneBar(
+      child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: EdgeInsets.only(
         left: 24,
@@ -2403,6 +2416,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -2571,7 +2585,17 @@ class _EditNestSheetState extends State<_EditNestSheet> {
     // label, not a checkmark) so the only checkmark on screen is ever
     // the custom bar's. Tap-anywhere-in-the-sheet stays as a backup way
     // to dismiss the keyboard, same as before.
-    return GestureDetector(
+    // Aug 16: modals opened via showModalBottomSheet render as their own
+    // separate layer ON TOP of the screen behind them -- relying on that
+    // parent screen's ambient KeyboardDoneBarOverlay never actually
+    // worked correctly for them, since the bar lives in a layer BELOW
+    // this modal. Depending on whether this modal's own content happened
+    // to leave a gap down to the keyboard, the parent's bar either showed
+    // through disconnected from this modal's own buttons, or (here) was
+    // fully covered and invisible. Wrapping this modal's own content in
+    // KeyboardDoneBar makes the bar genuinely part of THIS layer instead.
+    return KeyboardDoneBar(
+      child: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -2671,6 +2695,7 @@ class _EditNestSheetState extends State<_EditNestSheet> {
         ],
       ),
         ),
+      ),
       );
   }
 }

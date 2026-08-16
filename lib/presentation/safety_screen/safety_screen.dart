@@ -1387,7 +1387,8 @@ class _AddContactSheetState extends State<_AddContactSheet> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
-      body: GestureDetector(
+      body: KeyboardDoneBar(
+        child: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -1529,6 +1530,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
         ],
       ),
     ),
+  ),
   ),
   );
   }
@@ -1713,7 +1715,8 @@ class _EditContactSheetState extends State<_EditContactSheet> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
-      body: GestureDetector(
+      body: KeyboardDoneBar(
+        child: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -1907,6 +1910,7 @@ class _EditContactSheetState extends State<_EditContactSheet> {
         ],
       ),
     ),
+  ),
   ),
   );
   }

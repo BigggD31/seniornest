@@ -497,7 +497,11 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    return Container(
+    // See the matching comment on Setup's Rename Nest sheet -- modals
+    // need their own KeyboardDoneBar, not the parent screen's ambient
+    // overlay, which sits in a layer this modal renders on top of.
+    return KeyboardDoneBar(
+      child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: EdgeInsets.only(
         left: 24,
@@ -612,6 +616,7 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
           ),
         ],
       ),
+    ),
     );
   }
 }
