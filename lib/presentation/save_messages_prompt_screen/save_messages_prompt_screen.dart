@@ -8,6 +8,7 @@ import '../profile_photo_picker_screen/profile_photo_picker_screen.dart' show kP
 import '../../services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'dart:math';
 import '../splash_screen/widgets/nest_logo_widget.dart';
 import '../../widgets/keyboard_done_bar.dart';
 import '../../widgets/branded_transition_screen.dart';
@@ -492,32 +493,51 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
               }
             }
           } else {
-            // Owner path — generate a fresh code, never reuse a typed one.
-            final existingCode = prefs.getString('invite_code') ?? '';
-            String inviteCode = existingCode;
-            if (inviteCode.isEmpty || !RegExp(r'^NEST[0-9]{6}$').hasMatch(inviteCode)) {
-              final digits = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
-              inviteCode = 'NEST' + digits;
-              await prefs.setString('invite_code', inviteCode);
-            }
+            // Owner path — always generate a fresh code, never reuse a
+            // cached one. The comment above this block already said "never
+            // reuse a typed one," but the code used to check prefs first
+            // and reuse whatever was cached if it happened to match the
+            // NEST###### format -- which is exactly what a PREVIOUS
+            // account's invite code would also look like. D Von hit this
+            // for real (Aug 16): signing out of the senior account and
+            // into a family-owner signup reused the senior nest's own
+            // still-cached invite code, colliding on the nests_invite_code_key
+            // unique constraint since that code already belonged to the
+            // senior's nest. Now always fresh, and retries on an actual DB
+            // collision too (a 6-digit space is finite; better to handle a
+            // genuine collision gracefully than assume fresh generation
+            // alone is bulletproof forever as the nest count grows).
             final nestName = prefs.getString('nest_name') ?? 'My Family';
-
-            // Create nest
-            await supabase.from('nests').insert({
-              'name': nestName,
-              'created_by': effectiveUserId,
-              'invite_code': inviteCode,
-            });
-
-            // Now fetch it back — we know it exists
-            final nestResponse = await supabase
-                .from('nests')
-                .select('id')
-                .eq('created_by', effectiveUserId)
-                .eq('invite_code', inviteCode)
-                .single();
-
-            final nestId = nestResponse['id'] as String;
+            String? nestId;
+            for (int attempt = 0; attempt < 5 && nestId == null; attempt++) {
+              final digits = (100000 + Random().nextInt(900000)).toString();
+              final inviteCode = 'NEST$digits';
+              try {
+                await supabase.from('nests').insert({
+                  'name': nestName,
+                  'created_by': effectiveUserId,
+                  'invite_code': inviteCode,
+                });
+                await prefs.setString('invite_code', inviteCode);
+                final nestResponse = await supabase
+                    .from('nests')
+                    .select('id')
+                    .eq('created_by', effectiveUserId)
+                    .eq('invite_code', inviteCode)
+                    .single();
+                nestId = nestResponse['id'] as String;
+              } on PostgrestException catch (e) {
+                if (e.code == '23505') {
+                  // Collision on this specific code -- try again with a
+                  // freshly generated one.
+                  continue;
+                }
+                rethrow;
+              }
+            }
+            if (nestId == null) {
+              throw Exception('Could not generate a unique invite code after 5 attempts');
+            }
             await prefs.setString('nest_id', nestId);
             print('NEST_DEBUG: nest created = $nestId');
 

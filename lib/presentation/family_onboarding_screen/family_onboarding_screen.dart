@@ -294,18 +294,16 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     if (_anniversary != null) {
       await prefs.setString('anniversary', _anniversary!.toIso8601String());
     }
-    // Generate and save invite code for family nest owner
-    final existingCode = prefs.getString('invite_code');
-    if (existingCode == null ||
-        existingCode.isEmpty ||
-        !RegExp(r'^NEST\d{6}$').hasMatch(existingCode)) {
-      final digits = (100000 + Random().nextInt(900000)).toString();
-      final code = 'NEST$digits';
-      await prefs.setString('invite_code', code);
-      setState(() => _inviteCode = code);
-    } else {
-      setState(() => _inviteCode = existingCode);
-    }
+    // Generate and save invite code for family nest owner -- always
+    // fresh, never reuse whatever's cached in prefs. A cached value could
+    // be left over from a completely different, previous account/nest on
+    // this device (confirmed root cause of a real nests_invite_code_key
+    // collision D Von hit, Aug 16 2026) -- the actual insert this feeds
+    // into also has its own retry-on-collision safety net now.
+    final digits = (100000 + Random().nextInt(900000)).toString();
+    final code = 'NEST$digits';
+    await prefs.setString('invite_code', code);
+    setState(() => _inviteCode = code);
   }
 
   // Shows the real nest name and separately joins the nest, as two
@@ -581,13 +579,40 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
                 debugPrint('Member join error: $e');
               }
             } else {
-              // Owner creating new nest
+              // Owner creating new nest -- this insert previously never
+              // included invite_code at all (confirmed via schema: the
+              // column has no DB-level default), meaning a family-owner
+              // nest created through this exact path had NO invite code
+              // whatsoever and could never actually be joined by anyone.
+              // Found while fixing the separate invite-code collision bug
+              // D Von hit Aug 16 -- same session, different root cause.
+              // Fixed here with the same retry-on-collision pattern used
+              // in senior_onboarding_screen.dart and
+              // save_messages_prompt_screen.dart, rather than relying on
+              // the _savePreferences() cached code, which was never
+              // actually wired to this insert in the first place.
               final nestName = prefs.getString('nest_name') ?? 'Our Nest';
-              final nestResponse = await supabase.from('nests').insert({
-                'name': nestName,
-                'created_by': userId,
-              }).select().single();
-              final nestId = nestResponse['id'] as String;
+              String? nestId;
+              for (int attempt = 0; attempt < 5 && nestId == null; attempt++) {
+                final digits = (100000 + Random().nextInt(900000)).toString();
+                final freshCode = 'NEST$digits';
+                try {
+                  final nestResponse = await supabase.from('nests').insert({
+                    'name': nestName,
+                    'created_by': userId,
+                    'invite_code': freshCode,
+                  }).select().single();
+                  nestId = nestResponse['id'] as String;
+                  await prefs.setString('invite_code', freshCode);
+                  if (mounted) setState(() => _inviteCode = freshCode);
+                } on PostgrestException catch (e) {
+                  if (e.code == '23505') continue;
+                  rethrow;
+                }
+              }
+              if (nestId == null) {
+                throw Exception('Could not generate a unique invite code after 5 attempts');
+              }
               await prefs.setString('nest_id', nestId);
               await supabase.from('nest_members').upsert({
                 'nest_id': nestId,

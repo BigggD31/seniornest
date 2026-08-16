@@ -261,17 +261,14 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
       await prefs.setString('anniversary', _anniversary!.toIso8601String());
     }
 
-    // Generate invite code
-    final existingCode = prefs.getString('invite_code') ?? '';
-    String inviteCode = existingCode;
-    if (existingCode.isEmpty || !RegExp(r'^NEST\d{6}$').hasMatch(existingCode)) {
-      final digits = (100000 + Random().nextInt(900000)).toString();
-      inviteCode = 'NEST$digits';
-      await prefs.setString('invite_code', inviteCode);
-      if (mounted) setState(() => _inviteCode = inviteCode);
-    } else {
-      if (mounted) setState(() => _inviteCode = existingCode);
-    }
+    // Invite code generation only applies to the "creating my own new nest"
+    // path -- someone who joined via invite already has their typed code
+    // in _inviteCode/prefs, and reusing THAT is correct, not a bug. This
+    // used to run unconditionally and could reuse a stale cached code left
+    // over from a completely different, previous account/nest on this
+    // device -- fixed below at the actual insert point (never trust the
+    // cache for a fresh nest; always generate new, with retry-on-collision
+    // as a real safety net, not just a one-time guess).
 
     // Save to Supabase
     try {
@@ -382,14 +379,31 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
               rethrow;
             }
           } else {
-            // Create new nest with invite code
-            final nestResponse = await supabase.from('nests').insert({
-              'name': nestName,
-              'created_by': userId,
-              'invite_code': inviteCode,
-            }).select().single();
-
-            nestId = nestResponse['id'] as String;
+            // Create new nest -- always a fresh code, never reuse whatever
+            // happens to be cached in prefs. See the comment above where
+            // the old unconditional generation used to live.
+            String? nestIdCreated;
+            for (int attempt = 0; attempt < 5 && nestIdCreated == null; attempt++) {
+              final digits = (100000 + Random().nextInt(900000)).toString();
+              final freshCode = 'NEST$digits';
+              try {
+                final nestResponse = await supabase.from('nests').insert({
+                  'name': nestName,
+                  'created_by': userId,
+                  'invite_code': freshCode,
+                }).select().single();
+                nestIdCreated = nestResponse['id'] as String;
+                await prefs.setString('invite_code', freshCode);
+                if (mounted) setState(() => _inviteCode = freshCode);
+              } on PostgrestException catch (e) {
+                if (e.code == '23505') continue;
+                rethrow;
+              }
+            }
+            if (nestIdCreated == null) {
+              throw Exception('Could not generate a unique invite code after 5 attempts');
+            }
+            nestId = nestIdCreated;
             await prefs.setString('nest_id', nestId);
 
             // Add user as nest member
