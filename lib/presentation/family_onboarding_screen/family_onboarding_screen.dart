@@ -1471,6 +1471,22 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         _buildSummaryRow(Icons.person_rounded, 'Name', name, isDark),
         const SizedBox(height: 8),
         _buildSummaryRow(Icons.home_rounded, 'Nest', nestName, isDark),
+        // TEMPORARY, Aug 16 2026: same debug pattern used to actually
+        // pin this exact bug down once before (see commit 8e0810e and
+        // the ones just before it) -- the state was already being
+        // tracked internally (_nestNameDebugStatus) but not shown
+        // anywhere. Remove once D Von confirms the real cause and it's
+        // fixed for real, same as last time.
+        Padding(
+          padding: const EdgeInsets.only(top: 4, left: 32),
+          child: Text(
+            'DEBUG: $_nestNameDebugStatus',
+            style: GoogleFonts.nunitoSans(
+              fontSize: 11,
+              color: const Color(0xFFC0392B),
+            ),
+          ),
+        ),
         const SizedBox(height: 8),
         _buildSummaryRow(
           Icons.favorite_rounded,
