@@ -55,11 +55,25 @@ class KeyboardDoneBar extends StatelessWidget {
 /// hides itself automatically when the keyboard is closed, or when
 /// appSuppressKeyboardDoneBarNotifier is true (see KeyboardDoneBar above).
 class KeyboardDoneBarOverlay extends StatelessWidget {
-  const KeyboardDoneBarOverlay({super.key});
+  // If the Scaffold this overlay lives inside has
+  // resizeToAvoidBottomInset: true, the Scaffold itself already consumes
+  // the keyboard's height to shrink its body -- by the time this widget's
+  // own context reads MediaQuery.of(context).viewInsets.bottom, it's
+  // already been reduced to 0, so the overlay would incorrectly render
+  // nothing even with the keyboard open. D Von caught this on the Share
+  // screen (build 173): the bar was genuinely never showing at all, not
+  // just hidden underneath something. Screens with that Scaffold setting
+  // need to capture the real inset from a context ABOVE the Scaffold's
+  // resize boundary (e.g. the outer build(BuildContext context) method,
+  // before the Scaffold is constructed) and pass it here explicitly.
+  final double? rawBottomInset;
+
+  const KeyboardDoneBarOverlay({super.key, this.rawBottomInset});
 
   @override
   Widget build(BuildContext context) {
-    final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final double bottomInset =
+        rawBottomInset ?? MediaQuery.of(context).viewInsets.bottom;
     if (bottomInset <= 0) return const SizedBox.shrink();
     return ValueListenableBuilder<bool>(
       valueListenable: appSuppressKeyboardDoneBarNotifier,

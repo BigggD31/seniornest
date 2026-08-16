@@ -1822,7 +1822,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           // KeyboardDoneBar wrap, was the actual cause of the Share
           // screen's message field showing no checkmark bar at all
           // (D Von's screenshot, build 172).
-          const KeyboardDoneBarOverlay(),
+          KeyboardDoneBarOverlay(rawBottomInset: keyboardHeight),
         ],
       ),
       floatingActionButton: null,
