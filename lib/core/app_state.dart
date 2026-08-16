@@ -105,6 +105,17 @@ final ValueNotifier<bool> appIsVipMemberNotifier = ValueNotifier<bool>(false);
 /// today, resolved from the same cached_checkin_* prefs family.
 final ValueNotifier<bool> appSeniorMedsTakenTodayNotifier = ValueNotifier<bool>(false);
 
+/// Found while investigating D Von's screenshot (build 172, Aug 15): the
+/// floating "I'm Good" button's own visibility flag (_isGoodTodaySent) had
+/// the exact same hardcoded-false-default pattern as everything else in
+/// this section, but got missed in the original rollout since it's driven
+/// by a separate local-only prefs key (good_today_*) rather than the
+/// cached_checkin_* family the other notifiers share. Date-scoped like the
+/// others; resolved from the same key family_feed_screen.dart itself
+/// writes to (see _todayKey() there for the exact date-string format this
+/// must match).
+final ValueNotifier<bool> appIsGoodTodaySentNotifier = ValueNotifier<bool>(false);
+
 /// Maps the stored string to a TextScaler multiplier.
 double textSizeToScale(String size) {
   switch (size) {

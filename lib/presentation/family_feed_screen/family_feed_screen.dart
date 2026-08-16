@@ -156,7 +156,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // "My Nest" placeholder) is ever visible, regardless of connection
   // speed.
   String _nestName = appNestNameNotifier.value;
-  bool _isGoodTodaySent = false;
+  bool _isGoodTodaySent = appIsGoodTodaySentNotifier.value;
   bool _justCheckedIn = false; // true only briefly right after tapping, to show the "Sent!" confirmation
   bool _showMedsReminder = true;
   bool _showWelcomeToast = false;
@@ -858,6 +858,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             'good_today_${_todayKey()}',
             checkinResponse != null,
           );
+          appIsGoodTodaySentNotifier.value = checkinResponse != null;
         }
         // Update the shared notifier so any other screen currently showing
         // this value picks it up immediately. Persistence to
@@ -1069,6 +1070,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     if (_isGoodTodaySent) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('good_today_${_todayKey()}', true);
+    appIsGoodTodaySentNotifier.value = true;
     setState(() {
       _isGoodTodaySent = true;
       _justCheckedIn = true;

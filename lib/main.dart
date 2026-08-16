@@ -245,6 +245,14 @@ class _MyAppState extends State<MyApp> {
             prefs.getBool('cached_checkin_meds_taken') ?? false;
       }
 
+      // Resolved once here -- see appIsGoodTodaySentNotifier's comment in
+      // app_state.dart. Key format must match family_feed_screen.dart's
+      // _todayKey() exactly (unpadded year_month_day), which is different
+      // from the padded todayDateString used just above for check-in/meds.
+      final goodTodayKey = '${now.year}_${now.month}_${now.day}';
+      appIsGoodTodaySentNotifier.value =
+          prefs.getBool('good_today_$goodTodayKey') ?? false;
+
       // Resolved once here -- see the "Flash-of-wrong-content fix, rollout
       // to remaining fields" section of app_state.dart. isSenior was
       // independently duplicated across 5 screens, all deriving it from
