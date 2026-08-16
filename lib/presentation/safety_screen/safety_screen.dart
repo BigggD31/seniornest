@@ -1282,21 +1282,10 @@ class _AddContactSheet extends StatefulWidget {
 class _AddContactSheetState extends State<_AddContactSheet> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  // Both single-line fields with their own native done key -- see
-  // suppressKeyboardBarWhileFocused in app_state.dart. This screen's root
-  // Stack has a KeyboardDoneBarOverlay (ambient), which would otherwise
-  // show up alongside the native done key on both fields.
   final FocusNode _nameFocusNode = FocusNode();
   final FocusNode _phoneFocusNode = FocusNode();
   bool _isPrimary = false;
   bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    suppressKeyboardBarWhileFocused(_nameFocusNode);
-    suppressKeyboardBarWhileFocused(_phoneFocusNode);
-  }
 
   @override
   void dispose() {
@@ -1304,7 +1293,6 @@ class _AddContactSheetState extends State<_AddContactSheet> {
     _phoneController.dispose();
     _nameFocusNode.dispose();
     _phoneFocusNode.dispose();
-    appSuppressKeyboardDoneBarNotifier.value = false;
     super.dispose();
   }
 
@@ -1463,7 +1451,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
             controller: _phoneController,
             focusNode: _phoneFocusNode,
             keyboardType: TextInputType.phone,
-            textInputAction: TextInputAction.done,
+            textInputAction: TextInputAction.go,
             onSubmitted: (_) => FocusScope.of(context).unfocus(),
             style: GoogleFonts.nunitoSans(fontSize: 16, color: _textPrimary),
             decoration: InputDecoration(
@@ -1558,8 +1546,6 @@ class _EditContactSheet extends StatefulWidget {
 class _EditContactSheetState extends State<_EditContactSheet> {
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
-  // Both single-line fields with their own native done key -- see
-  // suppressKeyboardBarWhileFocused in app_state.dart.
   final FocusNode _nameFocusNode = FocusNode();
   final FocusNode _phoneFocusNode = FocusNode();
   late bool _isPrimary;
@@ -1576,8 +1562,6 @@ class _EditContactSheetState extends State<_EditContactSheet> {
       text: widget.contact['phone'] as String? ?? '',
     );
     _isPrimary = widget.contact['isPrimary'] as bool? ?? false;
-    suppressKeyboardBarWhileFocused(_nameFocusNode);
-    suppressKeyboardBarWhileFocused(_phoneFocusNode);
   }
 
   @override
@@ -1586,7 +1570,6 @@ class _EditContactSheetState extends State<_EditContactSheet> {
     _phoneController.dispose();
     _nameFocusNode.dispose();
     _phoneFocusNode.dispose();
-    appSuppressKeyboardDoneBarNotifier.value = false;
     super.dispose();
   }
 
@@ -1829,7 +1812,7 @@ class _EditContactSheetState extends State<_EditContactSheet> {
             controller: _phoneController,
             focusNode: _phoneFocusNode,
             keyboardType: TextInputType.phone,
-            textInputAction: TextInputAction.done,
+            textInputAction: TextInputAction.go,
             onSubmitted: (_) => FocusScope.of(context).unfocus(),
             style: GoogleFonts.nunitoSans(fontSize: 16, color: _textPrimary),
             decoration: InputDecoration(

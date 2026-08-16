@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../core/app_state.dart';
 
 /// Wraps [child] so that whenever the keyboard is open, a thin bar with a
@@ -99,37 +100,67 @@ class _DoneBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: const Color(0xFFD1D3D9),
-        border: Border(
-          top: Border.all(color: const Color(0xFFB8BAC0)).top,
-        ),
-      ),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(6),
-              onTap: onDone,
-              child: Container(
-                width: 60,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF007AFF),
-                  borderRadius: BorderRadius.circular(6),
+    // D Von's design pass, Aug 16 2026: the previous bar was a plain iOS
+    // system-gray-and-blue default, which read as generic/unbranded next
+    // to the rest of the app. Same colors as everywhere else in
+    // SeniorNest -- the warm cream surface + cardBorder used on every
+    // card (app_theme.dart), and the established teal (#5DA399) used for
+    // every other primary action in the app, not iOS's default blue.
+    // Whole bar is tappable, not just the pill -- a larger, more forgiving
+    // touch target given SeniorNest's older-adult audience.
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onDone,
+        child: Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF5F0E8),
+            border: const Border(
+              top: BorderSide(color: Color(0xFFE8E0D0), width: 1),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(15),
+                blurRadius: 6,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 8,
                 ),
-                child: const Icon(
-                  Icons.check,
-                  color: Colors.white,
-                  size: 20,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF5DA399),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Done',
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(
+                      Icons.check_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ],
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),

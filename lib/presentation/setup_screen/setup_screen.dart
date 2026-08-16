@@ -2181,8 +2181,6 @@ class _EditProfileSheet extends StatefulWidget {
 class _EditProfileSheetState extends State<_EditProfileSheet> {
   late TextEditingController _nameController;
   late TextEditingController _preferredNameController;
-  // Both single-line fields with their own native done key -- see
-  // suppressKeyboardBarWhileFocused in app_state.dart.
   final FocusNode _nameFocusNode = FocusNode();
   final FocusNode _preferredNameFocusNode = FocusNode();
   bool _isSaving = false;
@@ -2198,8 +2196,6 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
     _birthday = widget.birthday;
     _anniversary = widget.anniversary;
     _profileData = widget.profileData;
-    suppressKeyboardBarWhileFocused(_nameFocusNode);
-    suppressKeyboardBarWhileFocused(_preferredNameFocusNode);
   }
 
   Future<void> _openAvatarPicker() async {
@@ -2219,7 +2215,6 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
     _preferredNameController.dispose();
     _nameFocusNode.dispose();
     _preferredNameFocusNode.dispose();
-    appSuppressKeyboardDoneBarNotifier.value = false;
     super.dispose();
   }
 
@@ -2330,7 +2325,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
             controller: _preferredNameController,
             focusNode: _preferredNameFocusNode,
             textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.done,
+            textInputAction: TextInputAction.go,
             onSubmitted: (_) => FocusScope.of(context).unfocus(),
             style: GoogleFonts.nunitoSans(fontSize: 18, color: _textPrimary),
             decoration: InputDecoration(
@@ -2540,11 +2535,6 @@ class _EditNestSheet extends StatefulWidget {
 
 class _EditNestSheetState extends State<_EditNestSheet> {
   late TextEditingController _nestController;
-  // Single-line field with its own native "Done" key -- this FocusNode
-  // exists solely to tell the parent screen's ambient KeyboardDoneBarOverlay
-  // to hide itself while this field is focused, so the native done key and
-  // the custom bar don't both show at once. See suppressKeyboardBarWhileFocused
-  // in app_state.dart for why this is needed at all.
   final FocusNode _nestFieldFocusNode = FocusNode();
   bool _isSaving = false;
 
@@ -2552,18 +2542,12 @@ class _EditNestSheetState extends State<_EditNestSheet> {
   void initState() {
     super.initState();
     _nestController = TextEditingController(text: widget.nestName);
-    suppressKeyboardBarWhileFocused(_nestFieldFocusNode);
   }
 
   @override
   void dispose() {
     _nestController.dispose();
     _nestFieldFocusNode.dispose();
-    // Reset in case this sheet is closed while the field still has focus
-    // (e.g. tapping the dimmed background) -- otherwise the notifier could
-    // stay stuck "suppressed" and hide the bar on the next screen that
-    // actually needs it.
-    appSuppressKeyboardDoneBarNotifier.value = false;
     super.dispose();
   }
 
@@ -2577,17 +2561,16 @@ class _EditNestSheetState extends State<_EditNestSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    // This is a single-line field with its own native "Done" key
-    // (textInputAction: TextInputAction.done below) -- it doesn't need the
-    // custom checkmark bar at all. But the parent setup_screen's
-    // KeyboardDoneBarOverlay is ambient (MediaQuery's keyboard inset isn't
-    // scoped per-route), so it was showing up here too, alongside the
-    // native done key -- two checkmark-style controls on screen for one
-    // field, reported by D Von (build 171 follow-up, Aug 15 2026).
-    // _nestFieldFocusNode below tells that ambient bar to hide itself
-    // while this field is focused (see suppressKeyboardBarWhileFocused in
-    // app_state.dart). Tap-anywhere-in-the-sheet stays as a backup way to
-    // dismiss the keyboard, same as before.
+    // Standing on Aug 15's double-checkmark fix: this used to suppress the
+    // parent screen's ambient KeyboardDoneBarOverlay while this field was
+    // focused, since single-line fields relied on the native "Done" key
+    // for dismissal. As of Aug 16, D Von decided every field should use
+    // the exact same custom bar app-wide, single-line or multi-line --
+    // no more relying on the native key's styling to happen to look
+    // similar. This field now uses TextInputAction.go (a plain text
+    // label, not a checkmark) so the only checkmark on screen is ever
+    // the custom bar's. Tap-anywhere-in-the-sheet stays as a backup way
+    // to dismiss the keyboard, same as before.
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
@@ -2630,7 +2613,7 @@ class _EditNestSheetState extends State<_EditNestSheet> {
             controller: _nestController,
             focusNode: _nestFieldFocusNode,
             textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.done,
+            textInputAction: TextInputAction.go,
             onSubmitted: (_) => FocusScope.of(context).unfocus(),
             style: GoogleFonts.nunitoSans(fontSize: 18, color: _textPrimary),
             decoration: InputDecoration(

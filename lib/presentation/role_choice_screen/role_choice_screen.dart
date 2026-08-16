@@ -383,25 +383,14 @@ class _InviteCodeSheet extends StatefulWidget {
 
 class _InviteCodeSheetState extends State<_InviteCodeSheet> {
   final TextEditingController _codeController = TextEditingController();
-  // Single-line field, same treatment as Setup's Rename Nest sheet -- see
-  // suppressKeyboardBarWhileFocused in app_state.dart. This screen's root
-  // Stack already has a KeyboardDoneBarOverlay (ambient), which would show
-  // up alongside the native done key without this.
   final FocusNode _codeFieldFocusNode = FocusNode();
   bool _isLoading = false;
   String? _errorText;
 
   @override
-  void initState() {
-    super.initState();
-    suppressKeyboardBarWhileFocused(_codeFieldFocusNode);
-  }
-
-  @override
   void dispose() {
     _codeController.dispose();
     _codeFieldFocusNode.dispose();
-    appSuppressKeyboardDoneBarNotifier.value = false;
     super.dispose();
   }
 
@@ -556,7 +545,7 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
             controller: _codeController,
             focusNode: _codeFieldFocusNode,
             textCapitalization: TextCapitalization.characters,
-            textInputAction: TextInputAction.done,
+            textInputAction: TextInputAction.go,
             onSubmitted: (_) => FocusScope.of(context).unfocus(),
             style: GoogleFonts.nunitoSans(
               fontSize: 22,
