@@ -619,6 +619,34 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
                 'user_id': userId,
               });
             }
+          } else {
+            // This account is already a valid member of existingNestId --
+            // e.g. the same real account was used for an earlier senior
+            // signup in this same testing session, then reused here for a
+            // family-member attempt. The fresh-join branch above already
+            // fetches and displays the real nest name; this branch never
+            // did, so the summary screen fell through to the "$name's
+            // Nest" placeholder even though a perfectly real nest name
+            // was one query away. D Von found this Aug 16 -- confirmed via
+            // this exact account's auth timestamps (created 13:42, signed
+            // in again 13:46) that it's the same account reused, not a
+            // fresh join, and not a regression in any of today's other
+            // fixes -- this branch just never had this fix applied to it
+            // in the first place.
+            try {
+              final realNestRow = await supabase
+                  .from('nests')
+                  .select('name')
+                  .eq('id', existingNestId)
+                  .maybeSingle();
+              final realNestName = realNestRow?['name'] as String?;
+              if (realNestName != null && realNestName.isNotEmpty) {
+                _nestNameController.text = realNestName;
+                await prefs.setString('nest_name', realNestName);
+              }
+            } catch (e) {
+              debugPrint('EXISTING_NEST_NAME_FETCH_ERROR: $e');
+            }
           }
         }
       }
