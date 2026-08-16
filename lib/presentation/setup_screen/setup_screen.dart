@@ -162,6 +162,11 @@ class _SetupScreenState extends State<SetupScreen>
       _inviteCode = prefs.getString('invite_code') ?? '';
       _familyMembers = initialFamilyMembers;
     });
+    // See the matching comment in family_feed_screen.dart -- appIsSeniorNotifier
+    // only re-resolves at true cold-start, so an in-session account switch
+    // needs this screen's own fresh cache read to correct the shared
+    // notifier too.
+    appIsSeniorNotifier.value = isSenior;
     _setupAnimations();
     _entranceController.forward();
 

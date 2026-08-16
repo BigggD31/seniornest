@@ -245,6 +245,11 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       _sampleBannerDismissed = prefs.getBool('messages_sample_banner_dismissed') ?? false;
       _profileData = profileData;
     });
+    // See the matching comment in family_feed_screen.dart -- appIsSeniorNotifier
+    // only re-resolves at true cold-start, so an in-session account switch
+    // needs this screen's own fresh cache read to correct the shared
+    // notifier too.
+    appIsSeniorNotifier.value = (prefs.getString('user_role') ?? 'senior') == 'senior';
     _entranceController.forward();
   }
 

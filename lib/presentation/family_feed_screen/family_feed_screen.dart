@@ -670,6 +670,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         _seniorMedsTakenTime = initialSeniorMedsTakenTime;
       }
     });
+    // appIsSeniorNotifier is only resolved once at true cold-start/resume
+    // (main.dart) -- switching accounts within one running session (sign
+    // out, sign into a different account, no full app relaunch) never hit
+    // that resolution point again, so the notifier stayed stuck on
+    // whoever was last resolved. That's exactly why a family member could
+    // briefly see the senior-only "I'm Good" button after an account
+    // switch (reported by D Von, build 172). This is the fresh, correct
+    // value for whoever is actually logged in right now -- write it back
+    // so every other screen reading this notifier corrects immediately
+    // too, not just this one.
+    appIsSeniorNotifier.value = role == 'senior';
 
     _setupItemAnimations();
     _listEntranceController.forward();

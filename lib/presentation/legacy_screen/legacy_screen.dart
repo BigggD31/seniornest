@@ -299,6 +299,11 @@ class _LegacyScreenState extends State<LegacyScreen>
       // Best guess until the live lookup below resolves the real senior.
       _seniorName = prefs.getString('senior_name') ?? 'Your Loved One';
     });
+    // See the matching comment in family_feed_screen.dart -- appIsSeniorNotifier
+    // only re-resolves at true cold-start, so an in-session account switch
+    // (sign out, sign into a different account, no full app relaunch) needs
+    // this screen's own fresh cache read to correct the shared notifier too.
+    appIsSeniorNotifier.value = isSeniorInitial;
     _setupAnimations();
     _entranceController.forward();
 

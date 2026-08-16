@@ -148,6 +148,11 @@ class _SafetyScreenState extends State<SafetyScreen>
           ? prefs.getString('preferred_name')!
           : (prefs.getString('display_name') ?? '');
     });
+    // See the matching comment in family_feed_screen.dart -- appIsSeniorNotifier
+    // only re-resolves at true cold-start, so an in-session account switch
+    // needs this screen's own fresh cache read to correct the shared
+    // notifier too.
+    appIsSeniorNotifier.value = isSeniorRole;
     _setupAnimations();
     _entranceController.forward();
 
