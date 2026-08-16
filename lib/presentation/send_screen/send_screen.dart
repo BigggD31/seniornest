@@ -1724,7 +1724,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
               behavior: HitTestBehavior.translucent,
             ),
           ),
-          const KeyboardDoneBarOverlay(),
           SafeArea(
             bottom: false,
             child: AnimatedBuilder(
@@ -1815,6 +1814,15 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ),
               ),
             ),
+          // Was previously positioned before the main SafeArea content
+          // above, which meant the compose panel (including the message
+          // field) rendered ON TOP of this bar in the Stack -- the bar was
+          // technically still there, just completely covered up. Moved to
+          // last so it draws above everything else. This, not a missing
+          // KeyboardDoneBar wrap, was the actual cause of the Share
+          // screen's message field showing no checkmark bar at all
+          // (D Von's screenshot, build 172).
+          const KeyboardDoneBarOverlay(),
         ],
       ),
       floatingActionButton: null,
