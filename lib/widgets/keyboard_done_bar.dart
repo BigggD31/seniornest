@@ -133,25 +133,26 @@ class _DoneBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // D Von's second design pass, Aug 17 2026: research into how polished
-    // apps actually handle this (Notes, Mail, Safari's autofill toolbar)
-    // showed the pattern that reads as genuinely integrated isn't a
-    // filled colored pill with a shadow -- that's exactly what makes a
-    // bar look bolted-on rather than native. The pattern that works is
-    // the opposite: plain text, no button shape, a bar that nearly
-    // blends with the screen behind it. Rebuilt on that basis --
-    // near-white background (not the more saturated cream that stood out
-    // as its own "slab" before), no shadow, no filled pill. Whole bar
-    // stays tappable, not just the text, so it's still an easy target.
+    // D Von's third design pass, Aug 17 2026: the plain-text version from
+    // the second pass read as "too faint" and, worse, was found to be
+    // genuinely invisible on plain white modals (Setup's Rename Nest) --
+    // near-white on near-white gave zero contrast, unlike Share's warmer
+    // cream background which happened to show just enough of it. This
+    // version fixes both: a background that stays visible regardless of
+    // what's behind it (light warm tint, not matched to any one screen),
+    // bold gold "Done" text (the established app gold, #D4AA00 --
+    // distinct from the gray text around it, per D Von's request), and a
+    // small contained teal checkmark badge instead of a bare icon that
+    // was easy to miss entirely.
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onDone,
         child: Container(
-          height: 44,
+          height: 46,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: const BoxDecoration(
-            color: Color(0xFFFDFDFB),
+            color: Color(0xFFFAF6EC),
             border: Border(
               top: BorderSide(color: Color(0xFFE8E0D0), width: 1),
             ),
@@ -163,15 +164,23 @@ class _DoneBar extends StatelessWidget {
                 'Done',
                 style: GoogleFonts.nunitoSans(
                   fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF5DA399),
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFD4AA00),
                 ),
               ),
-              const SizedBox(width: 4),
-              const Icon(
-                Icons.check_rounded,
-                color: Color(0xFF5DA399),
-                size: 18,
+              const SizedBox(width: 8),
+              Container(
+                width: 24,
+                height: 24,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF4A8A80),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
               ),
             ],
           ),
