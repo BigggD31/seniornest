@@ -133,65 +133,45 @@ class _DoneBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // D Von's design pass, Aug 16 2026: the previous bar was a plain iOS
-    // system-gray-and-blue default, which read as generic/unbranded next
-    // to the rest of the app. Same colors as everywhere else in
-    // SeniorNest -- the warm cream surface + cardBorder used on every
-    // card (app_theme.dart), and the established teal (#5DA399) used for
-    // every other primary action in the app, not iOS's default blue.
-    // Whole bar is tappable, not just the pill -- a larger, more forgiving
-    // touch target given SeniorNest's older-adult audience.
+    // D Von's second design pass, Aug 17 2026: research into how polished
+    // apps actually handle this (Notes, Mail, Safari's autofill toolbar)
+    // showed the pattern that reads as genuinely integrated isn't a
+    // filled colored pill with a shadow -- that's exactly what makes a
+    // bar look bolted-on rather than native. The pattern that works is
+    // the opposite: plain text, no button shape, a bar that nearly
+    // blends with the screen behind it. Rebuilt on that basis --
+    // near-white background (not the more saturated cream that stood out
+    // as its own "slab" before), no shadow, no filled pill. Whole bar
+    // stays tappable, not just the text, so it's still an easy target.
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onDone,
         child: Container(
-          height: 48,
+          height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF5F0E8),
-            border: const Border(
+          decoration: const BoxDecoration(
+            color: Color(0xFFFDFDFB),
+            border: Border(
               top: BorderSide(color: Color(0xFFE8E0D0), width: 1),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(15),
-                blurRadius: 6,
-                offset: const Offset(0, -2),
-              ),
-            ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
+              Text(
+                'Done',
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
                   color: const Color(0xFF5DA399),
-                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Done',
-                      style: GoogleFonts.nunitoSans(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    const Icon(
-                      Icons.check_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ],
-                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.check_rounded,
+                color: Color(0xFF5DA399),
+                size: 18,
               ),
             ],
           ),
