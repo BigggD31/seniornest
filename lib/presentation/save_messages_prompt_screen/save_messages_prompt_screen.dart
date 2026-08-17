@@ -513,19 +513,27 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
               final digits = (100000 + Random().nextInt(900000)).toString();
               final inviteCode = 'NEST$digits';
               try {
-                await supabase.from('nests').insert({
-                  'name': nestName,
-                  'created_by': effectiveUserId,
-                  'invite_code': inviteCode,
-                });
-                await prefs.setString('invite_code', inviteCode);
+                // Was previously two separate calls -- an insert with no
+                // .select(), then a SEPARATE lookup query to get the id
+                // back, with prefs written to in between the two. That gap
+                // meant prefs could end up holding a code that didn't
+                // match whatever nest record actually ended up being the
+                // real, final one -- especially on any retry. Doing it in
+                // one atomic call (matching senior_onboarding_screen.dart's
+                // version of this same fix) and only writing to prefs
+                // after this single call has genuinely succeeded closes
+                // that gap entirely.
                 final nestResponse = await supabase
                     .from('nests')
+                    .insert({
+                      'name': nestName,
+                      'created_by': effectiveUserId,
+                      'invite_code': inviteCode,
+                    })
                     .select('id')
-                    .eq('created_by', effectiveUserId)
-                    .eq('invite_code', inviteCode)
                     .single();
                 nestId = nestResponse['id'] as String;
+                await prefs.setString('invite_code', inviteCode);
               } on PostgrestException catch (e) {
                 if (e.code == '23505') {
                   // Collision on this specific code -- try again with a
