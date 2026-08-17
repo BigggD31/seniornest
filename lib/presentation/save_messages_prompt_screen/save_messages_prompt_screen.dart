@@ -493,25 +493,24 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
               }
             }
           } else {
-            // Owner path — always generate a fresh code, never reuse a
-            // cached one. The comment above this block already said "never
-            // reuse a typed one," but the code used to check prefs first
-            // and reuse whatever was cached if it happened to match the
-            // NEST###### format -- which is exactly what a PREVIOUS
-            // account's invite code would also look like. D Von hit this
-            // for real (Aug 16): signing out of the senior account and
-            // into a family-owner signup reused the senior nest's own
-            // still-cached invite code, colliding on the nests_invite_code_key
-            // unique constraint since that code already belonged to the
-            // senior's nest. Now always fresh, and retries on an actual DB
-            // collision too (a 6-digit space is finite; better to handle a
-            // genuine collision gracefully than assume fresh generation
-            // alone is bulletproof forever as the nest count grows).
+            // Reuse the code already sitting in prefs as the first
+            // attempt (matching build 167's original, confirmed-working
+            // behavior) rather than always inventing a brand new one. The
+            // original concern here -- a stale code leaking in from a
+            // completely different, previous account -- is now handled
+            // separately: Sign Out correctly clears invite_code on its
+            // own (fixed the same day as this). Only fall back to
+            // generating fresh if the cached code somehow already exists
+            // (an actual collision), not as the default first move.
             final nestName = prefs.getString('nest_name') ?? 'My Family';
+            final cachedCode = prefs.getString('invite_code') ?? '';
+            final reusableCachedCode =
+                RegExp(r'^NEST\d{6}$').hasMatch(cachedCode) ? cachedCode : null;
             String? nestId;
             for (int attempt = 0; attempt < 5 && nestId == null; attempt++) {
-              final digits = (100000 + Random().nextInt(900000)).toString();
-              final inviteCode = 'NEST$digits';
+              final inviteCode = (attempt == 0 && reusableCachedCode != null)
+                  ? reusableCachedCode
+                  : 'NEST${(100000 + Random().nextInt(900000))}';
               try {
                 // Was previously two separate calls -- an insert with no
                 // .select(), then a SEPARATE lookup query to get the id

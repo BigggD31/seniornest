@@ -366,6 +366,19 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
                   'nest_id': nestId,
                   'user_id': userId,
                 });
+                // The RPC already returns the real name alongside the id --
+                // this path was only ever using the id, never the name,
+                // meaning a senior joining an existing nest via invite
+                // (e.g. a spouse joining as co-senior) never saw the real
+                // nest name, the same gap already fixed for family members
+                // joining the same way. Fixed to match.
+                final realNestName = joinNest['name'] as String?;
+                if (realNestName != null && realNestName.isNotEmpty) {
+                  if (mounted) {
+                    setState(() => _nestNameController.text = realNestName);
+                  }
+                  await prefs.setString('nest_name', realNestName);
+                }
                 print('NEST_DEBUG: senior joined nest = $nestId');
               } else {
                 print('NEST_DEBUG: senior invite lookup found no nest for code $_inviteCode');
@@ -379,22 +392,31 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
               rethrow;
             }
           } else {
-            // Create new nest -- always a fresh code, never reuse whatever
-            // happens to be cached in prefs. See the comment above where
-            // the old unconditional generation used to live.
+            // Reuse the code already generated and shown a moment ago on
+            // the "You're all set" screen (step 2->3 transition) as the
+            // first attempt -- this is exactly what build 167 did, and
+            // it's what kept that screen's displayed code and this real
+            // database insert identical for a long stretch. Only fall
+            // back to generating a brand new one if that specific code
+            // somehow already exists (an actual collision), rather than
+            // always inventing a new one regardless.
+            final cachedCode = prefs.getString('invite_code') ?? '';
+            final reusableCachedCode =
+                RegExp(r'^NEST\d{6}$').hasMatch(cachedCode) ? cachedCode : null;
             String? nestIdCreated;
             for (int attempt = 0; attempt < 5 && nestIdCreated == null; attempt++) {
-              final digits = (100000 + Random().nextInt(900000)).toString();
-              final freshCode = 'NEST$digits';
+              final codeForThisAttempt = (attempt == 0 && reusableCachedCode != null)
+                  ? reusableCachedCode
+                  : 'NEST${(100000 + Random().nextInt(900000))}';
               try {
                 final nestResponse = await supabase.from('nests').insert({
                   'name': nestName,
                   'created_by': userId,
-                  'invite_code': freshCode,
+                  'invite_code': codeForThisAttempt,
                 }).select().single();
                 nestIdCreated = nestResponse['id'] as String;
-                await prefs.setString('invite_code', freshCode);
-                if (mounted) setState(() => _inviteCode = freshCode);
+                await prefs.setString('invite_code', codeForThisAttempt);
+                if (mounted) setState(() => _inviteCode = codeForThisAttempt);
               } on PostgrestException catch (e) {
                 if (e.code == '23505') continue;
                 rethrow;
