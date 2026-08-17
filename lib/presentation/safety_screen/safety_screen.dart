@@ -1388,6 +1388,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
       body: KeyboardDoneBar(
+        alreadyPaddedForKeyboard: true,
         child: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
@@ -1716,6 +1717,7 @@ class _EditContactSheetState extends State<_EditContactSheet> {
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
       body: KeyboardDoneBar(
+        alreadyPaddedForKeyboard: true,
         child: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(

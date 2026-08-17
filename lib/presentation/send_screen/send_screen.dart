@@ -1707,7 +1707,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     final size = MediaQuery.of(context).size;
     final isTablet = size.width >= 600;
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-    final isKeyboardOpen = keyboardHeight > 0;
 
     return Scaffold(
       backgroundColor: _bg,
@@ -1782,47 +1781,16 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
             ),
           ),
           
-          // Keyboard dismiss button — appears just above the nav bar when keyboard is open
-          if (isKeyboardOpen)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                color: _isDarkMode
-                    ? const Color(0xFF1E1A14)
-                    : const Color(0xFFF5EFE6),
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: GestureDetector(
-                    onTap: () => _textFocusNode.unfocus(),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      child: Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 28,
-                        color: _isDarkMode
-                            ? const Color(0xFFB8A888)
-                            : const Color(0xFF6B5E4E),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          // Was previously positioned before the main SafeArea content
-          // above, which meant the compose panel (including the message
-          // field) rendered ON TOP of this bar in the Stack -- the bar was
-          // technically still there, just completely covered up. Moved to
-          // last so it draws above everything else. This, not a missing
-          // KeyboardDoneBar wrap, was the actual cause of the Share
-          // screen's message field showing no checkmark bar at all
-          // (D Von's screenshot, build 172).
-          KeyboardDoneBarOverlay(rawBottomInset: keyboardHeight),
+          // The old separate chevron dismiss button that used to live here
+          // was removed -- it sat at this exact same bottom:0 position, so
+          // keeping it alongside the unified KeyboardDoneBarOverlay below
+          // would have stacked two different-looking dismiss controls on
+          // top of each other, defeating the point of having one single
+          // mechanism app-wide.
+          KeyboardDoneBarOverlay(
+            rawBottomInset: keyboardHeight,
+            positionAtZero: true,
+          ),
         ],
       ),
       floatingActionButton: null,

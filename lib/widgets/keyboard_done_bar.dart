@@ -20,12 +20,32 @@ import '../core/app_state.dart';
 class KeyboardDoneBar extends StatelessWidget {
   final Widget child;
 
-  const KeyboardDoneBar({super.key, required this.child});
+  // Set true when [child] already reserves its own bottom padding equal to
+  // the keyboard height (a common modal pattern: `padding: EdgeInsets.only(
+  // bottom: 24 + MediaQuery.of(context).viewInsets.bottom)`). In that case
+  // [child]'s own bottom edge already sits exactly where the bar should go
+  // -- adding this widget's own `bottom: bottomInset` offset on TOP of that
+  // double-counts the keyboard height, pushing the bar up far too high
+  // (roughly a full keyboard-height above where it should sit). D Von
+  // caught this on Setup's Rename Nest, Legacy's Write Your Story, and
+  // Share's compose panel (Aug 16 2026, build 175) -- the bar was floating
+  // disconnected from the modal's own content in every one of them, all
+  // for this same reason. Default false preserves the correct behavior
+  // for content that does NOT pre-pad for the keyboard.
+  final bool alreadyPaddedForKeyboard;
+
+  const KeyboardDoneBar({
+    super.key,
+    required this.child,
+    this.alreadyPaddedForKeyboard = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final bool keyboardVisible = bottomInset > 0;
+    final double barBottomOffset =
+        alreadyPaddedForKeyboard ? 0 : bottomInset;
 
     return Stack(
       children: [
@@ -38,7 +58,7 @@ class KeyboardDoneBar extends StatelessWidget {
               return Positioned(
                 left: 0,
                 right: 0,
-                bottom: bottomInset,
+                bottom: barBottomOffset,
                 child: _DoneBar(
                   onDone: () => FocusScope.of(context).unfocus(),
                 ),
@@ -63,13 +83,26 @@ class KeyboardDoneBarOverlay extends StatelessWidget {
   // already been reduced to 0, so the overlay would incorrectly render
   // nothing even with the keyboard open. D Von caught this on the Share
   // screen (build 173): the bar was genuinely never showing at all, not
-  // just hidden underneath something. Screens with that Scaffold setting
-  // need to capture the real inset from a context ABOVE the Scaffold's
-  // resize boundary (e.g. the outer build(BuildContext context) method,
-  // before the Scaffold is constructed) and pass it here explicitly.
+  // just hidden underneath something.
   final double? rawBottomInset;
 
-  const KeyboardDoneBarOverlay({super.key, this.rawBottomInset});
+  // Some screens (Share) already have their OWN body correctly shrunk to
+  // align with the keyboard via resizeToAvoidBottomInset: true -- proven
+  // by an existing, working dismiss button on that exact screen sitting
+  // flush at bottom: 0 with no extra offset at all. Passing rawBottomInset
+  // for POSITIONING in that case double-counts the keyboard height (the
+  // frame is already shrunk to end right at the keyboard's top, then this
+  // widget's own offset pushes it up a full keyboard-height further) --
+  // exactly what D Von saw floating disconnected above Share's tabs,
+  // Aug 16 2026. When true, sits flush at bottom: 0 like that dismiss
+  // button; rawBottomInset is still used to decide whether to show at all.
+  final bool positionAtZero;
+
+  const KeyboardDoneBarOverlay({
+    super.key,
+    this.rawBottomInset,
+    this.positionAtZero = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +116,7 @@ class KeyboardDoneBarOverlay extends StatelessWidget {
         return Positioned(
           left: 0,
           right: 0,
-          bottom: bottomInset,
+          bottom: positionAtZero ? 0 : bottomInset,
           child: _DoneBar(
             onDone: () => FocusScope.of(context).unfocus(),
           ),

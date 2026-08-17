@@ -349,6 +349,30 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     setState(() {
       _messages.removeWhere((m) => m.id == messageId);
     });
+    // The DB delete already succeeded (that's what got us here) but this
+    // only updated the in-memory list -- the persisted cache_first cache
+    // (cached_real_messages) still had the deleted post in it. Navigating
+    // away and back re-triggers _loadData(), which reads that stale cache
+    // FIRST for instant display, before the live Supabase fetch corrects
+    // it -- meaning the deleted post reappeared, at least briefly, exactly
+    // what D Von found (build 175, Aug 16 2026). Keep the cache in sync
+    // immediately so this can't happen.
+    _syncDeletedPostToCache(messageId);
+  }
+
+  Future<void> _syncDeletedPostToCache(String messageId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedJson = prefs.getString('cached_real_messages');
+      if (cachedJson == null) return;
+      final List<dynamic> cachedList = jsonDecode(cachedJson) as List<dynamic>;
+      cachedList.removeWhere(
+        (m) => (m as Map<String, dynamic>)['id'] == messageId,
+      );
+      await prefs.setString('cached_real_messages', jsonEncode(cachedList));
+    } catch (e) {
+      debugPrint('DELETE_POST_CACHE_SYNC_ERROR: $e');
+    }
   }
 
   Future<void> _ensureNestId() async {

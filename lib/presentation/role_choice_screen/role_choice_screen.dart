@@ -501,6 +501,7 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
     // need their own KeyboardDoneBar, not the parent screen's ambient
     // overlay, which sits in a layer this modal renders on top of.
     return KeyboardDoneBar(
+      alreadyPaddedForKeyboard: true,
       child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: EdgeInsets.only(
