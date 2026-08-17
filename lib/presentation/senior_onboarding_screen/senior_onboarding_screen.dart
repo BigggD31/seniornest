@@ -1112,75 +1112,18 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 36),
-        if (!_joinedViaInvite)
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5F0E8),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE8E0D0), width: 1.5),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  'Your Invite Code',
-                  style: GoogleFonts.nunitoSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF6B5E4E),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _inviteCode,
-                  style: GoogleFonts.nunitoSans(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF5DA399),
-                    letterSpacing: 6,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Share this with your family members',
-                  style: GoogleFonts.nunitoSans(
-                    fontSize: 13,
-                    color: const Color(0xFFA8A090),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: _shareInviteCode,
-                    icon: const Icon(
-                      Icons.share_rounded,
-                      size: 20,
-                      color: Colors.white,
-                    ),
-                    label: Text(
-                      'Share Invite Code',
-                      style: GoogleFonts.nunitoSans(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5DA399),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 0,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        // Removed the premature "Your Invite Code" card that used to be
+        // here entirely -- it displayed a code from this screen's own
+        // separate nest-creation attempt, which is NOT the real,
+        // authoritative one. Real account creation (and the real nest,
+        // with its real invite code) doesn't happen until
+        // save_messages_prompt_screen.dart runs later in the flow. Having
+        // two separate places each generate their own code was the actual
+        // root cause of D Von seeing two different codes for the same
+        // nest in the same signup (Aug 17 2026) -- this screen's code was
+        // never the one that ended up persisted. The real code now only
+        // ever shows up once, correctly, read live from the database on
+        // Setup screen.
         const SizedBox(height: 20),
         _buildSummaryRow(Icons.person_rounded, 'Name', name),
         const SizedBox(height: 8),
