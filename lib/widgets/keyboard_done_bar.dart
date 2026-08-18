@@ -2,6 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/app_state.dart';
 
+// The bar's top corners are rounded (against the sheet above it) but its
+// bottom corners are square. iOS's own keyboard has ROUNDED top corners --
+// so wherever the bar sits flush against the keyboard, that shape mismatch
+// left a small gap at both bottom corners where whatever was behind the bar
+// showed through. Confirmed by D Von on Setup, Legacy, AND Share (Aug 18
+// 2026) via zoomed screenshots -- this is not one screen's bug, it's the
+// bar's own shape not fully covering the keyboard's shape everywhere it's
+// used. Fix: extend the bar's solid color straight down past where the
+// keyboard's rounded corners curve inward, so there's fill color behind
+// that curve regardless of the keyboard's exact shape, instead of trying to
+// make the bar's corners match the keyboard's corners exactly. This extra
+// strip sits behind the keyboard for its full width except at the two
+// rounded corners, where it's what actually shows through.
+const double kDoneBarBleed = 24;
+
 /// Wraps [child] so that whenever the keyboard is open, a thin bar with a
 /// blue checkmark "Done" button is pinned directly above the keyboard.
 /// Tapping it dismisses the keyboard only — it does NOT submit/clear the
@@ -71,7 +86,7 @@ class KeyboardDoneBar extends StatelessWidget {
               return Positioned(
                 left: 0,
                 right: 0,
-                bottom: barBottomOffset,
+                bottom: barBottomOffset - kDoneBarBleed,
                 child: _DoneBar(
                   onDone: () => FocusScope.of(context).unfocus(),
                 ),
@@ -134,7 +149,7 @@ class KeyboardDoneBarOverlay extends StatelessWidget {
         return Positioned(
           left: 0,
           right: 0,
-          bottom: positionAtZero ? 0 : bottomInset,
+          bottom: (positionAtZero ? 0 : bottomInset) - kDoneBarBleed,
           child: _DoneBar(
             onDone: () => FocusScope.of(context).unfocus(),
           ),
@@ -166,57 +181,62 @@ class _DoneBar extends StatelessWidget {
     // border entirely, replaced with a soft shadow for separation, which
     // doesn't have this conflict. Also bumped Done/checkmark size and
     // weight per direct request -- both were still reading as too small.
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onDone,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
-        child: Container(
-          // Design per direct feedback (build 183+): background was a touch
-          // too dark, "Done" text should match the checkmark's teal instead
-          // of gold, per D Von's approval. Confirmed real bug was NOT this
-          // styling -- Legacy/Setup's bar was rendering behind the keyboard
-          // due to alreadyPaddedForKeyboard positioning, fixed at each
-          // modal's own KeyboardDoneBar call site, not in this shared file.
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE6DAC0),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(20),
-                blurRadius: 4,
-                offset: const Offset(0, -1),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Text(
-                'Done',
-                style: GoogleFonts.nunitoSans(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF4A8A80),
+    return Container(
+      // Solid fill strip, same color as the visible bar, extending the full
+      // kDoneBarBleed amount further down (see that constant's comment).
+      // This sits behind the keyboard for its entire width except at the
+      // two rounded bottom corners of the visible bar above -- that's the
+      // gap this is closing. Plain rectangle, no radius, since it's meant
+      // to be a flat continuation, not a second rounded shape.
+      color: const Color(0xFFD0D3D9),
+      padding: const EdgeInsets.only(bottom: kDoneBarBleed),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onDone,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+          child: Container(
+            // Aug 18 2026, fifth design pass: D Von asked to match the
+            // bar's color to the real iOS keyboard gray (#D0D3D9, measured
+            // directly from his screenshot pixels) so the bar blends in
+            // and doesn't read as a separate element at all -- only "Done"
+            // and the checkmark stay visible, both bold teal. No shadow
+            // here either: a shadow line would itself be a visible seam
+            // against a keyboard-matched background, working against the
+            // point of blending in.
+            height: 50,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: const BoxDecoration(
+              color: Color(0xFFD0D3D9),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(13)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  'Done',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF4A8A80),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                width: 28,
-                height: 28,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF4A8A80),
-                  shape: BoxShape.circle,
+                const SizedBox(width: 8),
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF4A8A80),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.check_rounded,
-                  color: Colors.white,
-                  size: 18,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

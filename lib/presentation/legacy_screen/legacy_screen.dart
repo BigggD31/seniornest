@@ -2186,20 +2186,24 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
         MediaQuery.of(context).viewInsets.bottom +
         MediaQuery.of(context).padding.bottom;
 
-    // Was a fixed 85% of the full screen height, regardless of whether the
-    // keyboard was open -- so KeyboardDoneBar (anchored to THIS container's
-    // own bottom edge) never actually tracked the keyboard's real position,
-    // just wherever this fixed-size box happened to end. With the keyboard
-    // open, the sheet needs to be shorter than 85% of the full screen to
-    // correctly leave room for it; this shrinks the sheet by the keyboard's
-    // own height so its bottom edge -- and the bar on it -- genuinely sits
-    // right above the keyboard, not floating above it with a gap
-    // (D Von's screenshot, Aug 16).
-    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    // Aug 18 2026: this used to ALSO shrink the box's own height by
+    // keyboardInset here, on top of the bottomPadding below (which already
+    // pads the Column's content up by that same keyboardInset). Two
+    // problems with that: (1) shrinking height doesn't move the box's
+    // visible area to sit above the keyboard -- this box's bottom edge is
+    // always pinned to the true screen bottom no matter its height (same
+    // modal-sheet layout behavior researched for the bar-visibility fix,
+    // build 184), so a shorter box just means MORE of it collapses inside
+    // the hidden, behind-keyboard region, not less. (2) padding inside that
+    // same box was independently doing the real, correct compensation
+    // already. Together those subtracted the keyboard's height from the
+    // visible content area twice -- which is what collapsed "Story Title"
+    // and the text field down to nothing, visible only as a gap between
+    // the header and the Done bar (D Von's report, Aug 18). Keeping the
+    // box at its full maxSheetHeight and relying on the one bottomPadding
+    // below is the single, correct compensation.
     final maxSheetHeight = MediaQuery.of(context).size.height * 0.85;
-    final sheetHeight = keyboardInset > 0
-        ? (maxSheetHeight - keyboardInset).clamp(300.0, maxSheetHeight)
-        : maxSheetHeight;
+    final sheetHeight = maxSheetHeight;
 
     final Color sectionBg = widget.isDarkMode
         ? const Color(0xFF2E2820)
