@@ -1260,7 +1260,17 @@ class _EmailAuthSheetState extends State<_EmailAuthSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    // Never had a KeyboardDoneBar at all until now -- this modal's 3 text
+    // fields were relying on the parent screen's ambient
+    // KeyboardDoneBarOverlay, which is architecturally hidden behind any
+    // modal (modals render as a separate layer on top of the screen
+    // behind them), so it never actually showed here. Found during a
+    // full audit of every showModalBottomSheet call in the app (Aug 18
+    // 2026), prompted by D Von reporting the new bar design had never
+    // shown up anywhere except the Share screen.
+    return KeyboardDoneBar(
+      alreadyPaddedForKeyboard: true,
+      child: Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
@@ -1576,6 +1586,7 @@ class _EmailAuthSheetState extends State<_EmailAuthSheet> {
           ],
         ),
       ),
+    ),
     );
   }
 }

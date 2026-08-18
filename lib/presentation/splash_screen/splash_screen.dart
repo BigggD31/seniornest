@@ -141,7 +141,16 @@ class _SplashScreenState extends State<SplashScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        return Padding(
+        // Never had a KeyboardDoneBar at all until now -- found during a
+        // full audit of every showModalBottomSheet call in the app
+        // (Aug 18 2026). This exact field (the invite code entry point)
+        // was relying on the parent screen's ambient
+        // KeyboardDoneBarOverlay, which is architecturally hidden behind
+        // any modal, so it never actually showed here despite being one
+        // of the most frequently tested fields this whole session.
+        return KeyboardDoneBar(
+          alreadyPaddedForKeyboard: true,
+          child: Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
           ),
@@ -255,6 +264,7 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
               ],
             ),
+          ),
           ),
         );
       },
