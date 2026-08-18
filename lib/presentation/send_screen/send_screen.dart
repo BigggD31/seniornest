@@ -379,6 +379,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 : const Color(0xFF6B5E4E);
 
             return KeyboardDoneBar(
+              alreadyPaddedForKeyboard: true,
               child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               decoration: BoxDecoration(
@@ -903,6 +904,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 : const Color(0xFF6B5E4E);
 
             return KeyboardDoneBar(
+              alreadyPaddedForKeyboard: true,
               child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               decoration: BoxDecoration(
