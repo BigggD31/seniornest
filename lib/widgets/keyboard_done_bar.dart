@@ -153,7 +153,7 @@ class _DoneBar extends StatelessWidget {
           height: 46,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: const BoxDecoration(
-            color: Color(0xFFFAF6EC),
+            color: Color(0xFFCDC9C1),
             // Rounded top corners to visually match the rounding on
             // iOS's own gray keyboard directly below this bar, per
             // D Von's direct request (Aug 17 2026) -- 13px matches the
