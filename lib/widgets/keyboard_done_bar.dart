@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/app_state.dart';
@@ -32,7 +33,7 @@ const double kDoneBarBleed = 24;
 /// fields already have their own native "Done" key, and without this check
 /// this bar would show up alongside it, producing two checkmark-style
 /// controls on screen at once.
-class KeyboardDoneBar extends StatelessWidget {
+class KeyboardDoneBar extends StatefulWidget {
   final Widget child;
 
   // Set true when [child] already reserves its own bottom padding equal to
@@ -55,29 +56,77 @@ class KeyboardDoneBar extends StatelessWidget {
     this.alreadyPaddedForKeyboard = false,
   });
 
-  // Aug 18 2026, build 181 revert: this widget was briefly converted to a
-  // StatefulWidget with a 220ms "settle delay" before showing the bar, to
-  // work around a theorized iOS accessory-view timing bug. D Von tested
-  // build 181 across three separate screens (Legacy Write Your Story,
-  // Setup Rename Nest, Share compose) and the bar did not appear AT ALL on
-  // any of them -- not delayed, genuinely absent. That conversion was the
-  // only functional change to this shared widget between build 180 (bar
-  // confirmed working, pending only a visual redesign) and 181 (bar gone
-  // everywhere) -- send_screen.dart itself had zero changes in that same
-  // window. Reverting to immediate Stateless rendering, matching the last
-  // point this was known to actually render, to isolate whether this
-  // mechanism was the cause. Do not reintroduce a delay here without
-  // confirming on-device first.
+  @override
+  State<KeyboardDoneBar> createState() => _KeyboardDoneBarState();
+}
+
+class _KeyboardDoneBarState extends State<KeyboardDoneBar> {
+  double _stableInset = 0;
+  Timer? _settleTimer;
+
+  @override
+  void dispose() {
+    _settleTimer?.cancel();
+    super.dispose();
+  }
+
+  // Aug 18 2026, build 186: iOS lets you interactively drag the real
+  // system keyboard down with your finger from content sitting right
+  // above it -- and while that drag is happening,
+  // MediaQuery.viewInsets.bottom reports the keyboard's live, shrinking
+  // height frame by frame. Since this bar's position and visibility used
+  // to be driven directly off that live value every build, a normal
+  // scroll gesture on the sheet's own content (trying to see what you'd
+  // just typed) could accidentally register as this native
+  // drag-to-dismiss, and the bar would visibly ride down with your
+  // finger, then vanish -- reported by D Von on both Setup and Legacy.
+  //
+  // This only accepts a new, SMALLER inset immediately when it's a clean
+  // drop to exactly 0 (a real, decisive dismiss -- e.g. tapping the bar's
+  // own Done button) or when it's growing/opening (never delay the
+  // keyboard appearing). Any other decrease -- a partial, in-progress
+  // height while a drag is still happening -- is held at its last known
+  // value for a brief settle window instead of chasing it frame by frame.
+  // If the drag completes, the next update is a clean 0 and hides
+  // immediately. If the drag is cancelled, the next update is the keyboard
+  // springing back to its full height, which is a growth and also applies
+  // immediately -- either way, the bar never tracks the drag itself.
+  //
+  // NOTE: this is the same category of change that broke the bar entirely
+  // in build 181 (a stateful settle-delay caused it to never render at
+  // all, not just late). This is a different, narrower mechanism -- it
+  // only ever delays a partial shrink, never the initial appearance or a
+  // full open/close -- but test this thoroughly on-device before trusting
+  // it (open keyboard, type, drag-scroll to see typed text, cancel a
+  // drag partway, and tap Done) given that history.
+  void _handleInset(double liveInset) {
+    if (liveInset == _stableInset) return;
+    final bool respondImmediately =
+        liveInset >= _stableInset || liveInset == 0;
+    _settleTimer?.cancel();
+    if (respondImmediately) {
+      setState(() => _stableInset = liveInset);
+    } else {
+      _settleTimer = Timer(const Duration(milliseconds: 150), () {
+        if (mounted) setState(() => _stableInset = liveInset);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final bool keyboardVisible = bottomInset > 0;
+    final double liveInset = MediaQuery.of(context).viewInsets.bottom;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _handleInset(liveInset);
+    });
+
+    final bool keyboardVisible = _stableInset > 0;
     final double barBottomOffset =
-        alreadyPaddedForKeyboard ? 0 : bottomInset;
+        widget.alreadyPaddedForKeyboard ? 0 : _stableInset;
 
     return Stack(
       children: [
-        child,
+        widget.child,
         if (keyboardVisible)
           ValueListenableBuilder<bool>(
             valueListenable: appSuppressKeyboardDoneBarNotifier,
@@ -103,7 +152,7 @@ class KeyboardDoneBar extends StatelessWidget {
 /// as one more child of that existing Stack — it positions itself and
 /// hides itself automatically when the keyboard is closed, or when
 /// appSuppressKeyboardDoneBarNotifier is true (see KeyboardDoneBar above).
-class KeyboardDoneBarOverlay extends StatelessWidget {
+class KeyboardDoneBarOverlay extends StatefulWidget {
   // If the Scaffold this overlay lives inside has
   // resizeToAvoidBottomInset: true, the Scaffold itself already consumes
   // the keyboard's height to shrink its body -- by the time this widget's
@@ -132,16 +181,48 @@ class KeyboardDoneBarOverlay extends StatelessWidget {
     this.positionAtZero = false,
   });
 
-  // Aug 18 2026, build 181 revert: reverted back to immediate Stateless
-  // rendering along with KeyboardDoneBar above -- see that class's comment
-  // for the full explanation. The settle-delay conversion was the only
-  // functional change to this shared widget between build 180 (bar
-  // confirmed working) and 181 (bar absent on every tested screen).
+  @override
+  State<KeyboardDoneBarOverlay> createState() =>
+      _KeyboardDoneBarOverlayState();
+}
+
+class _KeyboardDoneBarOverlayState extends State<KeyboardDoneBarOverlay> {
+  double _stableInset = 0;
+  Timer? _settleTimer;
+
+  @override
+  void dispose() {
+    _settleTimer?.cancel();
+    super.dispose();
+  }
+
+  // Aug 18 2026, build 186: same fix as KeyboardDoneBar's
+  // _handleInset -- see that class's comment for the full explanation.
+  // Applied here too since Share's compose field has the same live
+  // keyboard-height tracking and could show the same symptom.
+  void _handleInset(double liveInset) {
+    if (liveInset == _stableInset) return;
+    final bool respondImmediately =
+        liveInset >= _stableInset || liveInset == 0;
+    _settleTimer?.cancel();
+    if (respondImmediately) {
+      setState(() => _stableInset = liveInset);
+    } else {
+      _settleTimer = Timer(const Duration(milliseconds: 150), () {
+        if (mounted) setState(() => _stableInset = liveInset);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final double bottomInset =
-        rawBottomInset ?? MediaQuery.of(context).viewInsets.bottom;
-    if (bottomInset <= 0) return const SizedBox.shrink();
+    final double liveInset =
+        widget.rawBottomInset ?? MediaQuery.of(context).viewInsets.bottom;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _handleInset(liveInset);
+    });
+
+    if (_stableInset <= 0) return const SizedBox.shrink();
     return ValueListenableBuilder<bool>(
       valueListenable: appSuppressKeyboardDoneBarNotifier,
       builder: (context, suppressed, _) {
@@ -149,7 +230,9 @@ class KeyboardDoneBarOverlay extends StatelessWidget {
         return Positioned(
           left: 0,
           right: 0,
-          bottom: (positionAtZero ? 0 : bottomInset) - kDoneBarBleed,
+          bottom: widget.positionAtZero
+              ? 0
+              : (_stableInset - kDoneBarBleed),
           child: _DoneBar(
             onDone: () => FocusScope.of(context).unfocus(),
           ),
@@ -186,10 +269,19 @@ class _DoneBar extends StatelessWidget {
       // kDoneBarBleed amount further down (see that constant's comment).
       // This sits behind the keyboard for its entire width except at the
       // two rounded bottom corners of the visible bar above -- that's the
-      // gap this is closing. Plain rectangle, no radius, since it's meant
-      // to be a flat continuation, not a second rounded shape.
-      color: const Color(0xFFD0D3D9),
+      // gap this is closing. Rounded on top to match the inner bar's own
+      // top radius (D Von caught this: without matching radius here, this
+      // outer rectangle's square top edge is what's actually visible
+      // against the sheet above, since it's the same color as the rounded
+      // bar inside it -- the eye can't tell the two shapes apart, so the
+      // rounded corner was invisible even though the inner bar still had
+      // it). Flat on the bottom on purpose -- that's the edge meant to
+      // bleed into the keyboard.
       padding: const EdgeInsets.only(bottom: kDoneBarBleed),
+      decoration: const BoxDecoration(
+        color: Color(0xFFD0D3D9),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(13)),
+      ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
