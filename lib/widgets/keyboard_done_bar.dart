@@ -133,35 +133,39 @@ class _DoneBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // D Von's third design pass, Aug 17 2026: the plain-text version from
-    // the second pass read as "too faint" and, worse, was found to be
-    // genuinely invisible on plain white modals (Setup's Rename Nest) --
-    // near-white on near-white gave zero contrast, unlike Share's warmer
-    // cream background which happened to show just enough of it. This
-    // version fixes both: a background that stays visible regardless of
-    // what's behind it (light warm tint, not matched to any one screen),
-    // bold gold "Done" text (the established app gold, #D4AA00 --
-    // distinct from the gray text around it, per D Von's request), and a
-    // small contained teal checkmark badge instead of a bare icon that
-    // was easy to miss entirely.
+    // D Von's fourth design pass, Aug 18 2026: two real bugs found in the
+    // third pass, not just taste. (1) The darkened background (#CDC9C1)
+    // read as flat gray, not the warm gold-family tone D Von asked for --
+    // scaling all three RGB channels down by the same percentage shrinks
+    // the R-vs-B spread that actually reads as "warm" to the eye, so a
+    // uniformly-darkened neutral tends toward gray even though the math
+    // says "same color, just darker." Fixed by choosing a tan with a much
+    // wider R/G/B spread instead of just scaling the old value down.
+    // (2) The bar showed up "fragmented, with parts with no fill color"
+    // -- a known Flutter rendering conflict: a Border that only specifies
+    // one side (top) combined with a rounded BoxDecoration produces
+    // exactly this kind of broken-looking corner artifact. Removed the
+    // border entirely, replaced with a soft shadow for separation, which
+    // doesn't have this conflict. Also bumped Done/checkmark size and
+    // weight per direct request -- both were still reading as too small.
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onDone,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
         child: Container(
-          height: 46,
+          height: 50,
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: const BoxDecoration(
-            color: Color(0xFFCDC9C1),
-            // Rounded top corners to visually match the rounding on
-            // iOS's own gray keyboard directly below this bar, per
-            // D Von's direct request (Aug 17 2026) -- 13px matches the
-            // system keyboard's own corner radius.
-            borderRadius: BorderRadius.vertical(top: Radius.circular(13)),
-            border: Border(
-              top: BorderSide(color: Color(0xFFE8E0D0), width: 1),
-            ),
+          decoration: BoxDecoration(
+            color: const Color(0xFFD9C9A5),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(20),
+                blurRadius: 4,
+                offset: const Offset(0, -1),
+              ),
+            ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -169,15 +173,15 @@ class _DoneBar extends StatelessWidget {
               Text(
                 'Done',
                 style: GoogleFonts.nunitoSans(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
                   color: const Color(0xFFD4AA00),
                 ),
               ),
               const SizedBox(width: 8),
               Container(
-                width: 24,
-                height: 24,
+                width: 28,
+                height: 28,
                 decoration: const BoxDecoration(
                   color: Color(0xFF4A8A80),
                   shape: BoxShape.circle,
@@ -185,7 +189,7 @@ class _DoneBar extends StatelessWidget {
                 child: const Icon(
                   Icons.check_rounded,
                   color: Colors.white,
-                  size: 16,
+                  size: 18,
                 ),
               ),
             ],
