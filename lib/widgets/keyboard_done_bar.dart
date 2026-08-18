@@ -17,7 +17,7 @@ import '../core/app_state.dart';
 /// fields already have their own native "Done" key, and without this check
 /// this bar would show up alongside it, producing two checkmark-style
 /// controls on screen at once.
-class KeyboardDoneBar extends StatefulWidget {
+class KeyboardDoneBar extends StatelessWidget {
   final Widget child;
 
   // Set true when [child] already reserves its own bottom padding equal to
@@ -40,55 +40,30 @@ class KeyboardDoneBar extends StatefulWidget {
     this.alreadyPaddedForKeyboard = false,
   });
 
-  @override
-  State<KeyboardDoneBar> createState() => _KeyboardDoneBarState();
-}
-
-class _KeyboardDoneBarState extends State<KeyboardDoneBar> {
-  // D Von kept seeing NO bar at all, consistently, specifically on
-  // single-line fields like Setup's Rename Nest -- not intermittently,
-  // every time. Researched this (Aug 18 2026): confirmed, current,
-  // still-open Apple bugs (reported as recently as June 2026 on Apple's
-  // own developer forums) where a custom keyboard accessory view can
-  // fail to attach the very first time a field gets focus in a newly
-  // presented sheet -- "if I background the app and return, the toolbar
-  // appears as expected." Single-line and multi-line text fields use
-  // different underlying native iOS input types, which plausibly
-  // explains why this hit Rename Nest far more reliably than Share's
-  // multi-line message field. This is a real, still-open platform bug,
-  // not something fixable by matching code alone -- this delay gives
-  // iOS's own keyboard-appearance animation a moment to settle before
-  // the bar tries to attach, which is the documented mitigation.
-  bool _readyToShow = false;
-  bool _wasKeyboardVisible = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final keyboardVisible = bottomInset > 0;
-    if (keyboardVisible && !_wasKeyboardVisible) {
-      _readyToShow = false;
-      Future.delayed(const Duration(milliseconds: 220), () {
-        if (mounted) setState(() => _readyToShow = true);
-      });
-    } else if (!keyboardVisible) {
-      _readyToShow = false;
-    }
-    _wasKeyboardVisible = keyboardVisible;
-  }
-
+  // Aug 18 2026, build 181 revert: this widget was briefly converted to a
+  // StatefulWidget with a 220ms "settle delay" before showing the bar, to
+  // work around a theorized iOS accessory-view timing bug. D Von tested
+  // build 181 across three separate screens (Legacy Write Your Story,
+  // Setup Rename Nest, Share compose) and the bar did not appear AT ALL on
+  // any of them -- not delayed, genuinely absent. That conversion was the
+  // only functional change to this shared widget between build 180 (bar
+  // confirmed working, pending only a visual redesign) and 181 (bar gone
+  // everywhere) -- send_screen.dart itself had zero changes in that same
+  // window. Reverting to immediate Stateless rendering, matching the last
+  // point this was known to actually render, to isolate whether this
+  // mechanism was the cause. Do not reintroduce a delay here without
+  // confirming on-device first.
   @override
   Widget build(BuildContext context) {
     final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final bool keyboardVisible = bottomInset > 0;
     final double barBottomOffset =
-        widget.alreadyPaddedForKeyboard ? 0 : bottomInset;
+        alreadyPaddedForKeyboard ? 0 : bottomInset;
 
     return Stack(
       children: [
-        widget.child,
-        if (keyboardVisible && _readyToShow)
+        child,
+        if (keyboardVisible)
           ValueListenableBuilder<bool>(
             valueListenable: appSuppressKeyboardDoneBarNotifier,
             builder: (context, suppressed, _) {
@@ -113,7 +88,7 @@ class _KeyboardDoneBarState extends State<KeyboardDoneBar> {
 /// as one more child of that existing Stack — it positions itself and
 /// hides itself automatically when the keyboard is closed, or when
 /// appSuppressKeyboardDoneBarNotifier is true (see KeyboardDoneBar above).
-class KeyboardDoneBarOverlay extends StatefulWidget {
+class KeyboardDoneBarOverlay extends StatelessWidget {
   // If the Scaffold this overlay lives inside has
   // resizeToAvoidBottomInset: true, the Scaffold itself already consumes
   // the keyboard's height to shrink its body -- by the time this widget's
@@ -142,39 +117,16 @@ class KeyboardDoneBarOverlay extends StatefulWidget {
     this.positionAtZero = false,
   });
 
-  @override
-  State<KeyboardDoneBarOverlay> createState() => _KeyboardDoneBarOverlayState();
-}
-
-class _KeyboardDoneBarOverlayState extends State<KeyboardDoneBarOverlay> {
-  // Same settle-delay mitigation as KeyboardDoneBar -- see that class's
-  // comment for the full explanation (confirmed, still-open Apple bugs
-  // around keyboard accessory view attachment timing, Aug 18 2026).
-  bool _readyToShow = false;
-  bool _wasKeyboardVisible = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final bottomInset =
-        widget.rawBottomInset ?? MediaQuery.of(context).viewInsets.bottom;
-    final keyboardVisible = bottomInset > 0;
-    if (keyboardVisible && !_wasKeyboardVisible) {
-      _readyToShow = false;
-      Future.delayed(const Duration(milliseconds: 220), () {
-        if (mounted) setState(() => _readyToShow = true);
-      });
-    } else if (!keyboardVisible) {
-      _readyToShow = false;
-    }
-    _wasKeyboardVisible = keyboardVisible;
-  }
-
+  // Aug 18 2026, build 181 revert: reverted back to immediate Stateless
+  // rendering along with KeyboardDoneBar above -- see that class's comment
+  // for the full explanation. The settle-delay conversion was the only
+  // functional change to this shared widget between build 180 (bar
+  // confirmed working) and 181 (bar absent on every tested screen).
   @override
   Widget build(BuildContext context) {
     final double bottomInset =
-        widget.rawBottomInset ?? MediaQuery.of(context).viewInsets.bottom;
-    if (bottomInset <= 0 || !_readyToShow) return const SizedBox.shrink();
+        rawBottomInset ?? MediaQuery.of(context).viewInsets.bottom;
+    if (bottomInset <= 0) return const SizedBox.shrink();
     return ValueListenableBuilder<bool>(
       valueListenable: appSuppressKeyboardDoneBarNotifier,
       builder: (context, suppressed, _) {
@@ -182,7 +134,7 @@ class _KeyboardDoneBarOverlayState extends State<KeyboardDoneBarOverlay> {
         return Positioned(
           left: 0,
           right: 0,
-          bottom: widget.positionAtZero ? 0 : bottomInset,
+          bottom: positionAtZero ? 0 : bottomInset,
           child: _DoneBar(
             onDone: () => FocusScope.of(context).unfocus(),
           ),
