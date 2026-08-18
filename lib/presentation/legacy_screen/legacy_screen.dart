@@ -2212,7 +2212,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
         : const Color(0xFF8A7A6A);
 
     return KeyboardDoneBar(
-      alreadyPaddedForKeyboard: true,
+      alreadyPaddedForKeyboard: false,
       child: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
@@ -2732,7 +2732,7 @@ class _SuggestQuestionSheetState extends State<_SuggestQuestionSheet> {
         ? (maxSheetHeight - keyboardInset).clamp(250.0, maxSheetHeight)
         : maxSheetHeight;
     return KeyboardDoneBar(
-      alreadyPaddedForKeyboard: true,
+      alreadyPaddedForKeyboard: false,
       child: Container(
       height: sheetHeight,
       margin: const EdgeInsets.symmetric(horizontal: 8),
@@ -3341,7 +3341,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
     return KeyboardDoneBar(
-      alreadyPaddedForKeyboard: true,
+      alreadyPaddedForKeyboard: false,
       child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 8),
       padding: EdgeInsets.fromLTRB(24, 20, 24, 36 + bottomPadding),
@@ -3931,7 +3931,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
     return KeyboardDoneBar(
-      alreadyPaddedForKeyboard: true,
+      alreadyPaddedForKeyboard: false,
       child: SafeArea(
       top: false,
       child: Container(

@@ -172,19 +172,16 @@ class _DoneBar extends StatelessWidget {
         onTap: onDone,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
         child: Container(
-          // TEMP DIAGNOSTIC (build 183) -- deliberately hot pink and taller
-          // than the real design so it is impossible to mistake for "just
-          // styled oddly." D Von reported this bar is completely absent on
-          // Legacy's Write Your Story and Setup's Rename Nest despite a
-          // prior fix (commit d5ccfbf, already in build 182) that should
-          // have made it appear. This marker answers one question only:
-          // does ANYTHING from this widget paint on those two screens at
-          // all? Revert to the real #D9C9A5 design once that's confirmed
-          // either way -- do not ship this color.
-          height: 70,
+          // Design per direct feedback (build 183+): background was a touch
+          // too dark, "Done" text should match the checkmark's teal instead
+          // of gold, per D Von's approval. Confirmed real bug was NOT this
+          // styling -- Legacy/Setup's bar was rendering behind the keyboard
+          // due to alreadyPaddedForKeyboard positioning, fixed at each
+          // modal's own KeyboardDoneBar call site, not in this shared file.
+          height: 50,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFFFF00AA),
+            color: const Color(0xFFE6DAC0),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
             boxShadow: [
               BoxShadow(
@@ -198,11 +195,11 @@ class _DoneBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               Text(
-                'BAR TEST 183',
+                'Done',
                 style: GoogleFonts.nunitoSans(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                  color: const Color(0xFF4A8A80),
                 ),
               ),
               const SizedBox(width: 8),

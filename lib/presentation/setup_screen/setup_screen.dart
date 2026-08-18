@@ -2241,7 +2241,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
     // See the matching comment on the Rename Nest sheet -- modals need
     // their own KeyboardDoneBar, not the parent screen's ambient overlay.
     return KeyboardDoneBar(
-      alreadyPaddedForKeyboard: true,
+      alreadyPaddedForKeyboard: false,
       child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: EdgeInsets.only(
@@ -2596,7 +2596,7 @@ class _EditNestSheetState extends State<_EditNestSheet> {
     // fully covered and invisible. Wrapping this modal's own content in
     // KeyboardDoneBar makes the bar genuinely part of THIS layer instead.
     return KeyboardDoneBar(
-      alreadyPaddedForKeyboard: true,
+      alreadyPaddedForKeyboard: false,
       child: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
