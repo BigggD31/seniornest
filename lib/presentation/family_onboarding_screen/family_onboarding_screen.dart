@@ -294,16 +294,30 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     if (_anniversary != null) {
       await prefs.setString('anniversary', _anniversary!.toIso8601String());
     }
-    // Generate and save invite code for family nest owner -- always
-    // fresh, never reuse whatever's cached in prefs. A cached value could
-    // be left over from a completely different, previous account/nest on
-    // this device (confirmed root cause of a real nests_invite_code_key
-    // collision D Von hit, Aug 16 2026) -- the actual insert this feeds
-    // into also has its own retry-on-collision safety net now.
-    final digits = (100000 + Random().nextInt(900000)).toString();
-    final code = 'NEST$digits';
-    await prefs.setString('invite_code', code);
-    setState(() => _inviteCode = code);
+    // Generate and save invite code for family nest owner -- ONLY when
+    // this person is actually creating their own new nest. This was
+    // running completely unconditionally before, for every single
+    // signup regardless of _joinedViaInvite -- meaning even someone who
+    // had just typed and verified a real invite code (like Devon
+    // verifying Popy's real code) got that correct code silently
+    // overwritten with a brand new random one right here, moments
+    // later, in the same signup. Confirmed the actual root cause of
+    // D Von seeing a different, never-matching random code every single
+    // time he tested joining an existing nest (Aug 17-18 2026) -- this
+    // block's own comment already said "for family nest owner," it just
+    // was never gated to only run for that case.
+    if (!_joinedViaInvite) {
+      // Always fresh, never reuse whatever's cached in prefs. A cached
+      // value could be left over from a completely different, previous
+      // account/nest on this device (confirmed root cause of a real
+      // nests_invite_code_key collision D Von hit, Aug 16 2026) -- the
+      // actual insert this feeds into also has its own retry-on-collision
+      // safety net now.
+      final digits = (100000 + Random().nextInt(900000)).toString();
+      final code = 'NEST$digits';
+      await prefs.setString('invite_code', code);
+      setState(() => _inviteCode = code);
+    }
   }
 
   // Shows the real nest name and separately joins the nest, as two
