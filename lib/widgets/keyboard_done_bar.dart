@@ -148,11 +148,17 @@ class _DoneBar extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onDone,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
         child: Container(
           height: 46,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: const BoxDecoration(
             color: Color(0xFFFAF6EC),
+            // Rounded top corners to visually match the rounding on
+            // iOS's own gray keyboard directly below this bar, per
+            // D Von's direct request (Aug 17 2026) -- 13px matches the
+            // system keyboard's own corner radius.
+            borderRadius: BorderRadius.vertical(top: Radius.circular(13)),
             border: Border(
               top: BorderSide(color: Color(0xFFE8E0D0), width: 1),
             ),
