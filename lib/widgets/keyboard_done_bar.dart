@@ -172,10 +172,19 @@ class _DoneBar extends StatelessWidget {
         onTap: onDone,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
         child: Container(
-          height: 50,
+          // TEMP DIAGNOSTIC (build 183) -- deliberately hot pink and taller
+          // than the real design so it is impossible to mistake for "just
+          // styled oddly." D Von reported this bar is completely absent on
+          // Legacy's Write Your Story and Setup's Rename Nest despite a
+          // prior fix (commit d5ccfbf, already in build 182) that should
+          // have made it appear. This marker answers one question only:
+          // does ANYTHING from this widget paint on those two screens at
+          // all? Revert to the real #D9C9A5 design once that's confirmed
+          // either way -- do not ship this color.
+          height: 70,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFFD9C9A5),
+            color: const Color(0xFFFF00AA),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
             boxShadow: [
               BoxShadow(
@@ -189,11 +198,11 @@ class _DoneBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               Text(
-                'Done',
+                'BAR TEST 183',
                 style: GoogleFonts.nunitoSans(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFFD4AA00),
+                  color: Colors.white,
                 ),
               ),
               const SizedBox(width: 8),
