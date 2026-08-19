@@ -186,7 +186,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   bool _inviteCodeShared =
       true; // tracks if family owner has shared invite code
   bool _isGuest = appIsGuestNotifier.value;
-  bool _isNestOwner = appIsNestOwnerNotifier.value;
+  final bool _isNestOwner = appIsNestOwnerNotifier.value;
   // Author IDs of anyone removed from this nest -- used only to gate the
   // post-delete icon for the nest owner (delete a removed member's post).
   // Not critical-path, so a plain fetch after the main load is enough;
