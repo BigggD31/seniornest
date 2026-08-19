@@ -45,6 +45,7 @@ class MessageModel {
     this.isSample = false,
     this.isRecordedVideo = false,
     this.recipientLabel = 'Everyone in the Nest',
+    this.pinnedPosition,
   });
 
   final String id;
@@ -77,6 +78,11 @@ class MessageModel {
   // Supabase but never read back anywhere, so every card showed the same
   // generic default no matter who was actually selected.
   final String recipientLabel;
+  // Which pin slot (1, 2, or 3) this post occupies, or null if not pinned.
+  // Owner-chosen per post -- see the pin picker in message_card_widget.dart.
+  // Mutable (not final) so the feed can update it in place after a pin/
+  // unpin action instead of needing a full reload.
+  int? pinnedPosition;
 
   factory MessageModel.fromMap(Map<String, dynamic> map) {
     return MessageModel(
@@ -97,6 +103,7 @@ class MessageModel {
       isSample: map['isSample'] as bool? ?? false,
       isRecordedVideo: map['isRecordedVideo'] as bool? ?? false,
       recipientLabel: map['recipientLabel'] as String? ?? 'Everyone in the Nest',
+      pinnedPosition: map['pinnedPosition'] as int?,
     );
   }
 
@@ -131,6 +138,7 @@ class MessageModel {
     'isSample': isSample,
     'isRecordedVideo': isRecordedVideo,
     'recipientLabel': recipientLabel,
+    'pinnedPosition': pinnedPosition,
   };
 }
 
@@ -345,6 +353,89 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     return _isNestOwner && _removedMemberIds.contains(msg.authorId);
   }
 
+  // Nest owner's OWN posts only -- never another member's, even though the
+  // actor is the owner. Matches the owner_pin_own_post RLS policy exactly,
+  // same relationship this already has to _canDeletePost above (this
+  // controls whether the control shows; RLS is the real enforcement).
+  bool _canPinPost(MessageModel msg) {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (currentUserId == null || msg.authorId.isEmpty) return false;
+    return _isNestOwner && msg.authorId == currentUserId;
+  }
+
+  // Slots (1/2/3) currently occupied by ANY of the owner's pinned posts --
+  // used to build the picker's available-slots list, and to decide whether
+  // to show "max 3 pinned" instead of a picker at all.
+  Set<int> get _occupiedPinSlots => _messages
+      .map((m) => m.pinnedPosition)
+      .whereType<int>()
+      .toSet();
+
+  // Sets or changes a post's pin slot, or clears it (slot: null to unpin).
+  // A single-row UPDATE is enough -- no other row is ever touched, since
+  // the picker only ever offers slots that are already free (D Von's
+  // explicit direction: no automatic bumping of whatever's already in a
+  // slot). The partial unique index on (nest_id, pinned_position) is the
+  // real backstop against two posts ending up in the same slot regardless.
+  Future<void> _setPinSlot(MessageModel msg, int? slot) async {
+    final previousSlot = msg.pinnedPosition;
+    setState(() {
+      msg.pinnedPosition = slot;
+      _messages.sort(_pinnedThenRecencyComparator);
+    });
+    try {
+      await Supabase.instance.client
+          .from('feed_posts')
+          .update({'pinned_position': slot})
+          .eq('id', msg.id);
+      await _syncPinnedPositionToCache(msg.id, slot);
+    } catch (e) {
+      debugPrint('SET_PIN_SLOT_ERROR: $e');
+      if (mounted) {
+        setState(() {
+          msg.pinnedPosition = previousSlot;
+          _messages.sort(_pinnedThenRecencyComparator);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't update pin -- try again.")),
+        );
+      }
+    }
+  }
+
+  // Same ordering the Supabase query already applies server-side (pinned
+  // slots first in slot order, then everything else by recency) -- needed
+  // here too since _setPinSlot updates the in-memory list without a full
+  // reload, matching the same cache-in-sync pattern _syncDeletedPostToCache
+  // already established for deletes.
+  int _pinnedThenRecencyComparator(MessageModel a, MessageModel b) {
+    final aPin = a.pinnedPosition;
+    final bPin = b.pinnedPosition;
+    if (aPin != null && bPin != null) return aPin.compareTo(bPin);
+    if (aPin != null) return -1;
+    if (bPin != null) return 1;
+    return b.timestamp.compareTo(a.timestamp);
+  }
+
+  Future<void> _syncPinnedPositionToCache(String messageId, int? slot) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedJson = prefs.getString('cached_real_messages');
+      if (cachedJson == null) return;
+      final List<dynamic> cachedList = jsonDecode(cachedJson) as List<dynamic>;
+      for (final m in cachedList) {
+        final map = m as Map<String, dynamic>;
+        if (map['id'] == messageId) {
+          map['pinnedPosition'] = slot;
+          break;
+        }
+      }
+      await prefs.setString('cached_real_messages', jsonEncode(cachedList));
+    } catch (e) {
+      debugPrint('PIN_CACHE_SYNC_ERROR: $e');
+    }
+  }
+
   void _deletePost(String messageId) {
     setState(() {
       _messages.removeWhere((m) => m.id == messageId);
@@ -489,7 +580,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     final sampleBannerDismissed = prefs.getBool('sample_banner_dismissed') ?? false;
     final inviteCodeShared = prefs.getBool('invite_code_shared') ?? false;
     final isGuest = prefs.getBool('is_guest') ?? false;
-    final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
 
     if (firstLoad) {
       await prefs.setBool('first_load', false);
@@ -677,7 +767,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       _sampleBannerDismissed = sampleBannerDismissed;
       _inviteCodeShared = inviteCodeShared;
       _isGuest = isGuest;
-      _isNestOwner = !joinedViaInvite;
+      // Aug 19 2026: this used to be reset to !joinedViaInvite here, right
+      // after being correctly initialized from appIsNestOwnerNotifier.value
+      // at declaration (line 181) -- appIsNestOwnerNotifier is resolved once
+      // at cold start in main.dart from the best available source (a prior
+      // session's confirmed value if one exists, that same joined-via-invite
+      // proxy only as a genuine first-ever fallback). Overwriting it here
+      // with the raw proxy on every load undid that for Home specifically,
+      // silently reintroducing the "ownership must come from Supabase, not
+      // a local flag" bug in exactly the screen the pin feature's owner
+      // check depends on. Removed -- _isNestOwner now just keeps whatever
+      // value it was already correctly given.
       _messages = initialMessages;
       _isLoading = false;
       _todayCelebrations = todayEvents;
@@ -1247,6 +1347,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           .eq('nest_id', nestId)
           .isFilter('parent_post_id', null)
           .isFilter('legacy_entry_id', null)
+          // Pinned posts (1/2/3) float above everything else, in slot
+          // order. nullsFirst: false (also the package's own default --
+          // spelled out explicitly here so the intent reads clearly rather
+          // than relying on an unstated default) puts unpinned posts
+          // (pinned_position is null) after every pinned one, regardless
+          // of the ascending sort applying to the numeric slots themselves.
+          .order('pinned_position', ascending: true, nullsFirst: false)
           .order('created_at', ascending: false)
           .limit(50);
 
@@ -1350,6 +1457,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           isHearted: heartedByMe.contains(post['id'] as String),
           isRecordedVideo: post['is_recorded_video'] as bool? ?? false,
           recipientLabel: recipientLabel,
+          pinnedPosition: post['pinned_position'] as int?,
         );
       }).toList();
 
@@ -1877,6 +1985,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 senderAvatarJson: _messages[index].senderAvatarJson,
                 canDelete: _canDeletePost(_messages[index]),
                 onDelete: () => _deletePost(_messages[index].id),
+                canPin: _canPinPost(_messages[index]),
+                occupiedPinSlots: _occupiedPinSlots,
+                onPinSlotChosen: (slot) =>
+                    _setPinSlot(_messages[index], slot),
               ),
             ),
           );
@@ -1915,6 +2027,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               senderAvatarJson: _messages[index].senderAvatarJson,
               canDelete: _canDeletePost(_messages[index]),
               onDelete: () => _deletePost(_messages[index].id),
+              canPin: _canPinPost(_messages[index]),
+              occupiedPinSlots: _occupiedPinSlots,
+              onPinSlotChosen: (slot) => _setPinSlot(_messages[index], slot),
             ),
           );
         }, childCount: _messages.length),

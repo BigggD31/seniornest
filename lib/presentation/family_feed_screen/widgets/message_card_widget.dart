@@ -23,6 +23,9 @@ class MessageCardWidget extends StatefulWidget {
     this.currentUserId,
     this.canDelete = false,
     this.onDelete,
+    this.canPin = false,
+    this.occupiedPinSlots = const {},
+    this.onPinSlotChosen,
   });
 
   final MessageModel message;
@@ -40,6 +43,22 @@ class MessageCardWidget extends StatefulWidget {
   // loaded once per screen rather than per card.
   final bool canDelete;
   final VoidCallback? onDelete;
+  // Same shape as canDelete/onDelete: true only for the nest owner's own
+  // posts (owner_pin_own_post RLS policy, family_feed_screen's
+  // _canPinPost). Never true for another member's post even when the
+  // current user is the owner -- D Von's explicit scope, "never their own
+  // posts on someone else's behalf" doesn't apply here since pin never
+  // touches anyone else's post at all.
+  final bool canPin;
+  // Which of slots 1/2/3 are currently taken by ANY of the owner's pinned
+  // posts, nest-wide -- not just this post. Used to build the picker with
+  // only genuinely open slots, and to show "max 3 pinned" instead of a
+  // picker when all three are taken and this post isn't already one of
+  // them. D Von's explicit direction: never auto-bump whatever's already
+  // in a slot, so the picker simply never offers an occupied one.
+  final Set<int> occupiedPinSlots;
+  // Called with the chosen slot (1/2/3) to pin into, or null to unpin.
+  final ValueChanged<int?>? onPinSlotChosen;
 
   @override
   State<MessageCardWidget> createState() => _MessageCardWidgetState();
@@ -211,6 +230,123 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
     }
   }
 
+  // D Von's explicit direction, arrived at after discussing (and rejecting)
+  // both an automatic "bump whoever's in that slot" approach and a
+  // separate drag-and-drop management screen: one small picker, attached
+  // to each individual post, that only ever offers slots not already
+  // taken by some OTHER post. Nothing ever happens to a post except what
+  // the owner directly chooses for THAT post -- to free up a slot, they
+  // visit whatever's sitting there and move or unpin it themselves.
+  Future<void> _showPinOptions(BuildContext context, bool isDark) async {
+    final msg = widget.message;
+    const slotColors = {
+      1: Color(0xFFD4AA00),
+      2: Color(0xFF5DA399),
+      3: Color(0xFFC97B4A),
+    };
+    const slotLabels = {1: 'Spot 1 (Gold)', 2: 'Spot 2 (Teal)', 3: 'Spot 3 (Terracotta)'};
+
+    Widget slotRow(int slot, String label) => Row(
+          children: [
+            Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                color: slotColors[slot],
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: GoogleFonts.nunitoSans(
+                fontSize: 15,
+                color: isDark ? const Color(0xFFF5F0E8) : const Color(0xFF2C2417),
+              ),
+            ),
+          ],
+        );
+
+    final dialogBg = isDark ? const Color(0xFF241D14) : const Color(0xFFFDFDFD);
+    final titleStyle = GoogleFonts.nunitoSans(
+      fontSize: 18,
+      fontWeight: FontWeight.w700,
+      color: isDark ? const Color(0xFFF5F0E8) : const Color(0xFF2C2417),
+    );
+
+    if (msg.pinnedPosition == null) {
+      // Not currently pinned -- offer only the slots nothing else already
+      // occupies. If all three are taken, there's nothing to offer at all;
+      // just say so rather than showing an empty picker.
+      final openSlots = [1, 2, 3]
+          .where((s) => !widget.occupiedPinSlots.contains(s))
+          .toList();
+      if (openSlots.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Max 3 pinned posts allowed -- unpin one first.'),
+          ),
+        );
+        return;
+      }
+      final chosen = await showDialog<int>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          backgroundColor: dialogBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('Pin to which spot?', style: titleStyle),
+          children: [
+            for (final slot in openSlots)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, slot),
+                child: slotRow(slot, slotLabels[slot]!),
+              ),
+          ],
+        ),
+      );
+      if (chosen != null) widget.onPinSlotChosen?.call(chosen);
+      return;
+    }
+
+    // Already pinned -- offer Unpin, plus moving to any OTHER open slot.
+    // Its own current slot is deliberately not offered as a "move"
+    // target -- it's already there.
+    final otherOpenSlots = [1, 2, 3]
+        .where((s) => s != msg.pinnedPosition && !widget.occupiedPinSlots.contains(s))
+        .toList();
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        backgroundColor: dialogBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Pinned to ${slotLabels[msg.pinnedPosition]}', style: titleStyle),
+        children: [
+          for (final slot in otherOpenSlots)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, 'move:$slot'),
+              child: slotRow(slot, 'Move to ${slotLabels[slot]!}'),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'unpin'),
+            child: Text(
+              'Unpin',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFC0392B),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (chosen == 'unpin') {
+      widget.onPinSlotChosen?.call(null);
+    } else if (chosen != null && chosen.startsWith('move:')) {
+      widget.onPinSlotChosen?.call(int.parse(chosen.substring(5)));
+    }
+  }
+
   void _openPreview(BuildContext context) {
     final msg = widget.message;
     showModalBottomSheet(
@@ -238,6 +374,18 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
     final isDark = widget.isDarkMode;
     final msg = widget.message;
 
+    // Slot 1 = gold, 2 = teal, 3 = terracotta -- the three colors already
+    // established elsewhere in the app (role badges use teal, Legacy
+    // category tags and the delete icon use this same terracotta), rather
+    // than introducing a new one-off color for this. D Von: keep the card
+    // background the same either way, just change the border.
+    const pinSlotColors = {
+      1: Color(0xFFD4AA00),
+      2: Color(0xFF5DA399),
+      3: Color(0xFFC97B4A),
+    };
+    final pinBorderColor = pinSlotColors[msg.pinnedPosition];
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: msg.type == MessageType.photo ? null : () => _openPreview(context),
@@ -246,8 +394,9 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
         color: isDark ? const Color(0xFF242018) : const Color(0xFFFAF7F2),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? const Color(0xFF3D3428) : const Color(0xFFE8E0D0),
-          width: 1.5,
+          color: pinBorderColor ??
+              (isDark ? const Color(0xFF3D3428) : const Color(0xFFE8E0D0)),
+          width: pinBorderColor != null ? 2 : 1.5,
         ),
       ),
       child: Column(
@@ -622,6 +771,29 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                       Icons.delete_rounded,
                       size: 22,
                       color: Color(0xFFC97B4A),
+                    ),
+                  ),
+                ],
+                // Pin icon -- same visibility pattern as delete above, but
+                // gated on canPin instead (nest owner's own posts only,
+                // never another member's even though the actor is the
+                // owner). Filled and colored in the post's own slot color
+                // when pinned, outline and muted when not -- lets the icon
+                // itself hint at state without needing to open the picker
+                // first to find out.
+                if (widget.canPin) ...[
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () => _showPinOptions(context, isDark),
+                    child: Icon(
+                      msg.pinnedPosition != null
+                          ? Icons.push_pin_rounded
+                          : Icons.push_pin_outlined,
+                      size: 22,
+                      color: pinBorderColor ??
+                          (isDark
+                              ? const Color(0xFF6B5E4E)
+                              : const Color(0xFFA8A090)),
                     ),
                   ),
                 ],
