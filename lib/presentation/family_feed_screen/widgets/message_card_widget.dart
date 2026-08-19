@@ -244,7 +244,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
       2: Color(0xFF5DA399),
       3: Color(0xFFC97B4A),
     };
-    const slotLabels = {1: 'Spot 1 (Gold)', 2: 'Spot 2 (Teal)', 3: 'Spot 3 (Terracotta)'};
+    const slotLabels = {1: 'Spot 1', 2: 'Spot 2', 3: 'Spot 3'};
 
     Widget slotRow(int slot, String label) => Row(
           children: [
