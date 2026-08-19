@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/app_state.dart';
@@ -69,47 +70,76 @@ class KeyboardDoneBar extends StatefulWidget {
 }
 
 class _KeyboardDoneBarState extends State<KeyboardDoneBar> {
-  double _stableInset = 0;
+  double _targetInset = 0;
+  bool _pointerDown = false;
 
-  // Aug 18 2026, build 187: iOS lets you interactively drag the real
-  // system keyboard down with your finger from content sitting right
-  // above it -- and while that drag is happening,
-  // MediaQuery.viewInsets.bottom reports the keyboard's live, shrinking
-  // height frame by frame. Since this bar's position and visibility used
-  // to be driven directly off that live value every build, a normal
-  // scroll gesture on the sheet's own content (trying to see what you'd
-  // just typed) could accidentally register as this native
-  // drag-to-dismiss, and the bar would visibly ride down with your
-  // finger, then vanish -- reported by D Von on both Setup and Legacy.
+  @override
+  void initState() {
+    super.initState();
+    // Tracks whether a touch is CURRENTLY active anywhere on screen, using
+    // Flutter's global pointer router rather than a GestureDetector -- this
+    // way it works regardless of where in `child` the touch happens,
+    // without needing to restructure that content at all. See
+    // _handleInset below for why this distinction matters.
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_handlePointerEvent);
+  }
+
+  @override
+  void dispose() {
+    GestureBinding.instance.pointerRouter
+        .removeGlobalRoute(_handlePointerEvent);
+    super.dispose();
+  }
+
+  void _handlePointerEvent(PointerEvent event) {
+    if (event is PointerDownEvent) {
+      _pointerDown = true;
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _pointerDown = false;
+    }
+  }
+
+  // Aug 19 2026, build 191: builds 186/187 tried to solve two DIFFERENT
+  // problems with one blunt rule ("never accept a decrease unless it hits
+  // exactly 0"), and that rule broke a case it was never meant to touch.
   //
-  // A first attempt (build 186) only DELAYED a partial drag position by
-  // 150ms instead of preventing it -- if the drag paused even briefly
-  // (exactly what happens mid-gesture, or when a screenshot gets taken to
-  // show the bug), the delay elapsed and the bar committed to the paused
-  // position anyway. D Von confirmed this was still happening after 186.
+  // Problem 1 (real, needed fixing): iOS lets you interactively drag the
+  // real keyboard down with a touch on content sitting above it, and
+  // MediaQuery.viewInsets.bottom reports that drag's live, shrinking
+  // height frame by frame -- so an ordinary scroll gesture could
+  // accidentally register as this native drag-to-dismiss, and the bar
+  // would ride down with it.
   //
-  // This version is stricter: a decrease is NEVER accepted unless it's a
-  // clean drop to exactly 0 (a real, decisive dismiss). Any other
-  // decrease -- a partial, in-progress height while a drag is still
-  // happening -- is ignored outright, forever, not just delayed, until
-  // the inset either grows again (keyboard reopening/expanding) or hits 0
-  // (a complete dismiss). Trade-off: if the keyboard's real height
-  // legitimately gets smaller for a non-drag reason without fully closing
-  // first, the bar sits slightly high above it until the keyboard fully
-  // closes and reopens -- a minor cosmetic gap, versus the bar visibly
-  // chasing your finger during an ordinary scroll.
+  // Problem 2 (accidentally introduced by the fix for problem 1): a
+  // NORMAL keyboard-close animation -- tapping Done, no touch involved at
+  // all -- ALSO produces a smoothly decreasing sequence of values before
+  // landing on 0. The old rule ignored every one of those too, freezing
+  // the bar in its old position for the ~250ms the real keyboard takes to
+  // animate away, then snapping it only at the very last instant --
+  // exactly the floating, disconnected bar D Von's screenshots showed.
   //
-  // NOTE: this is the same category of change that broke the bar entirely
-  // in build 181 (a stateful settle-delay caused it to never render at
-  // all, not just late). Test this thoroughly on-device before trusting
-  // it (open keyboard, type, drag-scroll to see typed text, cancel a
-  // drag partway, and tap Done) given that history.
+  // Researched the standard fix rather than patching this blind (D Von's
+  // explicit ask): Flutter's own docs and a real flutter/flutter GitHub
+  // issue (#19279, "soft keyboard animation unsynchronized with Flutter
+  // resize animation") both point to the same pattern -- bind position
+  // directly to the live inset via AnimatedPositioned/AnimatedContainer
+  // and let Flutter's own implicit animation smooth the transition,
+  // rather than hand-rolling accept/reject logic on the raw numbers.
+  //
+  // Combined fix: only freeze during an ACTIVE touch (tracked above via
+  // the global pointer router) -- that's the actual signal that
+  // distinguishes "you're dragging" from "the keyboard is just
+  // animating closed on its own," which a raw sequence of numbers alone
+  // can never tell apart. Every other transition (open, close via Done,
+  // close via losing focus some other way) updates the target immediately
+  // and lets AnimatedPositioned below animate it smoothly, instead of
+  // freezing and jumping.
   void _handleInset(double liveInset) {
-    if (liveInset == _stableInset) return;
-    final bool respondImmediately =
-        liveInset >= _stableInset || liveInset == 0;
-    if (!respondImmediately) return;
-    setState(() => _stableInset = liveInset);
+    if (liveInset == _targetInset) return;
+    final bool isGrowingOrFullyClosed =
+        liveInset >= _targetInset || liveInset == 0;
+    if (_pointerDown && !isGrowingOrFullyClosed) return;
+    setState(() => _targetInset = liveInset);
   }
 
   @override
@@ -119,28 +149,37 @@ class _KeyboardDoneBarState extends State<KeyboardDoneBar> {
       if (mounted) _handleInset(liveInset);
     });
 
-    final bool keyboardVisible = _stableInset > 0;
     final double barBottomOffset =
-        widget.alreadyPaddedForKeyboard ? 0 : _stableInset;
+        widget.alreadyPaddedForKeyboard ? 0 : _targetInset;
 
     return Stack(
       children: [
         widget.child,
-        if (keyboardVisible)
-          ValueListenableBuilder<bool>(
-            valueListenable: appSuppressKeyboardDoneBarNotifier,
-            builder: (context, suppressed, _) {
-              if (suppressed) return const SizedBox.shrink();
-              return Positioned(
-                left: 0,
-                right: 0,
-                bottom: barBottomOffset - kDoneBarBleed,
-                child: _DoneBar(
-                  onDone: () => FocusScope.of(context).unfocus(),
-                ),
-              );
-            },
-          ),
+        ValueListenableBuilder<bool>(
+          valueListenable: appSuppressKeyboardDoneBarNotifier,
+          builder: (context, suppressed, _) {
+            if (suppressed) return const SizedBox.shrink();
+            // Always present in the tree now (rather than conditionally
+            // included via `if (keyboardVisible)`) so AnimatedPositioned
+            // has something to animate FROM when the keyboard closes --
+            // conditionally removing it the instant the target hit 0 was
+            // exactly what caused the old jump-to-frozen-position issue.
+            // Sits off-screen at -200 when there's no keyboard to show
+            // above.
+            return AnimatedPositioned(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              left: 0,
+              right: 0,
+              bottom: _targetInset > 0
+                  ? (barBottomOffset - kDoneBarBleed)
+                  : -200,
+              child: _DoneBar(
+                onDone: () => FocusScope.of(context).unfocus(),
+              ),
+            );
+          },
+        ),
       ],
     );
   }
@@ -186,18 +225,41 @@ class KeyboardDoneBarOverlay extends StatefulWidget {
 }
 
 class _KeyboardDoneBarOverlayState extends State<KeyboardDoneBarOverlay> {
-  double _stableInset = 0;
+  double _targetInset = 0;
+  bool _pointerDown = false;
 
-  // Aug 18 2026, build 187: same stricter fix as KeyboardDoneBar's
-  // _handleInset -- see that class's comment for the full explanation.
-  // Applied here too since Share's compose field has the same live
-  // keyboard-height tracking and showed the same symptom.
+  @override
+  void initState() {
+    super.initState();
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_handlePointerEvent);
+  }
+
+  @override
+  void dispose() {
+    GestureBinding.instance.pointerRouter
+        .removeGlobalRoute(_handlePointerEvent);
+    super.dispose();
+  }
+
+  void _handlePointerEvent(PointerEvent event) {
+    if (event is PointerDownEvent) {
+      _pointerDown = true;
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _pointerDown = false;
+    }
+  }
+
+  // Aug 19 2026, build 191: same fix as KeyboardDoneBar's _handleInset --
+  // see that class's comment for the full explanation and research
+  // sources. Applied here too since Share's compose field has the same
+  // live keyboard-height tracking and showed the same disconnected-bar
+  // symptom on Done.
   void _handleInset(double liveInset) {
-    if (liveInset == _stableInset) return;
-    final bool respondImmediately =
-        liveInset >= _stableInset || liveInset == 0;
-    if (!respondImmediately) return;
-    setState(() => _stableInset = liveInset);
+    if (liveInset == _targetInset) return;
+    final bool isGrowingOrFullyClosed =
+        liveInset >= _targetInset || liveInset == 0;
+    if (_pointerDown && !isGrowingOrFullyClosed) return;
+    setState(() => _targetInset = liveInset);
   }
 
   @override
@@ -208,17 +270,20 @@ class _KeyboardDoneBarOverlayState extends State<KeyboardDoneBarOverlay> {
       if (mounted) _handleInset(liveInset);
     });
 
-    if (_stableInset <= 0) return const SizedBox.shrink();
     return ValueListenableBuilder<bool>(
       valueListenable: appSuppressKeyboardDoneBarNotifier,
       builder: (context, suppressed, _) {
         if (suppressed) return const SizedBox.shrink();
-        return Positioned(
+        // Always present now, same reasoning as KeyboardDoneBar above --
+        // sits off-screen at -200 when there's no keyboard to show above.
+        return AnimatedPositioned(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
           left: 0,
           right: 0,
-          bottom: widget.positionAtZero
-              ? 0
-              : (_stableInset - kDoneBarBleed),
+          bottom: _targetInset > 0
+              ? (widget.positionAtZero ? 0 : (_targetInset - kDoneBarBleed))
+              : -200,
           child: _DoneBar(
             onDone: () => FocusScope.of(context).unfocus(),
           ),
