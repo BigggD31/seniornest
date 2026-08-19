@@ -1712,7 +1712,25 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
 
     return Scaffold(
       backgroundColor: _bg,
-      resizeToAvoidBottomInset: true,
+      // Aug 18 2026: was resizeToAvoidBottomInset: true. That shrinks the
+      // Scaffold's body to end exactly at the keyboard's top edge -- a
+      // flat rectangle -- but the real keyboard has rounded top corners,
+      // so there was still a small shape mismatch there. Legacy and
+      // Setup's sheets don't have this problem because their content
+      // physically extends BEHIND the keyboard, giving real, unclipped
+      // space for the Done bar's color to reach into and cover that
+      // corner curve. Share had no such space -- the body ended exactly
+      // at the keyboard line with nothing beyond it, so no amount of
+      // extending the bar's own color could reach past that boundary (D
+      // Von confirmed this after three separate attempts: matching color,
+      // adding bleed, removing Stack clipping, increasing bleed size --
+      // none of it worked, because the space to paint into didn't exist).
+      // Turning this off makes the body always occupy the full screen,
+      // same as the modal sheets, so the same proven mechanism can work
+      // here too. The scroll view's own bottom padding below now handles
+      // keeping content clear of the keyboard manually, the same way
+      // Legacy/Setup's sheets already do.
+      resizeToAvoidBottomInset: false,
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
@@ -1745,7 +1763,15 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                               left: isTablet ? 28 : 20,
                               right: isTablet ? 28 : 20,
                               top: 16,
-                              bottom: kBottomNavigationBarHeight + 24,
+                              // Now that the Scaffold doesn't auto-shrink for
+                              // the keyboard, this scroll view has to keep
+                              // its own content clear of it manually -- same
+                              // pattern Legacy/Setup's sheets already use.
+                              // Falls back to the nav bar's height when the
+                              // keyboard's closed, same spacing as before.
+                              bottom: keyboardHeight > 0
+                                  ? keyboardHeight + 24
+                                  : kBottomNavigationBarHeight + 24,
                             ),
                             child: PrivateInboxListWidget(isDarkMode: _isDarkMode),
                           )
@@ -1754,7 +1780,12 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                         left: isTablet ? 28 : 20,
                         right: isTablet ? 28 : 20,
                         top: 16,
-                        bottom: kBottomNavigationBarHeight + 24,
+                        // Same as the Private Inbox tab above -- Scaffold no
+                        // longer auto-shrinks for the keyboard, so this has
+                        // to reserve space for it manually now.
+                        bottom: keyboardHeight > 0
+                            ? keyboardHeight + 24
+                            : kBottomNavigationBarHeight + 24,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1790,9 +1821,17 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           // would have stacked two different-looking dismiss controls on
           // top of each other, defeating the point of having one single
           // mechanism app-wide.
+          //
+          // Aug 18 2026: positionAtZero was true here because the Scaffold
+          // used to shrink its own body to end exactly at the keyboard's
+          // top edge, making bottom:0 the correct spot. Now that
+          // resizeToAvoidBottomInset is off, this Stack's bottom is the
+          // TRUE screen bottom -- same as Legacy/Setup's sheets -- so this
+          // uses the same bottomInset-based positioning they do, giving the
+          // bar's bleed genuine, unclipped space to reach into behind the
+          // keyboard instead of nowhere to go.
           KeyboardDoneBarOverlay(
             rawBottomInset: keyboardHeight,
-            positionAtZero: true,
           ),
         ],
       ),
