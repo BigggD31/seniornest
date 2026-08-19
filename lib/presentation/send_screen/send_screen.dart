@@ -14,10 +14,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:keyboard_actions/keyboard_actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
-import '../../widgets/keyboard_done_bar.dart';
 import '../../services/auth_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'widgets/private_inbox_list_widget.dart';
@@ -378,8 +378,14 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ? const Color(0xFFB8A888)
                 : const Color(0xFF6B5E4E);
 
-            return KeyboardDoneBar(
-              alreadyPaddedForKeyboard: true,
+            // Aug 19 2026: keyboard_actions swap -- see setup_screen.dart's
+            // Rename Nest sheet comment for the full reasoning. The
+            // existing Padding's viewInsets math below reserves space for
+            // the raw keyboard height same as before; keyboard_actions'
+            // own bar sits in its own Overlay above that, so worst case
+            // there's a little extra clearance to double check on-device
+            // rather than a functional break.
+            return KeyboardActions.done(
               child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               decoration: BoxDecoration(
@@ -903,8 +909,14 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ? const Color(0xFFB8A888)
                 : const Color(0xFF6B5E4E);
 
-            return KeyboardDoneBar(
-              alreadyPaddedForKeyboard: true,
+            // Aug 19 2026: keyboard_actions swap -- see setup_screen.dart's
+            // Rename Nest sheet comment for the full reasoning. The
+            // existing Padding's viewInsets math below reserves space for
+            // the raw keyboard height same as before; keyboard_actions'
+            // own bar sits in its own Overlay above that, so worst case
+            // there's a little extra clearance to double check on-device
+            // rather than a functional break.
+            return KeyboardActions.done(
               child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               decoration: BoxDecoration(
@@ -1708,35 +1720,22 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isTablet = size.width >= 600;
-    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
       backgroundColor: _bg,
-      // Aug 18 2026: was resizeToAvoidBottomInset: true. That shrinks the
-      // Scaffold's body to end exactly at the keyboard's top edge -- a
-      // flat rectangle -- but the real keyboard has rounded top corners,
-      // so there was still a small shape mismatch there. Legacy and
-      // Setup's sheets don't have this problem because their content
-      // physically extends BEHIND the keyboard, giving real, unclipped
-      // space for the Done bar's color to reach into and cover that
-      // corner curve. Share had no such space -- the body ended exactly
-      // at the keyboard line with nothing beyond it, so no amount of
-      // extending the bar's own color could reach past that boundary (D
-      // Von confirmed this after three separate attempts: matching color,
-      // adding bleed, removing Stack clipping, increasing bleed size --
-      // none of it worked, because the space to paint into didn't exist).
-      // Turning this off makes the body always occupy the full screen,
-      // same as the modal sheets, so the same proven mechanism can work
-      // here too. The scroll view's own bottom padding below now handles
-      // keeping content clear of the keyboard manually, the same way
-      // Legacy/Setup's sheets already do.
-      resizeToAvoidBottomInset: false,
+      // Aug 19 2026: back to Flutter's default (true). Aug 18's
+      // resizeToAvoidBottomInset: false + manual keyboard padding was a
+      // workaround for the old hand-rolled KeyboardDoneBar, which needed
+      // real, unclipped space behind the keyboard for its bleed to reach
+      // into. keyboard_actions doesn't need that -- it draws its bar in
+      // its own Overlay and inflates MediaQuery.viewInsets itself, so the
+      // Scaffold can go back to resizing normally around the keyboard.
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
       ),
-      body: Stack(
-        clipBehavior: Clip.none,
+      body: KeyboardActions.done(
+        child: Stack(
         children: [
           Positioned.fill(
             child: GestureDetector(
@@ -1763,15 +1762,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                               left: isTablet ? 28 : 20,
                               right: isTablet ? 28 : 20,
                               top: 16,
-                              // Now that the Scaffold doesn't auto-shrink for
-                              // the keyboard, this scroll view has to keep
-                              // its own content clear of it manually -- same
-                              // pattern Legacy/Setup's sheets already use.
-                              // Falls back to the nav bar's height when the
-                              // keyboard's closed, same spacing as before.
-                              bottom: keyboardHeight > 0
-                                  ? keyboardHeight + 24
-                                  : kBottomNavigationBarHeight + 24,
+                              bottom: kBottomNavigationBarHeight + 24,
                             ),
                             child: PrivateInboxListWidget(isDarkMode: _isDarkMode),
                           )
@@ -1780,12 +1771,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                         left: isTablet ? 28 : 20,
                         right: isTablet ? 28 : 20,
                         top: 16,
-                        // Same as the Private Inbox tab above -- Scaffold no
-                        // longer auto-shrinks for the keyboard, so this has
-                        // to reserve space for it manually now.
-                        bottom: keyboardHeight > 0
-                            ? keyboardHeight + 24
-                            : kBottomNavigationBarHeight + 24,
+                        bottom: kBottomNavigationBarHeight + 24,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1814,26 +1800,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          
-          // The old separate chevron dismiss button that used to live here
-          // was removed -- it sat at this exact same bottom:0 position, so
-          // keeping it alongside the unified KeyboardDoneBarOverlay below
-          // would have stacked two different-looking dismiss controls on
-          // top of each other, defeating the point of having one single
-          // mechanism app-wide.
-          //
-          // Aug 18 2026: positionAtZero was true here because the Scaffold
-          // used to shrink its own body to end exactly at the keyboard's
-          // top edge, making bottom:0 the correct spot. Now that
-          // resizeToAvoidBottomInset is off, this Stack's bottom is the
-          // TRUE screen bottom -- same as Legacy/Setup's sheets -- so this
-          // uses the same bottomInset-based positioning they do, giving the
-          // bar's bleed genuine, unclipped space to reach into behind the
-          // keyboard instead of nowhere to go.
-          KeyboardDoneBarOverlay(
-            rawBottomInset: keyboardHeight,
-          ),
         ],
+        ),
       ),
       floatingActionButton: null,
     );

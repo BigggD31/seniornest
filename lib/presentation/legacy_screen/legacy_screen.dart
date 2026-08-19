@@ -11,10 +11,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:keyboard_actions/keyboard_actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
-import '../../widgets/keyboard_done_bar.dart';
 import '../../widgets/linkified_text.dart';
 import '../../widgets/share_preview_widget.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
@@ -665,7 +665,10 @@ class _LegacyScreenState extends State<LegacyScreen>
 
     return Scaffold(
       backgroundColor: _bg,
-      body: Stack(
+      // Aug 19 2026: keyboard_actions swap, same as Setup's main body --
+      // see that file's comment for the full reasoning.
+      body: KeyboardActions.done(
+        child: Stack(
         children: [
           SafeArea(
             bottom: false,
@@ -762,8 +765,8 @@ class _LegacyScreenState extends State<LegacyScreen>
           ],
         ),
       ),
-          const KeyboardDoneBarOverlay(),
         ],
+        ),
       ),
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,
@@ -2215,8 +2218,13 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
         ? const Color(0xFF9A8A72)
         : const Color(0xFF8A7A6A);
 
-    return KeyboardDoneBar(
-      alreadyPaddedForKeyboard: false,
+    // Aug 19 2026: keyboard_actions swap -- see setup_screen.dart's Rename
+    // Nest sheet comment for the full reasoning. sheetHeight/bottomPadding
+    // above are untouched -- that math is independently responsible for
+    // the scrollable content and Save Story button layout, not just the
+    // bar, so it still needs to do its own job regardless of which bar
+    // widget sits on top.
+    return KeyboardActions.done(
       child: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
@@ -2744,8 +2752,16 @@ class _SuggestQuestionSheetState extends State<_SuggestQuestionSheet> {
     final sheetHeight = keyboardInset > 0
         ? (maxSheetHeight - keyboardInset).clamp(250.0, maxSheetHeight)
         : maxSheetHeight;
-    return KeyboardDoneBar(
-      alreadyPaddedForKeyboard: false,
+    // Aug 19 2026: keyboard_actions swap -- see setup_screen.dart's Rename
+    // Nest sheet comment for the full reasoning. NOTE: sheetHeight above
+    // still has the same double-compensation pattern (shrinks height AND
+    // pads content for the keyboard) that was root-caused and fixed on
+    // Write Your Story's sheet -- this sheet (_SuggestQuestionSheet) was
+    // apparently never given that same fix. Left as-is here since it's a
+    // separate, pre-existing issue from the bar-widget swap this pass is
+    // actually doing -- flagged to D Von separately rather than mixed
+    // into this change.
+    return KeyboardActions.done(
       child: Container(
       height: sheetHeight,
       margin: const EdgeInsets.symmetric(horizontal: 8),
@@ -3353,8 +3369,9 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
-    return KeyboardDoneBar(
-      alreadyPaddedForKeyboard: false,
+    // Aug 19 2026: keyboard_actions swap -- see setup_screen.dart's Rename
+    // Nest sheet comment for the full reasoning.
+    return KeyboardActions.done(
       child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 8),
       padding: EdgeInsets.fromLTRB(24, 20, 24, 36 + bottomPadding),
@@ -3943,8 +3960,9 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
-    return KeyboardDoneBar(
-      alreadyPaddedForKeyboard: false,
+    // Aug 19 2026: keyboard_actions swap -- see setup_screen.dart's Rename
+    // Nest sheet comment for the full reasoning.
+    return KeyboardActions.done(
       child: SafeArea(
       top: false,
       child: Container(

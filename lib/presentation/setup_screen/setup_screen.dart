@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:keyboard_actions/keyboard_actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -10,7 +11,6 @@ import '../../core/app_state.dart';
 import '../../services/auth_service.dart';
 import '../../services/share_service.dart';
 import '../../widgets/app_navigation.dart';
-import '../../widgets/keyboard_done_bar.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -484,7 +484,12 @@ class _SetupScreenState extends State<SetupScreen>
 
     return Scaffold(
       backgroundColor: _bg,
-      body: Stack(
+      // Aug 19 2026: same keyboard_actions swap as the two modal sheets in
+      // this file -- wraps the whole body now instead of a standalone
+      // KeyboardDoneBarOverlay Stack child, since the package needs to
+      // wrap actual content to discover the fields inside it.
+      body: KeyboardActions.done(
+        child: Stack(
         children: [
           SafeArea(
         bottom: false,
@@ -516,8 +521,8 @@ class _SetupScreenState extends State<SetupScreen>
                 ],
               ),
           ),
-          const KeyboardDoneBarOverlay(),
         ],
+        ),
       ),
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,
@@ -2238,10 +2243,9 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    // See the matching comment on the Rename Nest sheet -- modals need
-    // their own KeyboardDoneBar, not the parent screen's ambient overlay.
-    return KeyboardDoneBar(
-      alreadyPaddedForKeyboard: false,
+    // Aug 19 2026: same keyboard_actions swap as the Rename Nest sheet --
+    // see that comment for the full reasoning.
+    return KeyboardActions.done(
       child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: EdgeInsets.only(
@@ -2595,8 +2599,16 @@ class _EditNestSheetState extends State<_EditNestSheet> {
     // through disconnected from this modal's own buttons, or (here) was
     // fully covered and invisible. Wrapping this modal's own content in
     // KeyboardDoneBar makes the bar genuinely part of THIS layer instead.
-    return KeyboardDoneBar(
-      alreadyPaddedForKeyboard: false,
+    // Aug 19 2026: replaced the custom KeyboardDoneBar with the
+    // keyboard_actions package after that hand-rolled widget's repeated
+    // regressions (corner gaps, drag-follow, Done-tap desync) across many
+    // builds -- D Von's direct ask: find real, maintained code for this
+    // rather than continuing to patch our own. KeyboardActions.done draws
+    // its bar in its own Overlay layer, so it doesn't need this modal's
+    // content to make room for it the way the old widget did -- the
+    // existing bottomPadding-based Container padding below still does its
+    // original job of keeping Save Name clear of the raw keyboard.
+    return KeyboardActions.done(
       child: GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
