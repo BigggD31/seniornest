@@ -15,7 +15,16 @@ import '../core/app_state.dart';
 // make the bar's corners match the keyboard's corners exactly. This extra
 // strip sits behind the keyboard for its full width except at the two
 // rounded corners, where it's what actually shows through.
-const double kDoneBarBleed = 24;
+// D Von confirmed the Share corner gap persisted even after fixing the
+// Stack clipping (build 189) -- both that fix and this bleed amount were
+// genuinely in place, so 24px itself just wasn't covering how far the
+// real keyboard's corner actually curves in. Less noticeable in light
+// mode where the bar and background colors are closer together; in dark
+// mode the contrast between the near-black background and the dark gray
+// bar made the same gap much more obvious. Bumped generously -- this is
+// always hidden behind the real keyboard regardless of screen, so an
+// oversized value is harmless everywhere it's used.
+const double kDoneBarBleed = 60;
 
 /// Wraps [child] so that whenever the keyboard is open, a thin bar with a
 /// blue checkmark "Done" button is pinned directly above the keyboard.
