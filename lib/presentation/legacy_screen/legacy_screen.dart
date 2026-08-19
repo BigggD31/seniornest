@@ -2428,41 +2428,50 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-          // ── Save Button ──────────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-            child: SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _isSaving ? null : _saveStory,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF5DA399),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: _isSaving
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        'Save Story',
-                        style: GoogleFonts.nunitoSans(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                  const SizedBox(height: 16),
+                  // ── Save Button ────────────────────────────────────────────
+                  // Aug 18 2026: moved here, inside the same scrollable
+                  // Column as the story content, from being a fixed sibling
+                  // AFTER the Expanded/SingleChildScrollView. D Von's
+                  // screenshots showed the story content scrolling (title
+                  // and category pushed out of view as the story field
+                  // grew) while this button stayed pinned in the exact same
+                  // screen position regardless -- disconnected from the
+                  // content it belongs to. Share's Send button already
+                  // lives inside its own scrollable content the same way
+                  // this one now does, which is why Share never showed this
+                  // problem.
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : _saveStory,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF5DA399),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
                       ),
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              'Save Story',
+                              style: GoogleFonts.nunitoSans(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
