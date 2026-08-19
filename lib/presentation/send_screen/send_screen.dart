@@ -1718,6 +1718,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         onTap: _onNavTap,
       ),
       body: Stack(
+        clipBehavior: Clip.none,
         children: [
           Positioned.fill(
             child: GestureDetector(
