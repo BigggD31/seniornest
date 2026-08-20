@@ -18,7 +18,6 @@ import './services/auth_service.dart';
 import './services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import './widgets/custom_error_widget.dart';
-import './widgets/branded_transition_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
