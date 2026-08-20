@@ -347,14 +347,33 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Previously this showed only a plain solid color matching dark/light
-    // mode (this session's earlier fix for the black-screen flash). Now
-    // shows the actual approved branded transition screen instead, so a
-    // cold start (including the OS fully suspending and relaunching the
-    // app, which looks identical to a fresh launch from here) reads as an
-    // intentional "loading" moment rather than a blank flash.
     if (!_ready) {
-      return const BrandedTransitionScreen();
+      // Aug 21 2026: this is the very first thing rendered on cold start,
+      // before _resolveInitialRoute() finishes deciding where to send the
+      // user -- it ran unconditionally for EVERY launch, new or
+      // returning, regardless of what the intro sequence or any route
+      // change was supposed to show first. That's the real reason D Von
+      // kept seeing the gold logo screen first no matter what changed in
+      // app_routes.dart -- this gate runs before any of that ever gets a
+      // chance to build. Shows the same grandmother photo the real intro
+      // sequence opens with (not a separate blank placeholder, not the
+      // gold logo) -- once resolution finishes, if this is a new user the
+      // real IntroSequenceScreen takes over showing the same image, so
+      // there's nothing visually distinct to notice in between. For a
+      // returning user, this briefly shows before their actual
+      // destination loads -- same brief-flash behavior the old gold
+      // screen already had for everyone, just a different image.
+      // BrandedTransitionScreen itself is untouched and still used
+      // everywhere else in the app exactly as before.
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: SizedBox.expand(
+          child: Image(
+            image: AssetImage('assets/images/splash_hero_1.png'),
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
     }
     return Sizer(
       builder: (context, orientation, screenType) {
