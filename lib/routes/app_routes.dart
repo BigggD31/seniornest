@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../presentation/family_feed_screen/family_feed_screen.dart';
 import '../presentation/role_choice_screen/role_choice_screen.dart';
 import '../presentation/splash_screen/splash_screen.dart';
+import '../presentation/splash_screen/branded_intro_screen.dart';
 import '../presentation/senior_onboarding_screen/senior_onboarding_screen.dart';
 import '../presentation/family_onboarding_screen/family_onboarding_screen.dart';
 import '../presentation/send_screen/send_screen.dart';
@@ -43,8 +44,14 @@ class AppRoutes {
   static const String messageThreadScreen = '/message-thread-screen';
 
   static Map<String, WidgetBuilder> routes = {
-    initial: (context) => const SplashScreen(),
-    splashScreen: (context) => const SplashScreen(),
+    initial: (context) => IntroSequenceScreen(
+          imagePaths: const ['assets/images/splash_hero_1.png'],
+          builder: (context) => const SplashScreen(),
+        ),
+    splashScreen: (context) => IntroSequenceScreen(
+          imagePaths: const ['assets/images/splash_hero_1.png'],
+          builder: (context) => const SplashScreen(),
+        ),
     roleChoiceScreen: (context) => const RoleChoiceScreen(),
     seniorOnboardingScreen: (context) => const SeniorOnboardingScreen(),
     familyOnboardingScreen: (context) => const FamilyOnboardingScreen(),
