@@ -498,6 +498,7 @@ class _SetupScreenState extends State<SetupScreen>
         child: _isLoading
             ? _buildLoadingState()
             : CustomScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 slivers: [
                   SliverToBoxAdapter(child: _buildTopBar(isTablet)),
                   SliverToBoxAdapter(child: _buildProfileCard(isTablet)),

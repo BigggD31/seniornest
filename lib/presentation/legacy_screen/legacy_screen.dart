@@ -2256,18 +2256,31 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
                 const Spacer(),
                 // Fixed Done button -- always present, not conditional on
                 // keyboard/focus state, so there's no show/hide timing to
-                // get wrong. Dismisses the keyboard from either field.
+                // get wrong. Filled pill, not plain text -- D Von's direct
+                // feedback on the plain-text version: it didn't read as a
+                // button at all, took real trial and error to find.
                 GestureDetector(
                   onTap: () => FocusScope.of(context).unfocus(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                      'Done',
-                      style: GoogleFonts.nunitoSans(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF4A8A80),
-                      ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4A8A80),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Done',
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.keyboard_hide_rounded, size: 15, color: Colors.white),
+                      ],
                     ),
                   ),
                 ),
@@ -2287,6 +2300,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
           // ── Scrollable body ─────────────────────────────────────────────────
           Expanded(
             child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2805,15 +2819,26 @@ class _SuggestQuestionSheetState extends State<_SuggestQuestionSheet> {
                 const Spacer(),
                 GestureDetector(
                   onTap: () => FocusScope.of(context).unfocus(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                      'Done',
-                      style: GoogleFonts.nunitoSans(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF4A8A80),
-                      ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4A8A80),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Done',
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.keyboard_hide_rounded, size: 15, color: Colors.white),
+                      ],
                     ),
                   ),
                 ),
@@ -2843,6 +2868,7 @@ class _SuggestQuestionSheetState extends State<_SuggestQuestionSheet> {
           const SizedBox(height: 16),
           Expanded(
             child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -3413,6 +3439,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -3438,15 +3465,26 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
               const Spacer(),
               GestureDetector(
                 onTap: () => FocusScope.of(context).unfocus(),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    'Done',
-                    style: GoogleFonts.nunitoSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF4A8A80),
-                    ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4A8A80),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Done',
+                        style: GoogleFonts.nunitoSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.keyboard_hide_rounded, size: 14, color: Colors.white),
+                    ],
                   ),
                 ),
               ),
@@ -4025,6 +4063,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -4035,15 +4074,26 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
               alignment: Alignment.centerRight,
               child: GestureDetector(
                 onTap: () => FocusScope.of(context).unfocus(),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    'Done',
-                    style: GoogleFonts.nunitoSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF4A8A80),
-                    ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4A8A80),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Done',
+                        style: GoogleFonts.nunitoSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.keyboard_hide_rounded, size: 14, color: Colors.white),
+                    ],
                   ),
                 ),
               ),
