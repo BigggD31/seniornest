@@ -297,31 +297,14 @@ class _SplashScreenState extends State<SplashScreen>
       backgroundColor: const Color(0xFFE9F1EE),
       body: Stack(
         children: [
-          // Aug 20 2026: full-screen background photo, D Von's direct ask
-          // -- replaces the plain gradient as the base layer. The
-          // gradient itself is kept as a scrim ON TOP of the photo (below
-          // this comment) rather than removed, since the existing content
-          // (logo, headline, buttons) was designed against a plain
-          // pastel background and needs something to stay legible over a
-          // busy photo.
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/splash_hero.png',
-              fit: BoxFit.cover,
-            ),
-          ),
           Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              const Color(0xFFE9F1EE).withValues(alpha: 0.88),
-              const Color(0xFFF3E7C4).withValues(alpha: 0.88),
-              const Color(0xFFF8E9E1).withValues(alpha: 0.88),
-            ],
+            colors: [Color(0xFFE9F1EE), Color(0xFFF3E7C4), Color(0xFFF8E9E1)],
           ),
         ),
         child: SafeArea(
