@@ -455,32 +455,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                         ),
                         const Spacer(),
                         GestureDetector(
-                          onTap: () => FocusScope.of(ctx).unfocus(),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF4A8A80),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Done',
-                                  style: GoogleFonts.nunitoSans(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                const Icon(Icons.keyboard_hide_rounded, size: 14, color: Colors.white),
-                              ],
-                            ),
-                          ),
-                        ),
-                        GestureDetector(
                           onTap: () {
                             _voiceTimer?.cancel();
                             _voicePlayTimer?.cancel();
@@ -1010,32 +984,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                           ],
                         ),
                         const Spacer(),
-                        GestureDetector(
-                          onTap: () => FocusScope.of(ctx).unfocus(),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF4A8A80),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Done',
-                                  style: GoogleFonts.nunitoSans(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                const Icon(Icons.keyboard_hide_rounded, size: 14, color: Colors.white),
-                              ],
-                            ),
-                          ),
-                        ),
                         GestureDetector(
                           onTap: () {
                             _videoTimer?.cancel();
@@ -1772,25 +1720,30 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
 
     return Scaffold(
       backgroundColor: _bg,
-      // Aug 19 2026: back to Flutter's default (true). Aug 18's
-      // Aug 19 2026: removed the KeyboardActions wrapper (and the package
-      // attempt before it) -- D Von's direct ask after that didn't fix
-      // the underlying symptoms either: go back to first principles. The
-      // multi-line message field now has its own fixed Done row directly
-      // above it (see _buildTextComposer) instead of a bar trying to
-      // track the keyboard.
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
       ),
-      body: Stack(
+      // Aug 19 2026: tap-to-dismiss rebuilt as a proper ancestor wrapper
+      // around the actual content, instead of a Positioned.fill sibling
+      // sitting behind it in the Stack. That structure put the dismiss
+      // GestureDetector BEHIND the scrollable content in z-order, very
+      // likely never actually receiving taps -- matching D Von's direct
+      // report that tapping outside the field did nothing. This is the
+      // standard, reliable Flutter pattern for this: wrap the content
+      // itself. A tap not claimed by anything more specific (a button,
+      // the text field) reaches this and only unfocuses -- it can't also
+      // trigger whatever's underneath, since nothing else claimed that
+      // same tap. A second, separate tap on an actual button still works
+      // normally. Also removed the Done button entirely per D Von's
+      // direct ask (Facebook screenshots as reference) -- swipe-down
+      // (keyboardDismissBehavior below) and this tap-away are the only
+      // two mechanisms now, no custom control at all.
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: Stack(
         children: [
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: () => FocusScope.of(context).unfocus(),
-              behavior: HitTestBehavior.translucent,
-            ),
-          ),
           SafeArea(
             bottom: false,
             child: AnimatedBuilder(
@@ -1806,15 +1759,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                   Expanded(
                     child: _topTabIndex == 1
                         ? SingleChildScrollView(
-                            // D Von's real feedback: tapping outside the
-                            // field did nothing, because this scroll view
-                            // swallows every tap in its bounds by default
-                            // (needed for drag-to-scroll gesture
-                            // detection) before it could ever reach a
-                            // separate background tap-to-dismiss handler.
-                            // keyboardDismissBehavior.onDrag is Flutter's
-                            // own built-in answer to this -- scrolling
-                            // dismisses the keyboard, the same standard
+                            // Swipe-down-to-dismiss -- Flutter's own
+                            // built-in answer to this, the same standard
                             // behavior as Messages, Mail, and most apps.
                             keyboardDismissBehavior:
                                 ScrollViewKeyboardDismissBehavior.onDrag,
@@ -1864,6 +1810,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           ),
         ],
         ),
+      ),
       floatingActionButton: null,
     );
   }
@@ -2530,43 +2477,13 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildTextComposer() {
-    // Aug 19 2026: multi-line field, so it gets a small, fixed Done
-    // button above it -- a plain part of this composer's own layout, not
-    // a bar floating over the keyboard. D Von's direct feedback on the
-    // first version of this: plain teal text in the corner didn't read
-    // as a tappable button at all, took real trial and error to find.
-    // Now a filled pill instead, the same visual language as every other
-    // button in the app, so it's unmistakable at a glance.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        GestureDetector(
-          onTap: () => FocusScope.of(context).unfocus(),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF4A8A80),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Done',
-                  style: GoogleFonts.nunitoSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.keyboard_hide_rounded, size: 16, color: Colors.white),
-              ],
-            ),
-          ),
-        ),
-        TextField(
+    // Aug 19 2026: removed the Done button entirely. D Von's direct ask,
+    // with Facebook screenshots as the reference: no custom button at
+    // all -- just swipe down or tap away, the same plain pattern seniors
+    // already know from Facebook's own comment field. See the tap-away
+    // wrapper in this screen's build() and the scroll view's
+    // keyboardDismissBehavior for swipe-down.
+    return TextField(
       textCapitalization: TextCapitalization.sentences,
       controller: _messageController,
       focusNode: _textFocusNode,
@@ -2592,8 +2509,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         focusedBorder: InputBorder.none,
         contentPadding: EdgeInsets.zero,
       ),
-        ),
-      ],
     );
   }
 

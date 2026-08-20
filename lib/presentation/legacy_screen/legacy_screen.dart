@@ -2254,37 +2254,13 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
                   ),
                 ),
                 const Spacer(),
-                // Fixed Done button -- always present, not conditional on
-                // keyboard/focus state, so there's no show/hide timing to
-                // get wrong. Filled pill, not plain text -- D Von's direct
-                // feedback on the plain-text version: it didn't read as a
-                // button at all, took real trial and error to find.
-                GestureDetector(
-                  onTap: () => FocusScope.of(context).unfocus(),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4A8A80),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Done',
-                          style: GoogleFonts.nunitoSans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.keyboard_hide_rounded, size: 15, color: Colors.white),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
+                // Aug 19 2026: removed the Done button entirely. D Von's
+                // direct ask, with Facebook screenshots as the reference:
+                // no custom button at all -- just swipe down or tap away,
+                // the same plain, native pattern seniors already know from
+                // Facebook. See _WriteStorySheetState's build() for the
+                // tap-away wrapper and the scroll view's
+                // keyboardDismissBehavior for swipe-down.
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: Icon(
@@ -2817,31 +2793,6 @@ class _SuggestQuestionSheetState extends State<_SuggestQuestionSheet> {
                   ),
                 ),
                 const Spacer(),
-                GestureDetector(
-                  onTap: () => FocusScope.of(context).unfocus(),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4A8A80),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Done',
-                          style: GoogleFonts.nunitoSans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.keyboard_hide_rounded, size: 15, color: Colors.white),
-                      ],
-                    ),
-                  ),
-                ),
                 const SizedBox(width: 16),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
@@ -3428,10 +3379,16 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
     // Aug 19 2026: removed the KeyboardActions wrapper (and the
     // keyboard_actions package attempt before it) -- see Write Your
-    // Story's sheet comment for the full reasoning. Title is single-line
-    // (native Done key below); Caption is multi-line, so it gets the same
-    // fixed header Done button as Write Your Story, not a floating bar.
-    return Container(
+    // Aug 20 2026: D Von's direct ask (Facebook screenshots as reference)
+    // -- no custom Done button at all, just swipe-down and tap-away, the
+    // same plain pattern Facebook already uses. Wrapped in a
+    // GestureDetector here as the ancestor of all this sheet's content,
+    // so a tap not claimed by anything more specific (the fields, the
+    // buttons) reaches this and only unfocuses -- it can't also trigger
+    // whatever's underneath, since nothing else claimed that same tap.
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 8),
       padding: EdgeInsets.fromLTRB(24, 20, 24, 36 + bottomPadding),
       decoration: BoxDecoration(
@@ -3463,32 +3420,6 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
                 ),
               ),
               const Spacer(),
-              GestureDetector(
-                onTap: () => FocusScope.of(context).unfocus(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4A8A80),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Done',
-                        style: GoogleFonts.nunitoSans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.keyboard_hide_rounded, size: 14, color: Colors.white),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
               GestureDetector(
                 onTap: () => Navigator.pop(context),
                 child: Icon(
@@ -3876,6 +3807,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
         ],
       ),
       ),
+    ),
     );
   }
 }
@@ -4047,13 +3979,14 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
-    // Aug 19 2026: removed the KeyboardActions wrapper (and the
-    // keyboard_actions package attempt before it) -- see Write Your
-    // Story's sheet comment for the full reasoning. Title is single-line
-    // (native Done key below); Caption is multi-line, so it gets a fixed
-    // Done row here -- this sheet had no existing header row to attach it
-    // to (title was a plain centered Text), so one's added above it.
-    return SafeArea(
+    // Aug 20 2026: D Von's direct ask (Facebook screenshots as reference)
+    // -- no custom Done button at all, just swipe-down and tap-away.
+    // Wrapped in a GestureDetector as the ancestor of all this sheet's
+    // content, so a tap not claimed by anything more specific reaches
+    // this and only unfocuses.
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: SafeArea(
       top: false,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8),
@@ -4069,36 +4002,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
           children: [
             Container(width: 40, height: 4,
               decoration: BoxDecoration(color: _cardBorder, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: GestureDetector(
-                onTap: () => FocusScope.of(context).unfocus(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4A8A80),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Done',
-                        style: GoogleFonts.nunitoSans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.keyboard_hide_rounded, size: 14, color: Colors.white),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 16),
             Text('Record Video Story',
               style: GoogleFonts.nunitoSans(fontSize: 20, fontWeight: FontWeight.w800, color: _textPrimary)),
             const SizedBox(height: 6),
@@ -4356,6 +4260,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
         ),
         ),
       ),
+    ),
     );
   }
 }
