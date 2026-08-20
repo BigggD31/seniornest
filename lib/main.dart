@@ -173,7 +173,6 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _resolveInitialRoute() async {
-    final startTime = DateTime.now();
     try {
       // Must run before anything else in this function, including the
       // dark_mode read two lines down -- detects a genuine account switch
@@ -330,18 +329,18 @@ class _MyAppState extends State<MyApp> {
     } catch (_) {
       _initialRoute = AppRoutes.splashScreen;
     }
-    final elapsed = DateTime.now().difference(startTime);
-    // Confirmed the actual remaining complaint after the subscribe-screen
-    // race itself was fixed: display duration was inconsistent -- a fast
-    // connection could resolve everything in a couple hundred
-    // milliseconds, barely long enough to register, while a slow one
-    // could take much longer. This applies to every reopen regardless of
-    // how long the app was in the background -- a second, an hour, a day
-    // -- since nothing in this app signs someone out on its own; only an
-    // explicit sign-out does that.
-    if (elapsed < BrandedTransitionScreen.minDisplayDuration) {
-      await Future.delayed(BrandedTransitionScreen.minDisplayDuration - elapsed);
-    }
+    // Aug 21 2026: removed the artificial minDisplayDuration wait here.
+    // It existed to keep the OLD gold logo screen visible for a
+    // consistent minimum time regardless of connection speed -- but this
+    // gate no longer shows that screen, it shows the grandmother photo
+    // now. Since the real IntroSequenceScreen (once _ready flips) starts
+    // its own fresh timer on the same image, that artificial 1.5s wait
+    // was only adding a guaranteed extra pause plus a visible
+    // timer-restart before the real, interactive slide ever got a
+    // chance to begin -- exactly the stutter D Von was seeing. Letting
+    // _ready flip the moment resolution actually finishes minimizes that
+    // handoff window to whatever the real async work took, instead of a
+    // fixed 1.5s no matter how fast the connection was.
     if (mounted) setState(() => _ready = true);
   }
 
