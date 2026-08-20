@@ -45,11 +45,11 @@ class AppRoutes {
 
   static Map<String, WidgetBuilder> routes = {
     initial: (context) => IntroSequenceScreen(
-          imagePaths: const ['assets/images/splash_hero_1.png'],
+          imagePaths: const ['assets/images/splash_hero_1.png', 'assets/images/splash_hero_2.png'],
           builder: (context) => const SplashScreen(),
         ),
     splashScreen: (context) => IntroSequenceScreen(
-          imagePaths: const ['assets/images/splash_hero_1.png'],
+          imagePaths: const ['assets/images/splash_hero_1.png', 'assets/images/splash_hero_2.png'],
           builder: (context) => const SplashScreen(),
         ),
     roleChoiceScreen: (context) => const RoleChoiceScreen(),
