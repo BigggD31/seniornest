@@ -9,13 +9,6 @@ environment:
 dependencies:
   flutter:       # CRITICAL: Required for every Flutter project - DO NOT REMOVE
     sdk: flutter # CRITICAL: Required for every Flutter project - DO NOT REMOVE
-  # Real, maintained package (diegoveloper.com, verified publisher, 155k
-  # downloads) replacing the hand-rolled keyboard_done_bar.dart on Setup,
-  # Legacy, and Share -- Aug 19 2026, after that custom widget's repeated
-  # regressions (corner gaps, drag-follow, Done-tap desync) despite
-  # multiple rounds of research and fixes. This package has its own
-  # documented fix for the exact symptom class we kept hitting.
-  keyboard_actions: ^5.0.2
   
   # CRITICAL: Core UI and responsive design - DO NOT REMOVE OR MODIFY
   supabase_flutter: ^2.9.1

@@ -11,7 +11,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:keyboard_actions/keyboard_actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
@@ -665,10 +664,12 @@ class _LegacyScreenState extends State<LegacyScreen>
 
     return Scaffold(
       backgroundColor: _bg,
-      // Aug 19 2026: keyboard_actions swap, same as Setup's main body --
-      // see that file's comment for the full reasoning.
-      body: KeyboardActions.done(
-        child: Stack(
+      // Aug 19 2026: removed the KeyboardActions wrapper entirely -- no
+      // editable text fields live on this screen's main browsing body at
+      // all. Legacy's actual fields live in modal sheets (Write Your
+      // Story, Suggest Question, Voice/Video captions); see those sheets'
+      // own comments for how each is handled.
+      body: Stack(
         children: [
           SafeArea(
             bottom: false,
@@ -767,7 +768,6 @@ class _LegacyScreenState extends State<LegacyScreen>
       ),
         ],
         ),
-      ),
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
@@ -2218,14 +2218,17 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
         ? const Color(0xFF9A8A72)
         : const Color(0xFF8A7A6A);
 
-    // Aug 19 2026: keyboard_actions swap -- see setup_screen.dart's Rename
-    // Nest sheet comment for the full reasoning. sheetHeight/bottomPadding
-    // above are untouched -- that math is independently responsible for
-    // the scrollable content and Save Story button layout, not just the
-    // bar, so it still needs to do its own job regardless of which bar
-    // widget sits on top.
-    return KeyboardActions.done(
-      child: GestureDetector(
+    // Aug 19 2026: removed the KeyboardActions wrapper (and the
+    // keyboard_actions package attempt before it). D Von's direct ask
+    // after that package didn't fix the underlying symptoms either: go
+    // back to first principles. Story Title is single-line and now uses
+    // the real iOS keyboard's own Done key. Story body is multi-line, so
+    // its return key has to stay a real line break -- for that field, the
+    // small "Done" button next to the header title below is a plain,
+    // fixed part of this sheet's own layout, not a floating bar tracking
+    // the keyboard. It can't detach or desync from something it was never
+    // attached to.
+    return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
         height: sheetHeight,
@@ -2251,6 +2254,24 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
                   ),
                 ),
                 const Spacer(),
+                // Fixed Done button -- always present, not conditional on
+                // keyboard/focus state, so there's no show/hide timing to
+                // get wrong. Dismisses the keyboard from either field.
+                GestureDetector(
+                  onTap: () => FocusScope.of(context).unfocus(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      'Done',
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF4A8A80),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: Icon(
@@ -2294,6 +2315,8 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
                     child: TextField(
                       textCapitalization: TextCapitalization.sentences,
                       controller: _titleController,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
                       style: GoogleFonts.nunitoSans(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -2486,8 +2509,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
         ],
       ),
     ),
-  ),
-    );
+  );
   }
 }
 
@@ -2752,17 +2774,12 @@ class _SuggestQuestionSheetState extends State<_SuggestQuestionSheet> {
     final sheetHeight = keyboardInset > 0
         ? (maxSheetHeight - keyboardInset).clamp(250.0, maxSheetHeight)
         : maxSheetHeight;
-    // Aug 19 2026: keyboard_actions swap -- see setup_screen.dart's Rename
-    // Nest sheet comment for the full reasoning. NOTE: sheetHeight above
-    // still has the same double-compensation pattern (shrinks height AND
-    // pads content for the keyboard) that was root-caused and fixed on
-    // Write Your Story's sheet -- this sheet (_SuggestQuestionSheet) was
-    // apparently never given that same fix. Left as-is here since it's a
-    // separate, pre-existing issue from the bar-widget swap this pass is
-    // actually doing -- flagged to D Von separately rather than mixed
-    // into this change.
-    return KeyboardActions.done(
-      child: Container(
+    // Aug 19 2026: removed the KeyboardActions wrapper (and the
+    // keyboard_actions package attempt before it) -- see Write Your
+    // Story's sheet comment for the full reasoning. The question field is
+    // multi-line (maxLines: 3), so it gets the same fixed header Done
+    // button as that sheet, not a floating bar.
+    return Container(
       height: sheetHeight,
       margin: const EdgeInsets.symmetric(horizontal: 8),
       padding: EdgeInsets.only(bottom: bottomPadding),
@@ -2786,6 +2803,21 @@ class _SuggestQuestionSheetState extends State<_SuggestQuestionSheet> {
                   ),
                 ),
                 const Spacer(),
+                GestureDetector(
+                  onTap: () => FocusScope.of(context).unfocus(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      'Done',
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF4A8A80),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: Icon(
@@ -2927,7 +2959,6 @@ class _SuggestQuestionSheetState extends State<_SuggestQuestionSheet> {
             ),
           ),
         ],
-      ),
       ),
     );
   }
@@ -3369,10 +3400,12 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
-    // Aug 19 2026: keyboard_actions swap -- see setup_screen.dart's Rename
-    // Nest sheet comment for the full reasoning.
-    return KeyboardActions.done(
-      child: Container(
+    // Aug 19 2026: removed the KeyboardActions wrapper (and the
+    // keyboard_actions package attempt before it) -- see Write Your
+    // Story's sheet comment for the full reasoning. Title is single-line
+    // (native Done key below); Caption is multi-line, so it gets the same
+    // fixed header Done button as Write Your Story, not a floating bar.
+    return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8),
       padding: EdgeInsets.fromLTRB(24, 20, 24, 36 + bottomPadding),
       decoration: BoxDecoration(
@@ -3403,6 +3436,21 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
                 ),
               ),
               const Spacer(),
+              GestureDetector(
+                onTap: () => FocusScope.of(context).unfocus(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    'Done',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF4A8A80),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
               GestureDetector(
                 onTap: () => Navigator.pop(context),
                 child: Icon(
@@ -3437,6 +3485,8 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
             child: TextField(
               textCapitalization: TextCapitalization.sentences,
               controller: _titleController,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => FocusScope.of(context).unfocus(),
               style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w600, color: _textPrimary),
               decoration: InputDecoration(
                 hintText: 'Give your story a title…',
@@ -3788,7 +3838,6 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
         ],
       ),
       ),
-      ),
     );
   }
 }
@@ -3960,10 +4009,13 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
-    // Aug 19 2026: keyboard_actions swap -- see setup_screen.dart's Rename
-    // Nest sheet comment for the full reasoning.
-    return KeyboardActions.done(
-      child: SafeArea(
+    // Aug 19 2026: removed the KeyboardActions wrapper (and the
+    // keyboard_actions package attempt before it) -- see Write Your
+    // Story's sheet comment for the full reasoning. Title is single-line
+    // (native Done key below); Caption is multi-line, so it gets a fixed
+    // Done row here -- this sheet had no existing header row to attach it
+    // to (title was a plain centered Text), so one's added above it.
+    return SafeArea(
       top: false,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8),
@@ -3978,7 +4030,25 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
           children: [
             Container(width: 40, height: 4,
               decoration: BoxDecoration(color: _cardBorder, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                onTap: () => FocusScope.of(context).unfocus(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    'Done',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF4A8A80),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
             Text('Record Video Story',
               style: GoogleFonts.nunitoSans(fontSize: 20, fontWeight: FontWeight.w800, color: _textPrimary)),
             const SizedBox(height: 6),
@@ -3998,6 +4068,8 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
             child: TextField(
               textCapitalization: TextCapitalization.sentences,
               controller: _titleController,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => FocusScope.of(context).unfocus(),
               style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w600, color: _textPrimary),
               decoration: InputDecoration(
                 hintText: 'Give your story a title…',
@@ -4233,7 +4305,6 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
           ],
         ),
         ),
-      ),
       ),
     );
   }

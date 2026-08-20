@@ -14,7 +14,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:keyboard_actions/keyboard_actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
@@ -378,15 +377,14 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ? const Color(0xFFB8A888)
                 : const Color(0xFF6B5E4E);
 
-            // Aug 19 2026: keyboard_actions swap -- see setup_screen.dart's
-            // Rename Nest sheet comment for the full reasoning. The
-            // existing Padding's viewInsets math below reserves space for
-            // the raw keyboard height same as before; keyboard_actions'
-            // own bar sits in its own Overlay above that, so worst case
-            // there's a little extra clearance to double check on-device
-            // rather than a functional break.
-            return KeyboardActions.done(
-              child: Container(
+            // Aug 19 2026: removed the KeyboardActions wrapper (and the
+            // keyboard_actions package attempt before it) -- D Von's
+            // direct ask after that didn't fix the underlying symptoms
+            // either: go back to first principles. The caption field
+            // below is multi-line, so it gets a fixed Done button next to
+            // the existing close button here, not a bar tracking the
+            // keyboard.
+            return Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               decoration: BoxDecoration(
                 color: bg,
@@ -455,6 +453,20 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                           ],
                         ),
                         const Spacer(),
+                        GestureDetector(
+                          onTap: () => FocusScope.of(ctx).unfocus(),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              'Done',
+                              style: GoogleFonts.nunitoSans(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF4A8A80),
+                              ),
+                            ),
+                          ),
+                        ),
                         GestureDetector(
                           onTap: () {
                             _voiceTimer?.cancel();
@@ -814,7 +826,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ),
                 ),
               ),
-              ),
             );
           },
         );
@@ -909,15 +920,14 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ? const Color(0xFFB8A888)
                 : const Color(0xFF6B5E4E);
 
-            // Aug 19 2026: keyboard_actions swap -- see setup_screen.dart's
-            // Rename Nest sheet comment for the full reasoning. The
-            // existing Padding's viewInsets math below reserves space for
-            // the raw keyboard height same as before; keyboard_actions'
-            // own bar sits in its own Overlay above that, so worst case
-            // there's a little extra clearance to double check on-device
-            // rather than a functional break.
-            return KeyboardActions.done(
-              child: Container(
+            // Aug 19 2026: removed the KeyboardActions wrapper (and the
+            // keyboard_actions package attempt before it) -- D Von's
+            // direct ask after that didn't fix the underlying symptoms
+            // either: go back to first principles. The caption field
+            // below is multi-line, so it gets a fixed Done button next to
+            // the existing close button here, not a bar tracking the
+            // keyboard.
+            return Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               decoration: BoxDecoration(
                 color: bg,
@@ -986,6 +996,20 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                           ],
                         ),
                         const Spacer(),
+                        GestureDetector(
+                          onTap: () => FocusScope.of(ctx).unfocus(),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              'Done',
+                              style: GoogleFonts.nunitoSans(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF4A8A80),
+                              ),
+                            ),
+                          ),
+                        ),
                         GestureDetector(
                           onTap: () {
                             _videoTimer?.cancel();
@@ -1363,7 +1387,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ),
                 ),
               ),
-              ),
             );
           },
         );
@@ -1724,18 +1747,17 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     return Scaffold(
       backgroundColor: _bg,
       // Aug 19 2026: back to Flutter's default (true). Aug 18's
-      // resizeToAvoidBottomInset: false + manual keyboard padding was a
-      // workaround for the old hand-rolled KeyboardDoneBar, which needed
-      // real, unclipped space behind the keyboard for its bleed to reach
-      // into. keyboard_actions doesn't need that -- it draws its bar in
-      // its own Overlay and inflates MediaQuery.viewInsets itself, so the
-      // Scaffold can go back to resizing normally around the keyboard.
+      // Aug 19 2026: removed the KeyboardActions wrapper (and the package
+      // attempt before it) -- D Von's direct ask after that didn't fix
+      // the underlying symptoms either: go back to first principles. The
+      // multi-line message field now has its own fixed Done row directly
+      // above it (see _buildTextComposer) instead of a bar trying to
+      // track the keyboard.
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
       ),
-      body: KeyboardActions.done(
-        child: Stack(
+      body: Stack(
         children: [
           Positioned.fill(
             child: GestureDetector(
@@ -1802,7 +1824,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           ),
         ],
         ),
-      ),
       floatingActionButton: null,
     );
   }
@@ -2469,7 +2490,30 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildTextComposer() {
-    return TextField(
+    // Aug 19 2026: this field is multi-line (return key stays a line
+    // break), so it gets a small, fixed Done row above it -- a plain part
+    // of this composer's own layout, not a bar floating over the
+    // keyboard. Placed right above the field itself rather than in the
+    // screen's top bar, since that's where attention actually is while
+    // typing.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              'Done',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF4A8A80),
+              ),
+            ),
+          ),
+        ),
+        TextField(
       textCapitalization: TextCapitalization.sentences,
       controller: _messageController,
       focusNode: _textFocusNode,
@@ -2495,6 +2539,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         focusedBorder: InputBorder.none,
         contentPadding: EdgeInsets.zero,
       ),
+        ),
+      ],
     );
   }
 

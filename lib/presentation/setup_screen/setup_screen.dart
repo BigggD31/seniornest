@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:keyboard_actions/keyboard_actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -484,12 +483,15 @@ class _SetupScreenState extends State<SetupScreen>
 
     return Scaffold(
       backgroundColor: _bg,
-      // Aug 19 2026: same keyboard_actions swap as the two modal sheets in
-      // this file -- wraps the whole body now instead of a standalone
-      // KeyboardDoneBarOverlay Stack child, since the package needs to
-      // wrap actual content to discover the fields inside it.
-      body: KeyboardActions.done(
-        child: Stack(
+      // Aug 19 2026: removed the KeyboardActions wrapper entirely. There
+      // are no editable text fields on this screen's main body at all
+      // (birthday/anniversary use date pickers, not TextFields) -- this
+      // wrapper never had anything to do here. Setup's actual fields
+      // (Rename Nest, profile name) live in their own modal sheets below,
+      // are all single-line, and are already wired to the real iOS
+      // keyboard's own Done key (textInputAction + onSubmitted) -- no
+      // custom bar needed for those either. See those sheets' comments.
+      body: Stack(
         children: [
           SafeArea(
         bottom: false,
@@ -522,7 +524,6 @@ class _SetupScreenState extends State<SetupScreen>
               ),
           ),
         ],
-        ),
       ),
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,
@@ -2243,10 +2244,15 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    // Aug 19 2026: same keyboard_actions swap as the Rename Nest sheet --
-    // see that comment for the full reasoning.
-    return KeyboardActions.done(
-      child: Container(
+    // Aug 19 2026: removed the KeyboardActions wrapper. Both fields here
+    // (Your name, Preferred name) are single-line and already wired to
+    // the real iOS keyboard's own Done/Next key via textInputAction +
+    // onSubmitted -- no custom bar needed. D Von's direct ask after the
+    // package swap didn't fix the underlying symptoms on any of the three
+    // screens: go back to first principles instead of a third package
+    // attempt. Native keyboard actions can't desync from the keyboard,
+    // because they ARE the keyboard.
+    return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: EdgeInsets.only(
         left: 24,
@@ -2421,7 +2427,6 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
           ),
         ],
       ),
-    ),
     );
   }
 
@@ -2599,17 +2604,16 @@ class _EditNestSheetState extends State<_EditNestSheet> {
     // through disconnected from this modal's own buttons, or (here) was
     // fully covered and invisible. Wrapping this modal's own content in
     // KeyboardDoneBar makes the bar genuinely part of THIS layer instead.
-    // Aug 19 2026: replaced the custom KeyboardDoneBar with the
-    // keyboard_actions package after that hand-rolled widget's repeated
-    // regressions (corner gaps, drag-follow, Done-tap desync) across many
-    // builds -- D Von's direct ask: find real, maintained code for this
-    // rather than continuing to patch our own. KeyboardActions.done draws
-    // its bar in its own Overlay layer, so it doesn't need this modal's
-    // content to make room for it the way the old widget did -- the
-    // existing bottomPadding-based Container padding below still does its
-    // original job of keeping Save Name clear of the raw keyboard.
-    return KeyboardActions.done(
-      child: GestureDetector(
+    // Aug 19 2026: removed the KeyboardActions wrapper (and the
+    // keyboard_actions package attempt before it). Nest name is a
+    // single-line field, already wired to the real iOS keyboard's own
+    // Done key via textInputAction: TextInputAction.go +
+    // onSubmitted: unfocus() -- no custom bar needed at all. D Von's
+    // direct ask after the package swap didn't fix the underlying
+    // symptoms on any of the three screens: go back to first principles.
+    // Native keyboard actions can't desync from the keyboard, because
+    // they ARE the keyboard.
+    return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -2708,9 +2712,8 @@ class _EditNestSheetState extends State<_EditNestSheet> {
           ),
         ],
       ),
-        ),
       ),
-      );
+    );
   }
 }
 
