@@ -282,7 +282,22 @@ class _MyAppState extends State<MyApp> {
       // HERE, at the actual point of origin, means this branch is decided
       // correctly the first time and splash_screen's competing path (fixed
       // separately) never has a real session left to find.
-      final isSignedIn = await _waitForRestoredUserId() != null;
+      final isSignedIn = hasOnboarded
+          ? await _waitForRestoredUserId() != null
+          // Aug 21 2026: D Von's wife saw a 5-6s black screen before the
+          // grandmother photo on her first-ever launch. Root cause: this
+          // wait polls for up to 2.5s waiting for a session to restore --
+          // legitimately needed for a RETURNING user whose session might
+          // still be loading, but on a device that has never onboarded at
+          // all, there is definitively no session that could ever be
+          // found, so the full 2.5s always ran to completion for nothing.
+          // hasOnboarded is already read locally and instantly just above
+          // -- skipping the wait when it's false only affects devices
+          // that have never signed in before, exactly the population
+          // about to see the intro sequence anyway. Anyone who HAS
+          // onboarded before still gets the full wait, completely
+          // unchanged, so the original fix this protects stays intact.
+          : false;
 
       if (isSignedIn && hasOnboarded) {
         // Signed in and onboarded -- but only let them straight into the
@@ -363,12 +378,25 @@ class _MyAppState extends State<MyApp> {
       // screen already had for everyone, just a different image.
       // BrandedTransitionScreen itself is untouched and still used
       // everywhere else in the app exactly as before.
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: SizedBox.expand(
-          child: Image(
-            image: AssetImage('assets/images/splash_hero_1.png'),
-            fit: BoxFit.cover,
+      //
+      // Aug 21 2026: D Von's follow-up report -- this was showing a
+      // black screen for 5-6 seconds before the photo appeared. Two
+      // causes, both fixed: (1) this used a real Image.asset here, and a
+      // Scaffold with a black background paints before that image
+      // finishes decoding on a cold cache -- black was what was actually
+      // visible during that gap, not the photo. (2) the wait this wraps
+      // was genuinely taking that long for a first-time device -- fixed
+      // above by skipping it entirely when hasOnboarded is false. This
+      // now uses a plain gradient instead of the photo -- D Von's own
+      // suggestion -- since a gradient paints instantly with nothing to
+      // decode, so there's nothing left that could ever flash black
+      // regardless of how long the (now much shorter) wait takes.
+      return const DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE9F1EE), Color(0xFFF3E7C4), Color(0xFFF8E9E1)],
           ),
         ),
       );
