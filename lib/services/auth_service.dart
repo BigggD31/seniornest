@@ -289,6 +289,23 @@ class AuthService {
     // instead, via capture-before-wipe/restore-after -- see the comment
     // there for the full explanation.
     'nest_name', 'nest_id', 'invite_code', 'joined_via_invite',
+    // Aug 21 2026: found while chasing D Von's report of the pin icon
+    // showing up on a member's own page -- cached_is_nest_owner was
+    // missing from this list entirely. Switch from an owner account to a
+    // member account on the same device (D Von's exact testing pattern),
+    // and the member's session would silently inherit the PREVIOUS
+    // account's cached "yes, I'm the owner" flag, since nothing ever
+    // wiped it. main.dart reads this cache directly into
+    // appIsNestOwnerNotifier before the real app ever builds, and
+    // family_feed_screen.dart's pin permission check (_canPinPost) trusts
+    // that notifier completely -- so a stale true here means a real
+    // member sees and can use owner-only pin controls on their own posts,
+    // not just a display glitch. cached_is_vip_member has the identical
+    // gap and the identical risk (a different, non-VIP account silently
+    // inheriting a previous account's paid status on the same device) --
+    // found while checking for siblings of the same bug shape, fixed
+    // here too rather than waiting to be reported separately.
+    'cached_is_nest_owner', 'cached_is_vip_member',
   ];
 
   /// Detects a genuine account switch on this device and wipes every
