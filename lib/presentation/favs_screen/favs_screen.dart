@@ -157,6 +157,20 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
 
   Future<void> _removeBookmark(Map<String, dynamic> item) async {
     final id = item['id'] as String;
+    // Aug 21 2026: found as a duplicate of the same bug already fixed in
+    // family_feed_screen.dart -- a separate, independent copy of this
+    // logic here, not shared code, so that fix didn't carry over
+    // automatically. This used to remove from the local list
+    // unconditionally, even if the actual Supabase delete silently
+    // failed -- local and server state could disagree, with the item
+    // quietly still bookmarked server-side and reappearing next time
+    // favourites loaded fresh. Now only removes locally if the delete
+    // actually succeeds; reverts (re-inserts the item back where it was)
+    // and shows a brief error otherwise.
+    final removedIndex = _bookmarkedItems.indexWhere((e) => e['id'] == id);
+    setState(() {
+      _bookmarkedItems.removeWhere((e) => e['id'] == id);
+    });
     try {
       final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
       if (bookmarkUserId != null) {
@@ -166,10 +180,30 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
             .eq('user_id', bookmarkUserId)
             .eq('item_id', id);
       }
-    } catch (_) {}
-    setState(() {
-      _bookmarkedItems.removeWhere((e) => e['id'] == id);
-    });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          final insertAt = removedIndex >= 0 && removedIndex <= _bookmarkedItems.length
+              ? removedIndex
+              : _bookmarkedItems.length;
+          _bookmarkedItems.insert(insertAt, item);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Couldn\'t remove that -- please try again.',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
+            ),
+            backgroundColor: const Color(0xFFC97B4A),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   @override
