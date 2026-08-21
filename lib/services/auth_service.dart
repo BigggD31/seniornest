@@ -306,6 +306,30 @@ class AuthService {
   /// codebase) must never be mistaken for "a different user," which would
   /// wipe a legitimately-signed-in person's own data for no reason.
   static Future<void> clearStaleAccountDataIfUserChanged({String? knownUserId}) async {
+    // Aug 21 2026: found this is the actual, precise remaining cause of
+    // the 4-5s delay D Von kept seeing before the grandmother photo,
+    // even after the earlier fixes to main.dart's own wait. This
+    // function runs unconditionally as the very first thing on every
+    // cold start, before either of those fixes even get a chance to
+    // matter. getReliableUserId() below (when knownUserId isn't passed)
+    // tries a real refreshSession() network call, and if that comes back
+    // empty, then WAITS UP TO 5 FULL SECONDS for an auth state change
+    // event that will never fire on a device that's never signed in --
+    // there's no sign-in happening for it to detect. hasOnboarded is
+    // already a local, instant read (no network) -- if a device has
+    // never onboarded, there is definitively no session this function
+    // could ever need to protect, so there's nothing to gain by calling
+    // getReliableUserId() at all here. Skips straight to "nothing to
+    // do," matching this function's own existing behavior for an
+    // inconclusive check, just without the 5s wait to get there. Any
+    // device that HAS onboarded before still goes through the exact
+    // same getReliableUserId() call as before, completely unchanged --
+    // this only bypasses it for a device with no prior account at all.
+    if (knownUserId == null) {
+      final prefs = await SharedPreferences.getInstance();
+      final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
+      if (!hasOnboarded) return;
+    }
     final currentUserId = knownUserId ?? await getReliableUserId();
     if (currentUserId == null) {
       // Can't reliably determine who's signed in right now -- do nothing
