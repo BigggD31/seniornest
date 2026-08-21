@@ -93,9 +93,24 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
 
   Future<void> _loadSavedName() async {
     final prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString('display_name') ?? '';
-    final preferredName = prefs.getString('preferred_name') ?? '';
-    final savedNestName = prefs.getString('nest_name') ?? '';
+    // Aug 21 2026: renamed to onboarding-scoped draft keys. These used to
+    // read/write the exact same keys (display_name, preferred_name,
+    // nest_name) that every other already-signed-in screen in the app
+    // trusts as "this device's currently authenticated user's real,
+    // confirmed name" -- meaning simply typing into this screen, even
+    // without ever finishing or submitting onboarding, could silently
+    // overwrite and leak into whatever account was already signed in and
+    // showing elsewhere on the same device. D Von hit this directly:
+    // navigated into onboarding while still signed in as an existing
+    // account, typed a name, never finished -- and that typed name showed
+    // up on the OTHER, already-set-up account's screens. These draft keys
+    // are onboarding's own private in-progress state now; nothing else in
+    // the app reads them. _finishOnboarding() below still writes the
+    // real, shared keys, but only once an account is actually being
+    // confirmed and created, not on every keystroke.
+    final name = prefs.getString('onboarding_draft_display_name') ?? '';
+    final preferredName = prefs.getString('onboarding_draft_preferred_name') ?? '';
+    final savedNestName = prefs.getString('onboarding_draft_nest_name') ?? '';
     final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
     final profileJson = prefs.getString(kProfilePhotoKey);
     // Restore birthday/anniversary saved before the subscribe-screen detour
@@ -150,11 +165,14 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
     }
     // After step 0, navigate to subscribe screen
     if (_currentStep == 0) {
-      // Save name and nest name to SharedPreferences immediately so they persist
+      // Save name and nest name to onboarding's own draft keys immediately
+      // so they persist through the subscribe-screen detour -- see
+      // _loadSavedName's comment for why these are draft-scoped, not the
+      // real shared keys.
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('display_name', _nameController.text.trim());
-      await prefs.setString('preferred_name', _preferredNameController.text.trim());
-      await prefs.setString('nest_name', _nestNameController.text.trim());
+      await prefs.setString('onboarding_draft_display_name', _nameController.text.trim());
+      await prefs.setString('onboarding_draft_preferred_name', _preferredNameController.text.trim());
+      await prefs.setString('onboarding_draft_nest_name', _nestNameController.text.trim());
       // Save birthday/anniversary now so they survive the pushReplacementNamed detour
       if (_birthday != null) {
         await prefs.setString('birthday', _birthday!.toIso8601String());

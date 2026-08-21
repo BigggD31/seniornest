@@ -200,10 +200,12 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         _showError('Please select your relationship');
         return;
       }
-      // Save name immediately so it persists through the subscribe detour
+      // Save name immediately so it persists through the subscribe detour.
+      // Aug 21 2026: renamed to onboarding-scoped draft keys -- see
+      // _savePreferences' comment below for the full reasoning.
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('display_name', _nameController.text.trim());
-      await prefs.setString('preferred_name', _preferredNameController.text.trim());
+      await prefs.setString('onboarding_draft_display_name', _nameController.text.trim());
+      await prefs.setString('onboarding_draft_preferred_name', _preferredNameController.text.trim());
       setState(() => _savedName = _nameController.text.trim());
       // Save birthday/anniversary now so they survive the pushReplacementNamed detour
       if (_birthday != null) {
@@ -267,15 +269,26 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('user_role', 'family');
     // Use controller text if present; fall back to _savedName (set before subscribe detour);
-    // final fallback reads the value already persisted to SharedPreferences before the detour
-    final nameFromPrefs = prefs.getString('display_name') ?? '';
+    // final fallback reads the value already persisted before the detour.
+    // Aug 21 2026: renamed display_name/preferred_name/nest_name here to
+    // onboarding-scoped draft keys. This function runs before the account
+    // is actually created/confirmed (that happens in _finishOnboarding
+    // via a real Supabase upsert) -- it used to write the exact same keys
+    // every other already-signed-in screen in the app trusts as "this
+    // device's currently authenticated user's real, confirmed name."
+    // Simply reaching this step, even without ever finishing onboarding,
+    // could silently overwrite and leak into whatever account was already
+    // signed in and showing elsewhere on the same device -- exactly what
+    // D Von hit. These draft keys are onboarding's own private in-progress
+    // state now; nothing else in the app reads them.
+    final nameFromPrefs = prefs.getString('onboarding_draft_display_name') ?? '';
     final name = _nameController.text.trim().isNotEmpty
         ? _nameController.text.trim()
         : _savedName.isNotEmpty
         ? _savedName
         : nameFromPrefs;
-    await prefs.setString('display_name', name);
-    await prefs.setString('preferred_name', _preferredNameController.text.trim());
+    await prefs.setString('onboarding_draft_display_name', name);
+    await prefs.setString('onboarding_draft_preferred_name', _preferredNameController.text.trim());
     // Guarded by the required-selection check in _nextStep, so this
     // fallback shouldn't fire in practice — but 'other' is used instead
     // of 'Family' as defense-in-depth, since 'Family' is not a valid
@@ -286,7 +299,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     await prefs.setBool('notify_messages', _notifyOnMessages);
     await prefs.setBool('onboarding_complete', true);
     await prefs.setBool('first_load', true);
-    await prefs.setString('nest_name', _nestNameController.text.trim());
+    await prefs.setString('onboarding_draft_nest_name', _nestNameController.text.trim());
     await prefs.setBool('has_onboarded', true);
     if (_birthday != null) {
       await prefs.setString('birthday', _birthday!.toIso8601String());
@@ -478,8 +491,12 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       // is what actually creates the user's profile row, so it needs this
       // even more than the display-only pieces do.
       final userId = await AuthService.getReliableUserId();
-      final name = prefs.getString('display_name') ?? '';
-      final preferredName = prefs.getString('preferred_name') ?? '';
+      // Aug 21 2026: reads from the onboarding-scoped draft keys now,
+      // where the typed name actually lives -- see _savePreferences'
+      // comment above for the full reasoning. The real, shared keys get
+      // written just below, only once this upsert actually succeeds.
+      final name = prefs.getString('onboarding_draft_display_name') ?? '';
+      final preferredName = prefs.getString('onboarding_draft_preferred_name') ?? '';
       final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
       final inviteCode = prefs.getString('invite_code') ?? '';
 
@@ -514,6 +531,15 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
             .maybeSingle();
 
         if (profileCheck != null) {
+          // Aug 21 2026: the account is now genuinely confirmed created --
+          // this is the correct point to write the real, shared
+          // display_name/preferred_name keys that other already-signed-in
+          // screens throughout the app trust, not any earlier point in
+          // the flow where the account might still be abandoned.
+          await prefs.setString('display_name', name);
+          if (preferredName.isNotEmpty) {
+            await prefs.setString('preferred_name', preferredName);
+          }
           // Deferred VIP redemption -- the code was only validated (not
           // consumed) back at invite-code entry, before this account
           // existed. Now that it genuinely does, actually redeem it.
@@ -605,7 +631,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
               // save_messages_prompt_screen.dart, rather than relying on
               // the _savePreferences() cached code, which was never
               // actually wired to this insert in the first place.
-              final nestName = prefs.getString('nest_name') ?? 'Our Nest';
+              final nestName = prefs.getString('onboarding_draft_nest_name') ?? 'Our Nest';
               String? nestId;
               for (int attempt = 0; attempt < 5 && nestId == null; attempt++) {
                 final digits = (100000 + Random().nextInt(900000)).toString();
