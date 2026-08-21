@@ -78,6 +78,19 @@ class _MyAppState extends State<MyApp> {
   StreamSubscription? _sub;
   String _initialRoute = AppRoutes.splashScreen;
   bool _ready = false;
+  // Aug 21 2026: D Von's direct ask -- grandma should be the literal
+  // first thing on screen, unconditionally, for a genuinely new device,
+  // with nothing in front of her at all, not even briefly. This is
+  // resolved separately from (and much faster than) _ready/_resolveInitialRoute
+  // below -- it's a single local boolean read, no network involved, so
+  // it settles in milliseconds rather than however long the full
+  // sign-in/entitlement/membership resolution takes. null = not
+  // resolved yet (the only moment anything placeholder-like shows);
+  // false = a device that's onboarded before, skip the intro sequence
+  // entirely and fall through to the existing gated flow below, exactly
+  // as before; true = never onboarded, show the intro sequence right
+  // now, not gated behind _ready at all.
+  bool? _shouldShowIntro;
 
   void _initDeepLinks() async {
     final appLinks = AppLinks();
@@ -86,9 +99,16 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
+  Future<void> _resolveShouldShowIntro() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
+    if (mounted) setState(() => _shouldShowIntro = !hasOnboarded);
+  }
+
   @override
   void initState() {
     super.initState();
+    _resolveShouldShowIntro();
     _resolveInitialRoute();
     // _initDeepLinks(); // Removed: native Apple Sign-In doesn't need deep links
   }
@@ -360,37 +380,37 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_ready) {
-      // Aug 21 2026: this is the very first thing rendered on cold start,
-      // before _resolveInitialRoute() finishes deciding where to send the
-      // user -- it ran unconditionally for EVERY launch, new or
-      // returning, regardless of what the intro sequence or any route
-      // change was supposed to show first. That's the real reason D Von
-      // kept seeing the gold logo screen first no matter what changed in
-      // app_routes.dart -- this gate runs before any of that ever gets a
-      // chance to build. Shows the same grandmother photo the real intro
-      // sequence opens with (not a separate blank placeholder, not the
-      // gold logo) -- once resolution finishes, if this is a new user the
-      // real IntroSequenceScreen takes over showing the same image, so
-      // there's nothing visually distinct to notice in between. For a
-      // returning user, this briefly shows before their actual
-      // destination loads -- same brief-flash behavior the old gold
-      // screen already had for everyone, just a different image.
-      // BrandedTransitionScreen itself is untouched and still used
-      // everywhere else in the app exactly as before.
-      //
-      // Aug 21 2026: D Von's follow-up report -- this was showing a
-      // black screen for 5-6 seconds before the photo appeared. Two
-      // causes, both fixed: (1) this used a real Image.asset here, and a
-      // Scaffold with a black background paints before that image
-      // finishes decoding on a cold cache -- black was what was actually
-      // visible during that gap, not the photo. (2) the wait this wraps
-      // was genuinely taking that long for a first-time device -- fixed
-      // above by skipping it entirely when hasOnboarded is false. This
-      // now uses a plain gradient instead of the photo -- D Von's own
-      // suggestion -- since a gradient paints instantly with nothing to
-      // decode, so there's nothing left that could ever flash black
-      // regardless of how long the (now much shorter) wait takes.
+    // Aug 21 2026: D Von's direct ask -- grandma should be the literal
+    // first thing on screen for a new device, unconditionally, with
+    // nothing in front of her at all, not even briefly. _shouldShowIntro
+    // resolves separately and much faster than _ready below (a single
+    // local boolean read, no network) -- once it's known true, the real
+    // app builds immediately with AppRoutes.splashScreen hardcoded as
+    // the route, skipping the wait for the rest of _resolveInitialRoute()
+    // to finish entirely. This is safe, not a guess: traced the full
+    // branching below and confirmed a device with hasOnboarded == false
+    // can only ever end up at AppRoutes.splashScreen regardless of what
+    // else that resolution finds -- isSignedIn is unconditionally false
+    // whenever hasOnboarded is false, which eliminates every other
+    // branch. The intro screens themselves (grandma, family photo) don't
+    // read any of the app-wide notifiers _resolveInitialRoute() sets
+    // (dark mode, nest name, etc.), and by the time someone's actually
+    // watched or tapped through both photos, that resolution has almost
+    // always already finished in the background regardless -- so those
+    // notifiers are correctly set well before they'd ever actually be
+    // needed, on the real pitch screen after the photos.
+    if (_shouldShowIntro == true) {
+      return _buildRealApp(AppRoutes.splashScreen);
+    }
+    if (_shouldShowIntro == null || !_ready) {
+      // Aug 21 2026: this now only shows for two much narrower cases
+      // than before: (1) the brief moment before _shouldShowIntro itself
+      // is known (a single local read, milliseconds) and (2) a RETURNING
+      // device (_shouldShowIntro == false) waiting on the full
+      // sign-in/entitlement/membership resolution -- which never shows
+      // the intro photos at all, exactly as before. Plain gradient, not
+      // the photo and not the gold logo -- see the two comments above
+      // this method's prior version for the full history of why.
       return const DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -401,6 +421,10 @@ class _MyAppState extends State<MyApp> {
         ),
       );
     }
+    return _buildRealApp(_initialRoute);
+  }
+
+  Widget _buildRealApp(String initialRoute) {
     return Sizer(
       builder: (context, orientation, screenType) {
         return ValueListenableBuilder<bool>(
@@ -494,7 +518,7 @@ class _MyAppState extends State<MyApp> {
                       },
                     );
                   },
-                  initialRoute: _initialRoute,
+                  initialRoute: initialRoute,
                 );
               },
             );
