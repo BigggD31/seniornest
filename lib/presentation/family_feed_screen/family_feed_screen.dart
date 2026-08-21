@@ -1543,7 +1543,32 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           'item_id': id,
           'item_data': item,
         });
-      } catch (_) {}
+      } catch (_) {
+        // Aug 21 2026: found during a general audit -- this used to fail
+        // completely silently. The optimistic setState above already
+        // marked this bookmarked locally; if the actual server write
+        // fails, local and server state silently disagree (item shows
+        // bookmarked here, isn't really saved, and won't be there next
+        // time favourites loads from Supabase). Reverting the optimistic
+        // update and telling the person keeps what they see honest.
+        if (mounted) {
+          setState(() => _bookmarkedIds.remove(id));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Couldn\'t save that -- please try again.',
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                ),
+              ),
+              backgroundColor: const Color(0xFFC97B4A),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
     } else {
       try {
         await Supabase.instance.client
@@ -1551,7 +1576,26 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             .delete()
             .eq('user_id', bookmarkUserId)
             .eq('item_id', id);
-      } catch (_) {}
+      } catch (_) {
+        // Same fix as above, mirrored for the unbookmark direction.
+        if (mounted) {
+          setState(() => _bookmarkedIds.add(id));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Couldn\'t remove that -- please try again.',
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                ),
+              ),
+              backgroundColor: const Color(0xFFC97B4A),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
     }
   }
 
