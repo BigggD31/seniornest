@@ -385,22 +385,31 @@ class _MyAppState extends State<MyApp> {
     // nothing in front of her at all, not even briefly. _shouldShowIntro
     // resolves separately and much faster than _ready below (a single
     // local boolean read, no network) -- once it's known true, the real
-    // app builds immediately with AppRoutes.splashScreen hardcoded as
-    // the route, skipping the wait for the rest of _resolveInitialRoute()
-    // to finish entirely. This is safe, not a guess: traced the full
+    // app builds immediately with AppRoutes.initial hardcoded as the
+    // route, skipping the wait for the rest of _resolveInitialRoute() to
+    // finish entirely. This is safe, not a guess: traced the full
     // branching below and confirmed a device with hasOnboarded == false
-    // can only ever end up at AppRoutes.splashScreen regardless of what
-    // else that resolution finds -- isSignedIn is unconditionally false
-    // whenever hasOnboarded is false, which eliminates every other
-    // branch. The intro screens themselves (grandma, family photo) don't
-    // read any of the app-wide notifiers _resolveInitialRoute() sets
-    // (dark mode, nest name, etc.), and by the time someone's actually
-    // watched or tapped through both photos, that resolution has almost
-    // always already finished in the background regardless -- so those
-    // notifiers are correctly set well before they'd ever actually be
-    // needed, on the real pitch screen after the photos.
+    // can only ever end up at what AppRoutes.splashScreen resolves to
+    // (the plain pitch screen) regardless of what else that resolution
+    // finds -- isSignedIn is unconditionally false whenever hasOnboarded
+    // is false, which eliminates every other branch. The intro screens
+    // themselves (grandma, family photo) don't read any of the app-wide
+    // notifiers _resolveInitialRoute() sets (dark mode, nest name, etc.),
+    // and by the time someone's actually watched or tapped through both
+    // photos, that resolution has almost always already finished in the
+    // background regardless -- so those notifiers are correctly set well
+    // before they'd ever actually be needed, on the real pitch screen
+    // after the photos.
+    //
+    // AppRoutes.initial (not splashScreen) specifically -- found a real
+    // bug from wiring splashScreen to the intro sequence originally:
+    // sign-out and account deletion (setup_screen.dart), plus two other
+    // existing flows, all explicitly navigate to the named
+    // '/splash-screen' route expecting the plain pitch screen, not the
+    // first-launch intro. Only 'initial' is wired to the intro sequence
+    // now -- see app_routes.dart's comment for the full reasoning.
     if (_shouldShowIntro == true) {
-      return _buildRealApp(AppRoutes.splashScreen);
+      return _buildRealApp(AppRoutes.initial);
     }
     if (_shouldShowIntro == null || !_ready) {
       // Aug 21 2026: this now only shows for two much narrower cases

@@ -44,14 +44,24 @@ class AppRoutes {
   static const String messageThreadScreen = '/message-thread-screen';
 
   static Map<String, WidgetBuilder> routes = {
+    // Aug 21 2026: found a real bug -- D Von signing out landed him back
+    // on the grandmother/family intro photos instead of the plain
+    // pitch screen. Root cause: splashScreen below was ALSO wired to the
+    // intro sequence, but 4 separate existing places in the app
+    // (sign-out and account deletion in setup_screen.dart,
+    // save_messages_prompt_screen.dart, role_choice_screen.dart) all
+    // navigate to this exact named route expecting the plain pitch
+    // screen -- none of them were ever meant to trigger the first-launch
+    // intro. Only 'initial' below stays wired to the intro sequence now,
+    // since that's the only route main.dart's cold-start
+    // _shouldShowIntro logic actually uses. splashScreen goes back to
+    // plain SplashScreen, matching what every one of those 4 existing
+    // call sites has always correctly expected.
     initial: (context) => IntroSequenceScreen(
           imagePaths: const ['assets/images/splash_hero_1.png', 'assets/images/splash_hero_2.png'],
           builder: (context) => const SplashScreen(),
         ),
-    splashScreen: (context) => IntroSequenceScreen(
-          imagePaths: const ['assets/images/splash_hero_1.png', 'assets/images/splash_hero_2.png'],
-          builder: (context) => const SplashScreen(),
-        ),
+    splashScreen: (context) => const SplashScreen(),
     roleChoiceScreen: (context) => const RoleChoiceScreen(),
     seniorOnboardingScreen: (context) => const SeniorOnboardingScreen(),
     familyOnboardingScreen: (context) => const FamilyOnboardingScreen(),
