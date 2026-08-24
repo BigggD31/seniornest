@@ -5169,10 +5169,18 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                             const SizedBox(width: 10),
                             GestureDetector(
                               onTap: () => _confirmDeleteStory(context, widget.isDarkMode),
-                              child: Icon(
-                                Icons.delete_outline_rounded,
-                                size: 20,
-                                color: _textSecondary,
+                              // Aug 21 2026: D Von's direct correction --
+                              // this didn't match Home's delete icon at
+                              // all. Fixed to be identical: same filled
+                              // Icons.delete_rounded (not the outline
+                              // version), same size 22 (not 20), same
+                              // terracotta 0xFFC97B4A D Von specifically
+                              // asked for there -- not the neutral
+                              // _textSecondary this had instead.
+                              child: const Icon(
+                                Icons.delete_rounded,
+                                size: 22,
+                                color: Color(0xFFC97B4A),
                               ),
                             ),
                           ],

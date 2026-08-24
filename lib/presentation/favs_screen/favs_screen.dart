@@ -477,14 +477,23 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
         return AnimatedBuilder(
           animation: _entranceController,
           builder: (context, child) {
-            final anim = CurvedAnimation(
-              parent: _entranceController,
-              curve: Interval(start, end, curve: Curves.easeOutCubic),
-            );
+            // Aug 21 2026: this used to construct a brand new
+            // CurvedAnimation object here every single frame (60/sec)
+            // for every visible item during the entrance animation --
+            // real, wasteful object allocation on a hot path, though it
+            // predates today's grouping work rather than being
+            // introduced by it. Replaced with direct math against the
+            // controller's own value -- same visual curve and timing,
+            // no per-frame allocation at all.
+            final t = end > start
+                ? ((_entranceController.value - start) / (end - start))
+                    .clamp(0.0, 1.0)
+                : 1.0;
+            final value = Curves.easeOutCubic.transform(t);
             return Opacity(
-              opacity: anim.value,
+              opacity: value,
               child: Transform.translate(
-                offset: Offset(0, 20 * (1 - anim.value)),
+                offset: Offset(0, 20 * (1 - value)),
                 child: child,
               ),
             );
