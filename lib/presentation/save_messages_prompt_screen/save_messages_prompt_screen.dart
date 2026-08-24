@@ -181,7 +181,22 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             preferredName = supabasePreferredName;
             await prefs.setString('preferred_name', preferredName);
           }
-          if (supabaseRole.isNotEmpty && supabaseRole != 'senior') {
+          if (supabaseRole.isNotEmpty && supabaseRole != role) {
+            // Aug 21 2026: found the real, precise cause of D Von's dead
+            // Answer-button report. This used to be
+            // `supabaseRole != 'senior'` -- meaning a sign-in only ever
+            // updated the local cache when the real role was 'family',
+            // and silently left it untouched whenever the real role was
+            // 'senior'. That's backwards: it correctly refreshed the
+            // cache when signing INTO a family account, but never
+            // refreshed it when signing back INTO a senior account,
+            // leaving 'family' (set moments earlier during that
+            // family member's own onboarding, on the same device)
+            // permanently stuck for the senior's own session -- even
+            // though the senior had genuinely signed in fresh. Now
+            // compares against the actual current local value instead,
+            // so a real, confirmed role from the server always wins,
+            // regardless of which specific role it happens to be.
             role = supabaseRole;
             await prefs.setString('user_role', role);
           }

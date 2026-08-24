@@ -262,23 +262,17 @@ class AuthService {
     'has_real_post', 'has_sent_messages',
     'has_sent_stories', 'removed_member_ids',
     'story_prompts',
-    // Aug 21 2026: found this genuinely missing while investigating
-    // D Von's report of a suggested question's "Answer" button doing
-    // nothing at all when tapped, on the senior's own account. Root
-    // cause: user_role drives appIsSeniorNotifier (main.dart) AND is
-    // independently re-read by legacy_screen.dart itself -- per that
-    // second read site's own comment, "isSenior was independently
-    // duplicated across 5 screens, all deriving it from this same prefs
-    // key." With user_role missing from this list, switching from a
-    // family member account to the senior account on the same device
-    // (D Von's exact testing pattern) left the senior's session reading
-    // a leftover 'family' value -- rendering Legacy's answer-a-prompt
-    // card in its read-only, non-interactive family view even though
-    // the actual signed-in user was genuinely the senior. Same root
-    // bug class as cached_is_nest_owner and cached_is_vip_member, found
-    // and fixed earlier today -- this is the third occurrence of the
-    // identical gap shape, just on a different key.
-    'user_role',
+    // Aug 21 2026: reverted adding user_role here -- D Von correctly
+    // pushed back that this wasn't a new build-203 issue, and checking
+    // git history confirmed he was right. user_role was deliberately
+    // excluded from this list in an Aug 9 commit (63cf61e), for a real,
+    // documented reason: it gets actively set DURING the invite-code/
+    // onboarding flow, before sign-in fully completes, and wiping it
+    // broke a family member's fresh onboarding (they ended up looking
+    // like the nest owner mid-signup). Re-adding it would have risked
+    // reintroducing that exact bug while not actually explaining what's
+    // different about build 203. The real cause of the dead Answer
+    // button is still being investigated.
     'cached_nest_members', 'cached_nest_members_nest_id', 'cached_nest_members_user_id',
     'cached_real_messages', 'cached_real_messages_nest_id',
     // cached_checkin_* deliberately excluded -- "has the senior checked in
