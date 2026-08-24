@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
 import '../../widgets/keyboard_done_bar.dart';
+import '../../widgets/collapsible_date_group_header.dart';
 import '../../routes/app_routes.dart';
 import './widgets/feed_empty_state_widget.dart';
 import './widgets/feed_top_bar_widget.dart';
@@ -209,6 +210,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   static bool _topCardsAnimatedOnceThisSession = false;
   final List<Animation<double>> _itemAnimations = [];
   final ScrollController _scrollController = ScrollController();
+  // Aug 21 2026: collapsible year/month grouping -- which groups are
+  // currently collapsed, keyed 'year-2026' / 'month-2026-8'. In-memory
+  // only (not persisted), so it resets to fully-expanded each fresh
+  // session, matching how collapse state works elsewhere in the app
+  // (e.g. Setup's expandable sections).
+  final Set<String> _collapsedGroupKeys = {};
 
   // ── Mock Data Maps ─────────────────────────────────────────────
   static final List<Map<String, dynamic>> _messageMaps = [
@@ -2003,13 +2010,91 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     );
   }
 
+  // Aug 21 2026: collapsible year/month grouping for Home's feed.
+  // Pinned messages stay exactly as they were -- ungrouped, at the top,
+  // in their existing pin-slot order -- since a pinned post shouldn't
+  // collapse into "August 2026" along with everything else. Only the
+  // remaining, non-pinned messages get grouped. animIndex on every
+  // message-carrying entry is that message's ORIGINAL index in
+  // _messages, preserved through grouping so heart-toggling and the
+  // entrance animation (both keyed to the original flat index) keep
+  // working exactly as before -- grouping only changes what's rendered
+  // and in what order, not the underlying indexing either of those
+  // already depended on.
+  List<_HomeListEntry> _buildHomeListEntries() {
+    final entries = <_HomeListEntry>[];
+    final unpinned = <MessageModel>[];
+    final originalIndex = <MessageModel, int>{};
+    for (int i = 0; i < _messages.length; i++) {
+      final m = _messages[i];
+      originalIndex[m] = i;
+      if (m.pinnedPosition != null) {
+        entries.add(_HomeListEntry.message(m, i));
+      } else {
+        unpinned.add(m);
+      }
+    }
+    final groups = groupByYearMonth<MessageModel>(
+      unpinned,
+      (m) => m.timestamp,
+    );
+    for (final yearGroup in groups) {
+      final yearKey = 'year-${yearGroup.year}';
+      final yearCount = yearGroup.months.fold<int>(
+        0,
+        (sum, mg) => sum + mg.items.length,
+      );
+      entries.add(
+        _HomeListEntry.yearHeader('${yearGroup.year}', yearCount, yearKey),
+      );
+      if (_collapsedGroupKeys.contains(yearKey)) continue;
+      for (final monthGroup in yearGroup.months) {
+        final monthKey = 'month-${yearGroup.year}-${monthGroup.month}';
+        entries.add(
+          _HomeListEntry.monthHeader(
+            kMonthNames[monthGroup.month - 1],
+            monthGroup.items.length,
+            monthKey,
+          ),
+        );
+        if (_collapsedGroupKeys.contains(monthKey)) continue;
+        for (final m in monthGroup.items) {
+          entries.add(_HomeListEntry.message(m, originalIndex[m]!));
+        }
+      }
+    }
+    return entries;
+  }
+
   Widget _buildPhoneList() {
+    final entries = _buildHomeListEntries();
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate((context, index) {
-          final anim = index < _itemAnimations.length
-              ? _itemAnimations[index]
+          final entry = entries[index];
+          if (entry.kind == _HomeEntryKind.yearHeader ||
+              entry.kind == _HomeEntryKind.monthHeader) {
+            return CollapsibleGroupHeader(
+              label: entry.headerLabel!,
+              itemCount: entry.headerCount!,
+              isCollapsed: _collapsedGroupKeys.contains(entry.groupKey),
+              isDarkMode: _isDarkMode,
+              isYear: entry.kind == _HomeEntryKind.yearHeader,
+              onToggle: () {
+                setState(() {
+                  if (_collapsedGroupKeys.contains(entry.groupKey)) {
+                    _collapsedGroupKeys.remove(entry.groupKey);
+                  } else {
+                    _collapsedGroupKeys.add(entry.groupKey!);
+                  }
+                });
+              },
+            );
+          }
+          final msgIndex = entry.animIndex!;
+          final anim = msgIndex < _itemAnimations.length
+              ? _itemAnimations[msgIndex]
               : const AlwaysStoppedAnimation(1.0);
           return AnimatedBuilder(
             animation: anim,
@@ -2020,23 +2105,23 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             child: Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: MessageCardWidget(
-                key: ValueKey(_messages[index].id),
-                message: _messages[index],
+                key: ValueKey(entry.message!.id),
+                message: entry.message!,
                 isDarkMode: _isDarkMode,
-                onHeart: () => _toggleHeart(index),
-                isBookmarked: _bookmarkedIds.contains(_messages[index].id),
-                onBookmark: () => _toggleBookmark(_messages[index]),
-                senderAvatarJson: _messages[index].senderAvatarJson,
-                canDelete: _canDeletePost(_messages[index]),
-                onDelete: () => _deletePost(_messages[index].id),
-                canPin: _canPinPost(_messages[index]),
+                onHeart: () => _toggleHeart(msgIndex),
+                isBookmarked: _bookmarkedIds.contains(entry.message!.id),
+                onBookmark: () => _toggleBookmark(entry.message!),
+                senderAvatarJson: entry.message!.senderAvatarJson,
+                canDelete: _canDeletePost(entry.message!),
+                onDelete: () => _deletePost(entry.message!.id),
+                canPin: _canPinPost(entry.message!),
                 occupiedPinSlots: _occupiedPinSlots,
                 onPinSlotChosen: (slot) =>
-                    _setPinSlot(_messages[index], slot),
+                    _setPinSlot(entry.message!, slot),
               ),
             ),
           );
-        }, childCount: _messages.length),
+        }, childCount: entries.length),
       ),
     );
   }
@@ -2369,3 +2454,35 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     );
   }
 }
+
+// Aug 21 2026: flattened entry type for Home's grouped feed list -- a
+// single ordered list can mix real message cards with year/month header
+// pills, letting one SliverList render both instead of needing separate
+// slivers stitched together.
+enum _HomeEntryKind { message, yearHeader, monthHeader }
+
+class _HomeListEntry {
+  _HomeListEntry.message(this.message, this.animIndex)
+      : kind = _HomeEntryKind.message,
+        headerLabel = null,
+        headerCount = null,
+        groupKey = null;
+
+  _HomeListEntry.yearHeader(this.headerLabel, this.headerCount, this.groupKey)
+      : kind = _HomeEntryKind.yearHeader,
+        message = null,
+        animIndex = null;
+
+  _HomeListEntry.monthHeader(this.headerLabel, this.headerCount, this.groupKey)
+      : kind = _HomeEntryKind.monthHeader,
+        message = null,
+        animIndex = null;
+
+  final _HomeEntryKind kind;
+  final MessageModel? message;
+  final int? animIndex;
+  final String? headerLabel;
+  final int? headerCount;
+  final String? groupKey;
+}
+
