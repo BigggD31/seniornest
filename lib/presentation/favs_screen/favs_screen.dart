@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
 import '../../widgets/linkified_text.dart';
+import '../../widgets/collapsible_date_group_header.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
@@ -32,6 +33,9 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
   String _displayName = '';
   List<Map<String, dynamic>> _bookmarkedItems = [];
   bool _sampleBannerDismissed = false;
+  // Aug 21 2026: collapsible year/month grouping, same shared component
+  // and same in-memory-only collapse state already used on Home/Legacy.
+  final Set<String> _collapsedGroupKeys = {};
 
   late AnimationController _entranceController;
 
@@ -427,6 +431,15 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
       return _buildCategoryEmptyState(_selectedCategory);
     }
 
+    // Aug 21 2026: collapsible year/month grouping, same shared
+    // groupByYearMonth utility and CollapsibleGroupHeader pill already
+    // proven on Home/Legacy. Real bookmarked items have a real ISO
+    // timestamp; this screen's own demo/placeholder items (shown only
+    // when there are zero real bookmarks) have a non-parseable display
+    // string instead ('Example · Text Memory') -- those simply fall
+    // through groupByYearMonth's null handling and show ungrouped,
+    // rather than crashing or needing special-casing here.
+    final entries = _buildFavsListEntries(items);
     return ListView.builder(
       padding: EdgeInsets.fromLTRB(
         isTablet ? 28 : 20,
@@ -434,14 +447,36 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
         isTablet ? 28 : 20,
         100,
       ),
-      itemCount: items.length,
+      itemCount: entries.length,
       itemBuilder: (context, index) {
-        final item = items[index];
+        final entry = entries[index];
+        final start = (index * 0.1).clamp(0.0, 0.7);
+        final end = (start + 0.4).clamp(0.0, 1.0);
+        Widget child;
+        if (entry.kind == _FavsEntryKind.yearHeader ||
+            entry.kind == _FavsEntryKind.monthHeader) {
+          child = CollapsibleGroupHeader(
+            label: entry.headerLabel!,
+            itemCount: entry.headerCount!,
+            isCollapsed: _collapsedGroupKeys.contains(entry.groupKey),
+            isDarkMode: _isDarkMode,
+            isYear: entry.kind == _FavsEntryKind.yearHeader,
+            onToggle: () {
+              setState(() {
+                if (_collapsedGroupKeys.contains(entry.groupKey)) {
+                  _collapsedGroupKeys.remove(entry.groupKey);
+                } else {
+                  _collapsedGroupKeys.add(entry.groupKey!);
+                }
+              });
+            },
+          );
+        } else {
+          child = _buildMemoryCard(entry.item!, isTablet);
+        }
         return AnimatedBuilder(
           animation: _entranceController,
           builder: (context, child) {
-            final start = (index * 0.1).clamp(0.0, 0.7);
-            final end = (start + 0.4).clamp(0.0, 1.0);
             final anim = CurvedAnimation(
               parent: _entranceController,
               curve: Interval(start, end, curve: Curves.easeOutCubic),
@@ -454,10 +489,55 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
               ),
             );
           },
-          child: _buildMemoryCard(item, isTablet),
+          child: child,
         );
       },
     );
+  }
+
+  List<_FavsListEntry> _buildFavsListEntries(List<Map<String, dynamic>> items) {
+    final groups = groupByYearMonth<Map<String, dynamic>>(
+      items,
+      (item) => DateTime.tryParse(item['timestamp'] as String? ?? ''),
+    );
+    final grouped = <Map<String, dynamic>>{};
+    for (final yg in groups) {
+      for (final mg in yg.months) {
+        grouped.addAll(mg.items);
+      }
+    }
+    final entries = <_FavsListEntry>[];
+    for (final item in items) {
+      if (!grouped.contains(item)) {
+        entries.add(_FavsListEntry.item(item));
+      }
+    }
+    for (final yearGroup in groups) {
+      final yearKey = 'year-${yearGroup.year}';
+      final yearCount = yearGroup.months.fold<int>(
+        0,
+        (sum, mg) => sum + mg.items.length,
+      );
+      entries.add(
+        _FavsListEntry.yearHeader('${yearGroup.year}', yearCount, yearKey),
+      );
+      if (_collapsedGroupKeys.contains(yearKey)) continue;
+      for (final monthGroup in yearGroup.months) {
+        final monthKey = 'month-${yearGroup.year}-${monthGroup.month}';
+        entries.add(
+          _FavsListEntry.monthHeader(
+            kMonthNames[monthGroup.month - 1],
+            monthGroup.items.length,
+            monthKey,
+          ),
+        );
+        if (_collapsedGroupKeys.contains(monthKey)) continue;
+        for (final item in monthGroup.items) {
+          entries.add(_FavsListEntry.item(item));
+        }
+      }
+    }
+    return entries;
   }
 
   Widget _buildAllCategoriesView(bool isTablet) {
@@ -1539,4 +1619,30 @@ class _FavsVideoPlayer extends StatelessWidget {
       ),
     );
   }
+}
+
+// Aug 21 2026: flattened entry type for Favs' grouped list -- same
+// pattern as _HomeListEntry/_LegacyListEntry.
+enum _FavsEntryKind { item, yearHeader, monthHeader }
+
+class _FavsListEntry {
+  _FavsListEntry.item(this.item)
+      : kind = _FavsEntryKind.item,
+        headerLabel = null,
+        headerCount = null,
+        groupKey = null;
+
+  _FavsListEntry.yearHeader(this.headerLabel, this.headerCount, this.groupKey)
+      : kind = _FavsEntryKind.yearHeader,
+        item = null;
+
+  _FavsListEntry.monthHeader(this.headerLabel, this.headerCount, this.groupKey)
+      : kind = _FavsEntryKind.monthHeader,
+        item = null;
+
+  final _FavsEntryKind kind;
+  final Map<String, dynamic>? item;
+  final String? headerLabel;
+  final int? headerCount;
+  final String? groupKey;
 }
