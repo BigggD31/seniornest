@@ -491,11 +491,29 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       // is what actually creates the user's profile row, so it needs this
       // even more than the display-only pieces do.
       final userId = await AuthService.getReliableUserId();
-      // Aug 21 2026: reads from the onboarding-scoped draft keys now,
-      // where the typed name actually lives -- see _savePreferences'
-      // comment above for the full reasoning. The real, shared keys get
-      // written just below, only once this upsert actually succeeds.
-      final name = prefs.getString('onboarding_draft_display_name') ?? '';
+      // Aug 21 2026: found a real regression from this morning's own fix
+      // (the cross-account name-leak fix, commit 89fc457). This used to
+      // read ONLY the draft key directly, with nothing to fall back on
+      // if it happened to be empty at this exact moment -- unlike
+      // _savePreferences above, which already correctly falls back
+      // through the live controller text and _savedName first. D Von
+      // hit this directly: a family member's profile ended up with a
+      // genuinely empty display_name in the real database, which meant
+      // _loadNestMembers() (family_feed_screen.dart) skipped them
+      // entirely as unnamed, leaving the SENIOR's avatar tray showing
+      // placeholder avatars instead of that family member -- looked
+      // exactly like the avatar tray itself had broken, but the real
+      // cause was upstream, at the moment the name was actually
+      // submitted. Now uses the same robust fallback chain
+      // _savePreferences already proved correct, so the live typed name
+      // is always used regardless of whether the draft key happened to
+      // be written yet.
+      final nameFromDraftKey = prefs.getString('onboarding_draft_display_name') ?? '';
+      final name = _nameController.text.trim().isNotEmpty
+          ? _nameController.text.trim()
+          : _savedName.isNotEmpty
+              ? _savedName
+              : nameFromDraftKey;
       final preferredName = prefs.getString('onboarding_draft_preferred_name') ?? '';
       final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
       final inviteCode = prefs.getString('invite_code') ?? '';
