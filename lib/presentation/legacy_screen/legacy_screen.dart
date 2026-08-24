@@ -17,6 +17,7 @@ import '../../widgets/app_navigation.dart';
 import '../../widgets/linkified_text.dart';
 import '../../widgets/share_preview_widget.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
+import '../../widgets/collapsible_date_group_header.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../core/app_state.dart';
 
@@ -37,6 +38,9 @@ class _LegacyScreenState extends State<LegacyScreen>
   // notifier Home uses, not a hardcoded false.
   final bool _isNestOwner = appIsNestOwnerNotifier.value;
   Set<String> _removedMemberIds = {};
+  // Aug 21 2026: collapsible year/month grouping, same shared component
+  // and same in-memory-only collapse state already used on Home.
+  final Set<String> _collapsedGroupKeys = {};
   // Seeded from the already-resolved app-wide notifier instead of a
   // hardcoded false -- see messages_inbox_screen.dart for the full
   // explanation of the white-flash bug this fixes.
@@ -817,43 +821,7 @@ class _LegacyScreenState extends State<LegacyScreen>
                               child: _buildPromptSection(isTablet),
                             ),
                           ],
-                          _filteredStories.isEmpty
-                              ? SliverFillRemaining(
-                                  hasScrollBody: false,
-                                  child: _buildEmptyState(),
-                                )
-                              : SliverList(
-                                  delegate: SliverChildBuilderDelegate((
-                                    context,
-                                    index,
-                                  ) {
-                                    final animIndex =
-                                        index +
-                                        (_isSenior ? _prompts.length : 0);
-                                    final anim =
-                                        animIndex < _itemAnimations.length
-                                        ? _itemAnimations[animIndex]
-                                        : const AlwaysStoppedAnimation(1.0);
-                                    return AnimatedBuilder(
-                                      animation: anim,
-                                      builder: (context, child) => Opacity(
-                                        opacity: anim.value,
-                                        child: Transform.translate(
-                                          offset: Offset(
-                                            0,
-                                            20 * (1 - anim.value),
-                                          ),
-                                          child: child,
-                                        ),
-                                      ),
-                                      child: _buildStoryCard(
-                                        _filteredStories[index],
-                                        index,
-                                        isTablet,
-                                      ),
-                                    );
-                                  }, childCount: _filteredStories.length),
-                                ),
+                          ..._buildLegacyGroupedSlivers(isTablet),
                           const SliverPadding(
                             padding: EdgeInsets.only(bottom: 100),
                           ),
@@ -1406,6 +1374,115 @@ class _LegacyScreenState extends State<LegacyScreen>
         ],
       ),
     );
+  }
+
+  // Aug 21 2026: collapsible year/month grouping for Legacy's story list,
+  // same shared groupByYearMonth utility and CollapsibleGroupHeader
+  // pill already proven on Home. Returns a list of sliver widgets (one
+  // element) so it can be spread directly into the outer CustomScrollView's
+  // slivers list -- either the existing empty state, or one SliverList
+  // covering headers + story cards flattened together.
+  List<Widget> _buildLegacyGroupedSlivers(bool isTablet) {
+    if (_filteredStories.isEmpty) {
+      return [
+        SliverFillRemaining(hasScrollBody: false, child: _buildEmptyState()),
+      ];
+    }
+    final entries = _buildLegacyListEntries();
+    return [
+      SliverList(
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final entry = entries[index];
+          if (entry.kind == _LegacyEntryKind.yearHeader ||
+              entry.kind == _LegacyEntryKind.monthHeader) {
+            return CollapsibleGroupHeader(
+              label: entry.headerLabel!,
+              itemCount: entry.headerCount!,
+              isCollapsed: _collapsedGroupKeys.contains(entry.groupKey),
+              isDarkMode: _isDarkMode,
+              isYear: entry.kind == _LegacyEntryKind.yearHeader,
+              onToggle: () {
+                setState(() {
+                  if (_collapsedGroupKeys.contains(entry.groupKey)) {
+                    _collapsedGroupKeys.remove(entry.groupKey);
+                  } else {
+                    _collapsedGroupKeys.add(entry.groupKey!);
+                  }
+                });
+              },
+            );
+          }
+          final storyIndex = entry.originalIndex!;
+          final animIndex = storyIndex + (_isSenior ? _prompts.length : 0);
+          final anim = animIndex < _itemAnimations.length
+              ? _itemAnimations[animIndex]
+              : const AlwaysStoppedAnimation(1.0);
+          return AnimatedBuilder(
+            animation: anim,
+            builder: (context, child) => Opacity(
+              opacity: anim.value,
+              child: Transform.translate(
+                offset: Offset(0, 20 * (1 - anim.value)),
+                child: child,
+              ),
+            ),
+            child: _buildStoryCard(entry.story!, storyIndex, isTablet),
+          );
+        }, childCount: entries.length),
+      ),
+    ];
+  }
+
+  List<_LegacyListEntry> _buildLegacyListEntries() {
+    final originalIndex = <Map<String, dynamic>, int>{};
+    for (int i = 0; i < _filteredStories.length; i++) {
+      originalIndex[_filteredStories[i]] = i;
+    }
+    final groups = groupByYearMonth<Map<String, dynamic>>(
+      _filteredStories,
+      (s) => DateTime.tryParse(s['date'] as String? ?? ''),
+    );
+    // Stories groupByYearMonth couldn't parse a date for are excluded
+    // from grouping -- shown first, ungrouped, so nothing silently
+    // disappears rather than being invisible.
+    final grouped = <Map<String, dynamic>>{};
+    for (final yg in groups) {
+      for (final mg in yg.months) {
+        grouped.addAll(mg.items);
+      }
+    }
+    final entries = <_LegacyListEntry>[];
+    for (final s in _filteredStories) {
+      if (!grouped.contains(s)) {
+        entries.add(_LegacyListEntry.story(s, originalIndex[s]!));
+      }
+    }
+    for (final yearGroup in groups) {
+      final yearKey = 'year-${yearGroup.year}';
+      final yearCount = yearGroup.months.fold<int>(
+        0,
+        (sum, mg) => sum + mg.items.length,
+      );
+      entries.add(
+        _LegacyListEntry.yearHeader('${yearGroup.year}', yearCount, yearKey),
+      );
+      if (_collapsedGroupKeys.contains(yearKey)) continue;
+      for (final monthGroup in yearGroup.months) {
+        final monthKey = 'month-${yearGroup.year}-${monthGroup.month}';
+        entries.add(
+          _LegacyListEntry.monthHeader(
+            kMonthNames[monthGroup.month - 1],
+            monthGroup.items.length,
+            monthKey,
+          ),
+        );
+        if (_collapsedGroupKeys.contains(monthKey)) continue;
+        for (final s in monthGroup.items) {
+          entries.add(_LegacyListEntry.story(s, originalIndex[s]!));
+        }
+      }
+    }
+    return entries;
   }
 
   Widget _buildStoryCard(Map<String, dynamic> story, int index, bool isTablet) {
@@ -5225,4 +5302,33 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
       ),
     );
   }
+}
+
+// Aug 21 2026: flattened entry type for Legacy's grouped story list --
+// same pattern as _HomeListEntry in family_feed_screen.dart.
+enum _LegacyEntryKind { story, yearHeader, monthHeader }
+
+class _LegacyListEntry {
+  _LegacyListEntry.story(this.story, this.originalIndex)
+      : kind = _LegacyEntryKind.story,
+        headerLabel = null,
+        headerCount = null,
+        groupKey = null;
+
+  _LegacyListEntry.yearHeader(this.headerLabel, this.headerCount, this.groupKey)
+      : kind = _LegacyEntryKind.yearHeader,
+        story = null,
+        originalIndex = null;
+
+  _LegacyListEntry.monthHeader(this.headerLabel, this.headerCount, this.groupKey)
+      : kind = _LegacyEntryKind.monthHeader,
+        story = null,
+        originalIndex = null;
+
+  final _LegacyEntryKind kind;
+  final Map<String, dynamic>? story;
+  final int? originalIndex;
+  final String? headerLabel;
+  final int? headerCount;
+  final String? groupKey;
 }
