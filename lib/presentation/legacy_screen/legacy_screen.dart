@@ -228,14 +228,17 @@ class _LegacyScreenState extends State<LegacyScreen>
         profileData = jsonDecode(profileJson) as Map<String, dynamic>;
       } catch (_) {}
     }
-    // Load persisted story prompts
-    final promptsJson = prefs.getString('story_prompts');
+    // Aug 21 2026: removed the local-only 'story_prompts' cache read
+    // that used to live here -- that's the actual bug D Von found
+    // (suggested questions never reaching a different device/account,
+    // since this never touched the server at all). Real prompts now
+    // load from Supabase further down in this same function, alongside
+    // the stories fetch. Kept List<String> loadedPrompts as an empty
+    // starting point rather than removing the field entirely, so the
+    // widget shows nothing until the real fetch completes rather than
+    // briefly flashing whatever this device's local storage happened to
+    // have lying around from a previous account.
     List<String> loadedPrompts = [];
-    if (promptsJson != null) {
-      try {
-        loadedPrompts = List<String>.from(jsonDecode(promptsJson) as List);
-      } catch (_) {}
-    }
     // Load bookmark state for stories
     final bookmarksJson = prefs.getString('bookmarks');
     Set<String> bookmarkedIds = {};
@@ -442,6 +445,31 @@ class _LegacyScreenState extends State<LegacyScreen>
           _setupAnimations();
           await prefs.setString('cached_legacy_stories', jsonEncode(realStories));
           await prefs.setString('cached_legacy_stories_user_id', userId);
+        }
+
+        // Aug 21 2026: real fix for Suggest a Question, which used to be
+        // entirely local-only (SharedPreferences 'story_prompts'), never
+        // actually reaching the server -- a family member's suggestion
+        // could never genuinely reach the senior's own separate device.
+        // Reuses the nestId already resolved above for the stories fetch.
+        if (nestId.isNotEmpty) {
+          try {
+            final promptRows = await supabase
+                .from('legacy_story_prompts')
+                .select('prompt_text')
+                .eq('nest_id', nestId)
+                .order('created_at', ascending: false);
+            final realPrompts = (promptRows as List<dynamic>)
+                .map((r) => r['prompt_text'] as String)
+                .toList();
+            if (mounted) {
+              setState(() {
+                _submittedPrompts = realPrompts;
+              });
+            }
+          } catch (e) {
+            debugPrint('LEGACY PROMPTS LOAD ERROR: $e');
+          }
         }
       }
     } catch (e) {
@@ -1773,13 +1801,55 @@ class _LegacyScreenState extends State<LegacyScreen>
       builder: (ctx) => _SuggestQuestionSheet(
         isDarkMode: _isDarkMode,
         onPromptSubmitted: (prompt) async {
-          final prefs = await SharedPreferences.getInstance();
+          // Aug 21 2026: real fix -- this used to write only to local
+          // SharedPreferences, meaning a family member's suggested
+          // question could never actually reach the senior's own
+          // separate device. Now inserts into legacy_story_prompts, the
+          // same nest-scoped table structure already proven correct by
+          // legacy_entries.
           final updated = [prompt, ..._submittedPrompts];
-          await prefs.setString('story_prompts', jsonEncode(updated));
           if (mounted) {
             setState(() {
               _submittedPrompts = updated;
             });
+          }
+          try {
+            final supabase = Supabase.instance.client;
+            final userId = supabase.auth.currentUser?.id ??
+                supabase.auth.currentSession?.user.id;
+            final prefs = await SharedPreferences.getInstance();
+            final nestId = prefs.getString('nest_id') ?? '';
+            if (userId == null || nestId.isEmpty) {
+              throw Exception('Missing userId or nestId');
+            }
+            await supabase.from('legacy_story_prompts').insert({
+              'nest_id': nestId,
+              'suggested_by': userId,
+              'prompt_text': prompt,
+            });
+          } catch (e) {
+            debugPrint('LEGACY PROMPT SUBMIT ERROR: $e');
+            if (mounted) {
+              setState(() {
+                _submittedPrompts = _submittedPrompts
+                    .where((p) => p != prompt)
+                    .toList();
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Couldn\'t send that -- please try again.',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                  ),
+                  backgroundColor: const Color(0xFFC97B4A),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
           }
         },
       ),
@@ -1842,9 +1912,28 @@ class _LegacyScreenState extends State<LegacyScreen>
   }
 
   Future<void> _removeAnsweredPrompt(String prompt) async {
-    final prefs = await SharedPreferences.getInstance();
     final updated = _submittedPrompts.where((p) => p != prompt).toList();
-    await prefs.setString('story_prompts', jsonEncode(updated));
+    // Aug 21 2026: real fix -- deletes the answered prompt from
+    // legacy_story_prompts now, not just local storage, so it's
+    // genuinely gone for every device/account viewing this nest, not
+    // just this one. Matches by nest_id + prompt_text since the client
+    // only ever had the suggested text, not a stored row id -- fine for
+    // this feature (a duplicate identical suggestion being cleared
+    // together isn't a real problem here).
+    try {
+      final supabase = Supabase.instance.client;
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isNotEmpty) {
+        await supabase
+            .from('legacy_story_prompts')
+            .delete()
+            .eq('nest_id', nestId)
+            .eq('prompt_text', prompt);
+      }
+    } catch (e) {
+      debugPrint('LEGACY PROMPT DELETE ERROR: $e');
+    }
     // Add a completed story to the stories list
     final now = DateTime.now();
     final dateStr =
