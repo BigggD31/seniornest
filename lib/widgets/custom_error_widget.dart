@@ -57,7 +57,17 @@ class CustomErrorWidget extends StatelessWidget {
                     if (canBeBack) {
                       Navigator.of(context).pop();
                     } else {
-                      Navigator.pushNamed(context, AppRoutes.initial);
+                      // Aug 21 2026: found while auditing every
+                      // navigation to AppRoutes.initial after the
+                      // sign-out bug -- this error-recovery fallback had
+                      // the identical problem. AppRoutes.initial is now
+                      // wired to the first-launch intro sequence
+                      // (grandma/family photos), which is wrong here too
+                      // -- someone hitting an error mid-session and
+                      // tapping "go back" should land on the plain pitch
+                      // screen, not be shown marketing photos meant only
+                      // for a genuinely new device's very first launch.
+                      Navigator.pushNamed(context, AppRoutes.splashScreen);
                     }
                   },
                   icon: const Icon(

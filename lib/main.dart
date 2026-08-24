@@ -18,6 +18,7 @@ import './services/auth_service.dart';
 import './services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import './widgets/custom_error_widget.dart';
+import './widgets/branded_transition_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -101,8 +102,21 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _resolveShouldShowIntro() async {
     final prefs = await SharedPreferences.getInstance();
-    final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
-    if (mounted) setState(() => _shouldShowIntro = !hasOnboarded);
+    // Aug 21 2026: fixed a real, deeper mistake -- this used to read
+    // has_onboarded, which turned out to NOT be a "has this device ever
+    // launched before" flag at all. It's account-scoped: it's already in
+    // AuthService's account-switch clearing list, and it's also
+    // deliberately reset to false elsewhere (banned-account handling in
+    // save_messages_prompt_screen.dart). So every sign-out, account
+    // switch, or account deletion reset it -- and the intro sequence
+    // came back on the next launch, even on a device that had genuinely
+    // seen it many times before. has_seen_intro_sequence is a new,
+    // separate, deliberately device-scoped flag -- NOT included in any
+    // account-clearing list anywhere, set exactly once the first time
+    // the intro sequence actually finishes (see IntroSequenceScreen's
+    // onComplete below), and never reset after that for any reason.
+    final hasSeenIntro = prefs.getBool('has_seen_intro_sequence') ?? false;
+    if (mounted) setState(() => _shouldShowIntro = !hasSeenIntro);
   }
 
   @override
@@ -384,56 +398,119 @@ class _MyAppState extends State<MyApp> {
     // first thing on screen for a new device, unconditionally, with
     // nothing in front of her at all, not even briefly. _shouldShowIntro
     // resolves separately and much faster than _ready below (a single
-    // local boolean read, no network) -- once it's known true, the real
-    // app builds immediately with AppRoutes.initial hardcoded as the
-    // route, skipping the wait for the rest of _resolveInitialRoute() to
-    // finish entirely. This is safe, not a guess: traced the full
-    // branching below and confirmed a device with hasOnboarded == false
-    // can only ever end up at what AppRoutes.splashScreen resolves to
-    // (the plain pitch screen) regardless of what else that resolution
-    // finds -- isSignedIn is unconditionally false whenever hasOnboarded
-    // is false, which eliminates every other branch. The intro screens
-    // themselves (grandma, family photo) don't read any of the app-wide
-    // notifiers _resolveInitialRoute() sets (dark mode, nest name, etc.),
-    // and by the time someone's actually watched or tapped through both
-    // photos, that resolution has almost always already finished in the
-    // background regardless -- so those notifiers are correctly set well
-    // before they'd ever actually be needed, on the real pitch screen
-    // after the photos.
+    // local boolean read, no network) -- once it's known true, the intro
+    // sequence starts showing immediately, without waiting for the rest
+    // of _resolveInitialRoute() to finish.
     //
-    // AppRoutes.initial (not splashScreen) specifically -- found a real
-    // bug from wiring splashScreen to the intro sequence originally:
-    // sign-out and account deletion (setup_screen.dart), plus two other
-    // existing flows, all explicitly navigate to the named
-    // '/splash-screen' route expecting the plain pitch screen, not the
-    // first-launch intro. Only 'initial' is wired to the intro sequence
-    // now -- see app_routes.dart's comment for the full reasoning.
+    // Important correction from an earlier version of this: this does
+    // NOT hardcode where the intro leads afterward. has_seen_intro_sequence
+    // is a brand new flag, so it reads false on EVERY device that's ever
+    // used this app before today too -- including an already fully
+    // signed-in device. Hardcoding the destination to the plain pitch
+    // screen would have sent an existing, signed-in user to the
+    // marketing pitch instead of their actual nest on this one
+    // transitional launch. Instead, the intro's builder callback below
+    // consults the real, genuinely resolved _ready/_initialRoute once
+    // the photos finish -- exactly the same destination a returning user
+    // would get, just reached after the intro instead of before it. The
+    // intro screens themselves (grandma, family photo) don't read any of
+    // the app-wide notifiers _resolveInitialRoute() sets, and by the
+    // time someone's actually watched or tapped through both photos,
+    // that resolution has almost always already finished in the
+    // background regardless.
     if (_shouldShowIntro == true) {
-      return _buildRealApp(AppRoutes.initial);
-    }
-    if (_shouldShowIntro == null || !_ready) {
-      // Aug 21 2026: this now only shows for two much narrower cases
-      // than before: (1) the brief moment before _shouldShowIntro itself
-      // is known (a single local read, milliseconds) and (2) a RETURNING
-      // device (_shouldShowIntro == false) waiting on the full
-      // sign-in/entitlement/membership resolution -- which never shows
-      // the intro photos at all, exactly as before. Plain gradient, not
-      // the photo and not the gold logo -- see the two comments above
-      // this method's prior version for the full history of why.
-      return const DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFE9F1EE), Color(0xFFF3E7C4), Color(0xFFF8E9E1)],
-          ),
+      return _buildRealApp(
+        home: IntroSequenceScreen(
+          imagePaths: const [
+            'assets/images/splash_hero_1.png',
+            'assets/images/splash_hero_2.png',
+          ],
+          builder: (context) {
+            if (!_ready) {
+              // Resolution genuinely isn't done yet even though both
+              // photos finished -- rare, given resolution runs the whole
+              // time the photos are on screen, but handled gracefully:
+              // same gold logo bridges the gap, not a different or
+              // jarring placeholder. This rebuilds automatically once
+              // _ready flips, via the same setState in
+              // _resolveInitialRoute().
+              return const BrandedTransitionScreen();
+            }
+            // Resolves to whatever _resolveInitialRoute() genuinely
+            // concluded -- the real pitch screen for a genuinely new
+            // sign-out, but a returning-yet-never-seen-the-intro
+            // device's own nest, subscribe screen, or role choice
+            // exactly as it would have gotten without the intro at all.
+            // Built directly here (already inside this MaterialApp's own
+            // Navigator/theme scope via home:), not as a second nested
+            // MaterialApp. Uses _resolveRouteWidget rather than a direct
+            // AppRoutes.routes[...] lookup -- found while double-checking
+            // this that familyFeedScreen (a very common destination for
+            // an already-signed-in device) isn't in that static map at
+            // all, it's one of six screens handled separately via
+            // onGenerateRoute below. A direct lookup would have thrown a
+            // null-check crash for exactly that common case.
+            return _resolveRouteWidget(_initialRoute, context);
+          },
         ),
       );
     }
-    return _buildRealApp(_initialRoute);
+    if (_shouldShowIntro == null || !_ready) {
+      // Aug 21 2026: D Von's direct correction -- restored the real gold
+      // logo (BrandedTransitionScreen) here, not a plain gradient. The
+      // gradient was only ever meant to replace the BLACK flash that
+      // happened specifically because a real photo needed to decode
+      // behind a black-background Scaffold -- it was never meant to
+      // replace the logo everywhere else in the app. This screen draws
+      // the logo with code (shapes and gradients, no image file, nothing
+      // to decode), so that black-flash problem never applied here in
+      // the first place -- this can safely show instantly, exactly as
+      // it always did before any of today's changes.
+      //
+      // This now only shows for two much narrower cases than before:
+      // (1) the brief moment before _shouldShowIntro itself is known (a
+      // single local read, milliseconds) and (2) a RETURNING device
+      // (_shouldShowIntro == false) waiting on the full sign-in/
+      // entitlement/membership resolution -- which never shows the
+      // intro photos at all, exactly as before.
+      return const BrandedTransitionScreen();
+    }
+    return _buildRealApp(initialRoute: _initialRoute);
   }
 
-  Widget _buildRealApp(String initialRoute) {
+  // Aug 21 2026: shared by the intro sequence's post-photos destination
+  // and (implicitly, via the same six-screen list) onGenerateRoute below.
+  // _initialRoute can be any of the four values _resolveInitialRoute()
+  // assigns (splashScreen, roleChoiceScreen, subscribeNestScreen,
+  // familyFeedScreen) -- the first three are in AppRoutes.routes, but
+  // familyFeedScreen (a very common destination for an already-signed-in
+  // device) is only handled via onGenerateRoute's switch, not the static
+  // map. Checks the static map first, falls back to the same six-screen
+  // switch onGenerateRoute uses, so this never crashes regardless of
+  // which of the two systems the resolved route actually lives in.
+  Widget _resolveRouteWidget(String routeName, BuildContext context) {
+    final staticBuilder = AppRoutes.routes[routeName];
+    if (staticBuilder != null) return staticBuilder(context);
+    final Widget? page = switch (routeName) {
+      AppRoutes.familyFeedScreen => const FamilyFeedScreen(),
+      AppRoutes.sendScreen => const SendScreen(),
+      AppRoutes.legacyScreen => const LegacyScreen(),
+      AppRoutes.favsScreen => const FavsScreen(),
+      AppRoutes.safetyScreen => const SafetyScreen(),
+      AppRoutes.setupScreen => const SetupScreen(),
+      _ => null,
+    };
+    // Shouldn't happen -- _initialRoute is always one of the known
+    // values above -- but falls back to the plain pitch screen rather
+    // than crashing if something unexpected ever reaches this.
+    return page ?? const SplashScreen();
+  }
+
+  Widget _buildRealApp({String? initialRoute, Widget? home}) {
+    assert(
+      (initialRoute == null) != (home == null),
+      'Provide exactly one of initialRoute or home',
+    );
     return Sizer(
       builder: (context, orientation, screenType) {
         return ValueListenableBuilder<bool>(
@@ -528,6 +605,7 @@ class _MyAppState extends State<MyApp> {
                     );
                   },
                   initialRoute: initialRoute,
+                  home: home,
                 );
               },
             );

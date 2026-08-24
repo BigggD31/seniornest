@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Aug 20 2026: D Von's ask -- a short sequence of full-bleed marketing
 // photos (his own wording already baked into each image, nothing else
@@ -84,10 +85,30 @@ class IntroSequenceScreen extends StatefulWidget {
 
 class _IntroSequenceScreenState extends State<IntroSequenceScreen> {
   int _index = 0;
+  bool _markedSeen = false;
 
   void _advance() {
     if (!mounted) return;
     setState(() => _index++);
+    if (_index >= widget.imagePaths.length) {
+      _markSeenOnce();
+    }
+  }
+
+  // Aug 21 2026: writes a permanent, device-scoped "this device has seen
+  // the intro" flag exactly once, the moment the sequence genuinely
+  // completes (last slide advanced past). Deliberately a brand new key,
+  // never has_onboarded -- that one turned out to be account-scoped
+  // (cleared on sign-out, account switch, and account deletion
+  // elsewhere in the app), which was the actual reason the intro kept
+  // reappearing for D Von even on a device he'd used many times before.
+  // This key is never included in any of that clearing logic anywhere,
+  // by design -- it means "this physical device," not "this account."
+  Future<void> _markSeenOnce() async {
+    if (_markedSeen) return;
+    _markedSeen = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('has_seen_intro_sequence', true);
   }
 
   @override
