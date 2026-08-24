@@ -66,12 +66,12 @@ List<DateYearGroup<T>> groupByYearMonth<T>(
   }).toList();
 }
 
-/// One shared header row for both year and month groups -- a year header
-/// (bold, larger) and a month header (lighter, indented) both use this,
-/// just with different [isYear]/styling. Tap anywhere on the row toggles
-/// collapse; the chevron rotates to match, matching the same collapse
-/// affordance already used elsewhere in the app (e.g. Setup's
-/// expandable sections).
+/// A small, colored, tappable pill for a year or month group -- gold for
+/// year, teal for month, matching the app's established brand colors
+/// (AppTheme.gold / AppTheme.primary, used the same way elsewhere in the
+/// app already). Sized to its content, not full-width, per D Von's
+/// direct ask: "a small pill with a clickable drop down box," not a
+/// plain full-width text row.
 class CollapsibleGroupHeader extends StatelessWidget {
   const CollapsibleGroupHeader({
     super.key,
@@ -90,51 +90,70 @@ class CollapsibleGroupHeader extends StatelessWidget {
   final bool isDarkMode;
   final bool isYear;
 
+  static const Color _goldColor = Color(0xFFD4AA00);
+  static const Color _tealColor = Color(0xFF5DA399);
+
   @override
   Widget build(BuildContext context) {
-    final textPrimary =
-        isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417);
-    final textSecondary =
-        isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E);
-    return GestureDetector(
-      onTap: onToggle,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: isYear ? 0 : 16,
-          top: isYear ? 20 : 10,
-          bottom: 8,
-        ),
-        child: Row(
-          children: [
-            AnimatedRotation(
-              turns: isCollapsed ? -0.25 : 0,
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: isYear ? 22 : 18,
-                color: textSecondary,
+    final pillColor = isYear ? _goldColor : _tealColor;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: isYear ? 0 : 20,
+        top: isYear ? 20 : 10,
+        bottom: 8,
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: GestureDetector(
+          onTap: onToggle,
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isYear ? 16 : 12,
+              vertical: isYear ? 8 : 6,
+            ),
+            decoration: BoxDecoration(
+              color: isDarkMode
+                  ? pillColor.withValues(alpha: 0.22)
+                  : pillColor.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: pillColor.withValues(alpha: isDarkMode ? 0.5 : 0.35),
+                width: 1,
               ),
             ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: GoogleFonts.nunitoSans(
-                fontSize: isYear ? 18 : 14,
-                fontWeight: isYear ? FontWeight.w800 : FontWeight.w700,
-                color: isYear ? textPrimary : textSecondary,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: isYear ? 15 : 13,
+                    fontWeight: isYear ? FontWeight.w800 : FontWeight.w700,
+                    color: pillColor,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '$itemCount',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: isYear ? 12 : 11,
+                    fontWeight: FontWeight.w600,
+                    color: pillColor.withValues(alpha: 0.75),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                AnimatedRotation(
+                  turns: isCollapsed ? -0.25 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: isYear ? 18 : 15,
+                    color: pillColor,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text(
-              '($itemCount)',
-              style: GoogleFonts.nunitoSans(
-                fontSize: isYear ? 14 : 12,
-                fontWeight: FontWeight.w600,
-                color: textSecondary.withValues(alpha: 0.7),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
