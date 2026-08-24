@@ -31,6 +31,12 @@ class _LegacyScreenState extends State<LegacyScreen>
     with TickerProviderStateMixin {
   int _currentNavIndex = 2;
   bool _isSenior = appIsSeniorNotifier.value;
+  // Aug 21 2026: added for the delete-post feature (matching Home's
+  // exact pattern) -- Legacy never needed to know nest-owner status
+  // before this. Seeded from the same already-resolved app-wide
+  // notifier Home uses, not a hardcoded false.
+  final bool _isNestOwner = appIsNestOwnerNotifier.value;
+  Set<String> _removedMemberIds = {};
   // Seeded from the already-resolved app-wide notifier instead of a
   // hardcoded false -- see messages_inbox_screen.dart for the full
   // explanation of the white-flash bug this fixes.
@@ -217,6 +223,32 @@ class _LegacyScreenState extends State<LegacyScreen>
     );
     _itemAnimations = [];
     _loadData();
+    _loadRemovedMemberIds();
+  }
+
+  // Aug 21 2026: added for the delete-post feature, mirroring Home's
+  // exact _loadRemovedMemberIds implementation -- needed so the nest
+  // owner can delete a removed member's legacy story, the same
+  // capability they already have for regular feed posts.
+  Future<void> _loadRemovedMemberIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isEmpty) return;
+      final rows = await Supabase.instance.client
+          .from('nest_removed_members')
+          .select('user_id')
+          .eq('nest_id', nestId);
+      final ids = (rows as List<dynamic>)
+          .map((r) => r['user_id'] as String?)
+          .whereType<String>()
+          .toSet();
+      if (mounted) {
+        setState(() => _removedMemberIds = ids);
+      }
+    } catch (e) {
+      debugPrint('LEGACY_REMOVED_MEMBER_IDS_LOAD_ERROR: $e');
+    }
   }
 
   Future<void> _loadData() async {
@@ -431,6 +463,7 @@ class _LegacyScreenState extends State<LegacyScreen>
           'heartCount': heartCounts[e['id']] ?? 0,
           'isHearted': heartedByMe.contains(e['id']),
           'isMine': e['user_id'] == userId,
+          'userId': e['user_id'] ?? '',
           'authorName': authorNames[e['user_id']] ?? '',
           'authorAvatarUrl': authorAvatars[e['user_id']] ?? '',
         }).toList();
@@ -569,6 +602,43 @@ class _LegacyScreenState extends State<LegacyScreen>
           _stories[globalIndex]['heartCount'] = prevCount;
         });
       }
+    }
+  }
+
+  // Aug 21 2026: D Von's direct ask -- delete post on Legacy stories,
+  // the same identical way it already works on Share/Home's feed_posts.
+  // Own stories, or -- for the nest owner -- a story from someone
+  // they've removed. Matches the RLS policies exactly
+  // (delete_own_legacy_entry, owner_delete_removed_members_legacy_entry),
+  // so this only ever controls whether the icon shows; RLS is still the
+  // real enforcement, mirroring _canDeletePost in family_feed_screen.dart.
+  bool _canDeleteStory(Map<String, dynamic> story) {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final storyUserId = story['userId'] as String? ?? '';
+    if (currentUserId == null || storyUserId.isEmpty) return false;
+    if (storyUserId == currentUserId) return true;
+    return _isNestOwner && _removedMemberIds.contains(storyUserId);
+  }
+
+  void _deleteStory(String storyId) {
+    setState(() {
+      _stories.removeWhere((s) => s['id'] == storyId);
+    });
+    _syncDeletedStoryToCache(storyId);
+  }
+
+  Future<void> _syncDeletedStoryToCache(String storyId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedJson = prefs.getString('cached_legacy_stories');
+      if (cachedJson == null) return;
+      final List<dynamic> cachedList = jsonDecode(cachedJson) as List<dynamic>;
+      cachedList.removeWhere(
+        (s) => (s as Map<String, dynamic>)['id'] == storyId,
+      );
+      await prefs.setString('cached_legacy_stories', jsonEncode(cachedList));
+    } catch (e) {
+      debugPrint('LEGACY_DELETE_STORY_CACHE_SYNC_ERROR: $e');
     }
   }
 
@@ -1349,6 +1419,8 @@ class _LegacyScreenState extends State<LegacyScreen>
       displayName: _displayName,
       onHeart: () => _toggleHeart(index),
       onBookmark: () => _toggleStoryBookmark(story),
+      canDelete: _canDeleteStory(story),
+      onDelete: () => _deleteStory(story['id'] as String),
       onShare: () => SharePreviewWidget.show(
         context,
         title: story['title'] as String,
@@ -4555,6 +4627,8 @@ class _LegacyStoryCard extends StatefulWidget {
     required this.onHeart,
     required this.onBookmark,
     required this.onShare,
+    this.canDelete = false,
+    this.onDelete,
     this.onTap,
   });
   final Map<String, dynamic> story;
@@ -4567,6 +4641,8 @@ class _LegacyStoryCard extends StatefulWidget {
   final VoidCallback onHeart;
   final VoidCallback onBookmark;
   final VoidCallback onShare;
+  final bool canDelete;
+  final VoidCallback? onDelete;
   final VoidCallback? onTap;
 
   @override
@@ -4585,6 +4661,80 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
   Color get _cardBorder => widget.isDarkMode ? const Color(0xFF3D3428) : const Color(0xFFE8E0D0);
   Color get _textPrimary => widget.isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417);
   Color get _textSecondary => widget.isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E);
+
+  // Aug 21 2026: D Von's direct ask -- delete post on Legacy, the same
+  // identical way it already works on Share/Home's MessageCardWidget.
+  // Mirrors _confirmDelete there exactly: same dialog copy, same
+  // confirm-then-delete flow, same real-time RLS-enforced delete.
+  Future<void> _confirmDeleteStory(BuildContext context, bool isDark) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF241D14) : const Color(0xFFFDFDFD),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Delete this story?',
+          style: GoogleFonts.nunitoSans(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: isDark ? const Color(0xFFF5F0E8) : const Color(0xFF2C2417),
+          ),
+        ),
+        content: Text(
+          'This can\'t be undone.',
+          style: GoogleFonts.nunitoSans(
+            fontSize: 14,
+            color: isDark ? const Color(0xFFB8AD9A) : const Color(0xFF6B5E4E),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.nunitoSans(color: const Color(0xFF6B5E4E))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Delete',
+              style: GoogleFonts.nunitoSans(color: const Color(0xFFC0392B), fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      // RLS enforces who is actually allowed to do this (own story, or
+      // nest owner deleting a removed member's story) -- the client-side
+      // widget.canDelete check just controls whether the icon shows at
+      // all. If RLS were ever to disagree, this affects 0 rows rather
+      // than erroring, which is the correct, safe failure mode.
+      await Supabase.instance.client
+          .from('legacy_entries')
+          .delete()
+          .eq('id', widget.story['id'] as String);
+      widget.onDelete?.call();
+    } catch (e) {
+      debugPrint('LEGACY_STORY_DELETE_ERROR: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Couldn\'t delete that -- please try again.',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
+            ),
+            backgroundColor: const Color(0xFFC97B4A),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -4934,6 +5084,17 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                               color: (story['isBookmarked'] as bool? ?? false) ? const Color(0xFF5DA399) : _textSecondary,
                             ),
                           ),
+                          if (widget.canDelete) ...[
+                            const SizedBox(width: 10),
+                            GestureDetector(
+                              onTap: () => _confirmDeleteStory(context, widget.isDarkMode),
+                              child: Icon(
+                                Icons.delete_outline_rounded,
+                                size: 20,
+                                color: _textSecondary,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       if (_replies.isNotEmpty) ...[
