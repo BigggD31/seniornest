@@ -2249,9 +2249,13 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
   @override
   void initState() {
     super.initState();
-    if (widget.prompt != null) {
-      _bodyController.text = '${widget.prompt}\n\n';
-    }
+    // Aug 21 2026: D Von's direct ask -- the story used to show the
+    // prompt/question twice: once correctly as the title (line ~2289
+    // below, unchanged), and again here, since the body field used to
+    // be pre-filled with the same prompt text before the senior even
+    // started typing. Removed the pre-fill entirely -- the body now
+    // starts empty, so what shows is just the headline (the question)
+    // and the senior's actual answer underneath it, nothing repeated.
   }
 
   @override
