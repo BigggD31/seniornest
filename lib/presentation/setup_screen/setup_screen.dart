@@ -2148,21 +2148,38 @@ class _SetupScreenState extends State<SetupScreen>
               await prefs.remove('joined_via_invite');
               await prefs.remove('nest_name');
               await prefs.setBool('just_signed_out', true);
-              // Aug 21 2026: D Von's direct correction -- this was going
-              // to '/splash-screen', the generic pitch screen, instead
-              // of the actual dedicated sign-in screen he's used for
-              // many builds. That real sign-in screen already exists --
-              // it's save_messages_prompt_screen.dart with
-              // signInMode: true, exactly what the pitch screen's own
-              // "Already have an account? Sign In" link already
-              // correctly navigates to. Sign-out now matches that same
-              // destination instead of a different, wrong one.
+              // Aug 21 2026: correcting my own earlier mistake here,
+              // confirmed by D Von's screenshots -- that fix sent sign-out
+              // to save_messages_prompt_screen.dart, which is NOT the
+              // real sign-in screen at all (its signInMode argument only
+              // ever opens a "Create your account" sheet, regardless of
+              // the argument's value -- the function it calls is even
+              // named _showCreateAccountSheet). The real "Welcome back /
+              // Sign In" screen he's used for many builds is a distinct
+              // STATE of splash_screen.dart itself, driven by
+              // appIsReturningUserNotifier (see app_state.dart's comment
+              // on that notifier for the full design).
+              //
+              // That notifier is a field initializer read ONCE when
+              // SplashScreen's widget is constructed -- confirmed by
+              // tracing it precisely, not assumed -- and normally only
+              // gets set during main.dart's cold-start resolution, which
+              // doesn't run again mid-session. So navigating to
+              // '/splash-screen' alone wouldn't be enough here either --
+              // the notifier itself needs to be set directly, immediately,
+              // right before navigating, so the fresh SplashScreen
+              // instance this creates reads the correct value at
+              // construction. just_signed_out above still matters
+              // separately, for the case D Von already confirmed working
+              // correctly -- fully exiting and reopening the app, which
+              // goes through main.dart's real cold-start resolution and
+              // reads that persisted flag fresh.
+              appIsReturningUserNotifier.value = true;
               if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(
                   context,
-                  '/save-messages-prompt-screen',
+                  '/splash-screen',
                   (route) => false,
-                  arguments: {'signInMode': true},
                 );
               }
             },
