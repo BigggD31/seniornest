@@ -2148,11 +2148,21 @@ class _SetupScreenState extends State<SetupScreen>
               await prefs.remove('joined_via_invite');
               await prefs.remove('nest_name');
               await prefs.setBool('just_signed_out', true);
+              // Aug 21 2026: D Von's direct correction -- this was going
+              // to '/splash-screen', the generic pitch screen, instead
+              // of the actual dedicated sign-in screen he's used for
+              // many builds. That real sign-in screen already exists --
+              // it's save_messages_prompt_screen.dart with
+              // signInMode: true, exactly what the pitch screen's own
+              // "Already have an account? Sign In" link already
+              // correctly navigates to. Sign-out now matches that same
+              // destination instead of a different, wrong one.
               if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(
                   context,
-                  '/splash-screen',
+                  '/save-messages-prompt-screen',
                   (route) => false,
+                  arguments: {'signInMode': true},
                 );
               }
             },
