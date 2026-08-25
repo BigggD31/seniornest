@@ -300,6 +300,20 @@ class _MyAppState extends State<MyApp> {
       appIsVipMemberNotifier.value =
           prefs.getBool('cached_is_vip_member') ?? false;
 
+      // Resolved once here -- see appDisplayNameNotifier's comment in
+      // app_state.dart. Same preferred_name -> display_name fallback
+      // every one of the 7 duplicate screens already used independently.
+      final cachedPreferredName = prefs.getString('preferred_name') ?? '';
+      appDisplayNameNotifier.value = cachedPreferredName.isNotEmpty
+          ? cachedPreferredName
+          : (prefs.getString('display_name') ?? '');
+
+      // Resolved once here -- see appSeniorNameNotifier's comment in
+      // app_state.dart. Sourced from family_feed_screen's real, working
+      // cache key (not safety_screen's dead 'senior_name' key).
+      appSeniorNameNotifier.value =
+          prefs.getString('cached_checkin_senior_name') ?? '';
+
       final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
       // This is the TRUE origin of the subscribe-screen flash and the
       // "Home flashes twice" jitter, not just the entitlement check below.

@@ -116,6 +116,29 @@ final ValueNotifier<bool> appSeniorMedsTakenTodayNotifier = ValueNotifier<bool>(
 /// must match).
 final ValueNotifier<bool> appIsGoodTodaySentNotifier = ValueNotifier<bool>(false);
 
+/// Own display name -- was independently duplicated across 7 screens
+/// (setup, feed_top_bar, family_feed, send, safety, legacy, favs), every
+/// one declaring "String _displayName = '';" and correcting it after its
+/// own async SharedPreferences read finished -- the same flash-of-wrong-
+/// content pattern as appIsSeniorNotifier above, just for a string and at
+/// larger scale (7 duplicates instead of 5). Resolved once in main.dart's
+/// _resolveInitialRoute() from the same preferred_name -> display_name
+/// fallback chain every one of those screens already used independently.
+final ValueNotifier<String> appDisplayNameNotifier = ValueNotifier<String>('');
+
+/// The senior's name, as shown to family members (Home's pinned check-in
+/// card, Safety's "This is what ___ sees" banner). Aug 25 2026: found
+/// safety_screen was reading a 'senior_name' prefs key that is never
+/// written anywhere in the app -- confirmed via full codebase search --
+/// so it was blank on literally every first paint for every family
+/// member, guaranteed, not just occasionally. family_feed_screen already
+/// had a working cache under a different key (cached_checkin_senior_name,
+/// written after its own live nest_members lookup resolves), so this
+/// notifier is seeded from that real cache instead, and both screens now
+/// share it -- the same one-shared-source-of-truth fix already applied to
+/// appIsNestOwnerNotifier.
+final ValueNotifier<String> appSeniorNameNotifier = ValueNotifier<String>('');
+
 /// Maps the stored string to a TextScaler multiplier.
 double textSizeToScale(String size) {
   switch (size) {

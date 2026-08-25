@@ -157,7 +157,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // TODO: Replace with Riverpod/Bloc for production — feed state, user state
   int _currentNavIndex = 0;
   bool _isSenior = appIsSeniorNotifier.value;
-  String _displayName = '';
+  String _displayName = appDisplayNameNotifier.value;
   // Seeded from the already-resolved app-wide notifier instead of an
   // empty default -- see appNestNameNotifier in app_state.dart. Once
   // someone has named their nest, this is correct on the very first
@@ -178,7 +178,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _hasRealPost = appHasRealPostNotifier.value; // tracks if user has made their first real post
   bool _sampleBannerDismissed = false; // tracks if user closed the sample-content explainer banner
-  String _seniorName = ''; // display name of the senior in this nest (for the pinned check-in card)
+  String _seniorName = appSeniorNameNotifier.value; // display name of the senior in this nest (for the pinned check-in card)
   String _seniorUserId = '';
   bool _seniorCheckedInToday = appSeniorCheckedInTodayNotifier.value;
   DateTime? _seniorCheckinTime;
@@ -812,6 +812,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // so every other screen reading this notifier corrects immediately
     // too, not just this one.
     appIsSeniorNotifier.value = role == 'senior';
+    appDisplayNameNotifier.value = name;
+    if (initialSeniorUserId.isNotEmpty) {
+      appSeniorNameNotifier.value = initialSeniorName;
+    }
 
     _setupItemAnimations();
     _listEntranceController.forward();
@@ -1004,6 +1008,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         await prefs.setString('cached_checkin_date', _todayDateString());
         await prefs.setString('cached_checkin_senior_id', seniorId);
         await prefs.setString('cached_checkin_senior_name', seniorName);
+        appSeniorNameNotifier.value = seniorName;
         await prefs.setBool('cached_checkin_checked_in', checkinResponse != null);
         if (checkinResponse != null) {
           await prefs.setString(

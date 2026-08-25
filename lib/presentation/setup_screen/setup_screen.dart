@@ -30,7 +30,7 @@ class _SetupScreenState extends State<SetupScreen>
   bool _isLoading = true;
   bool _isNestOwner = appIsNestOwnerNotifier.value;
   bool _isVipMember = appIsVipMemberNotifier.value;
-  String _displayName = '';
+  String _displayName = appDisplayNameNotifier.value;
   String _preferredName = '';
   // If a preferred name has been set, show that everywhere; otherwise fall back to first name.
   String get _effectiveName =>
@@ -166,6 +166,7 @@ class _SetupScreenState extends State<SetupScreen>
     // needs this screen's own fresh cache read to correct the shared
     // notifier too.
     appIsSeniorNotifier.value = isSenior;
+    appDisplayNameNotifier.value = savedName;
     _setupAnimations();
     _entranceController.forward();
 
@@ -187,6 +188,7 @@ class _SetupScreenState extends State<SetupScreen>
           await prefs.setString('display_name', savedName);
           if (mounted) {
             setState(() => _displayName = savedName);
+            appDisplayNameNotifier.value = savedName;
           }
         }
       } catch (_) {}
@@ -362,6 +364,7 @@ class _SetupScreenState extends State<SetupScreen>
             _displayName = savedName;
             _preferredName = savedPreferredName;
           });
+          appDisplayNameNotifier.value = savedName;
         }
       }
     } catch (e) {
@@ -1631,6 +1634,8 @@ class _SetupScreenState extends State<SetupScreen>
             _birthday = birthday;
             _anniversary = anniversary;
           });
+          appDisplayNameNotifier.value =
+              preferredName.trim().isNotEmpty ? preferredName.trim() : name;
         },
       ),
     );

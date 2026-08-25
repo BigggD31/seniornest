@@ -215,8 +215,10 @@ class _LegacyScreenState extends State<LegacyScreen>
   List<Map<String, dynamic>> _stories = [];
 
   Map<String, dynamic>? _profileData;
-  String _displayName = '';
-  String _seniorName = 'Your Loved One';
+  String _displayName = appDisplayNameNotifier.value;
+  String _seniorName = appSeniorNameNotifier.value.isNotEmpty
+      ? appSeniorNameNotifier.value
+      : 'Your Loved One';
 
   @override
   void initState() {
@@ -334,14 +336,18 @@ class _LegacyScreenState extends State<LegacyScreen>
       _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
           ? prefs.getString('preferred_name')!
           : (prefs.getString('display_name') ?? '');
-      // Best guess until the live lookup below resolves the real senior.
-      _seniorName = prefs.getString('senior_name') ?? 'Your Loved One';
+      // Aug 25 2026: was reading 'senior_name', a key never actually
+      // written anywhere in the app -- see safety_screen.dart for the
+      // full explanation. Now uses the real cached value the shared
+      // notifier is already seeded from.
+      _seniorName = prefs.getString('cached_checkin_senior_name') ?? 'Your Loved One';
     });
     // See the matching comment in family_feed_screen.dart -- appIsSeniorNotifier
     // only re-resolves at true cold-start, so an in-session account switch
     // (sign out, sign into a different account, no full app relaunch) needs
     // this screen's own fresh cache read to correct the shared notifier too.
     appIsSeniorNotifier.value = isSeniorInitial;
+    appDisplayNameNotifier.value = _displayName;
     _setupAnimations();
     _entranceController.forward();
 
@@ -490,6 +496,10 @@ class _LegacyScreenState extends State<LegacyScreen>
             }
             _seniorName = resolvedSeniorName;
           });
+          if (resolvedSeniorName != 'Your Loved One') {
+            appSeniorNameNotifier.value = resolvedSeniorName;
+            await prefs.setString('cached_checkin_senior_name', resolvedSeniorName);
+          }
           _setupAnimations();
           await prefs.setString('cached_legacy_stories', jsonEncode(realStories));
           await prefs.setString('cached_legacy_stories_user_id', userId);

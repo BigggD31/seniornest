@@ -28,10 +28,13 @@ class _SafetyScreenState extends State<SafetyScreen>
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _isLoading = true;
   bool _isSendingAlert = false;
-  String _seniorName = '';
-  String _nestName = '';
+  String _seniorName = appSeniorNameNotifier.value;
+  // Was reading its own local prefs copy separately -- now points at the
+  // same already-resolved notifier every other screen uses, closing the
+  // last gap in the app-wide nest-name flash fix (build 173).
+  String _nestName = appNestNameNotifier.value;
   Map<String, dynamic>? _profileData;
-  String _displayName = '';
+  String _displayName = appDisplayNameNotifier.value;
 
   late AnimationController _entranceController;
   late AnimationController _pulseController;
@@ -127,11 +130,15 @@ class _SafetyScreenState extends State<SafetyScreen>
           ? prefs.getString('preferred_name')!
           : (prefs.getString('display_name') ?? prefs.getString('user_name') ?? '');
     } else {
-      // Best guess until the live nest_members lookup below resolves the
-      // real senior -- 'senior_name' is never actually written anywhere in
-      // the app (confirmed via full codebase search), so this is usually
-      // blank on first paint and gets filled in moments later.
-      initialSeniorName = prefs.getString('senior_name') ?? '';
+      // Aug 25 2026: was reading 'senior_name', a key never actually
+      // written anywhere in the app -- confirmed via full codebase
+      // search -- so this was blank on every single first paint for
+      // every family member, guaranteed, not an occasional flash.
+      // cached_checkin_senior_name is family_feed_screen's real, working
+      // cache of this same value (written after its own live
+      // nest_members lookup resolves); appSeniorNameNotifier is already
+      // seeded from it at cold start, so this local read now matches.
+      initialSeniorName = prefs.getString('cached_checkin_senior_name') ?? '';
     }
 
     setState(() {
@@ -141,7 +148,6 @@ class _SafetyScreenState extends State<SafetyScreen>
       _isSenior = isSeniorRole;
       _isDarkMode = prefs.getBool('dark_mode') ?? systemDark;
       _seniorName = initialSeniorName;
-      _nestName = prefs.getString('nest_name') ?? '';
       _isLoading = false;
       _profileData = profileData;
       _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
@@ -153,6 +159,10 @@ class _SafetyScreenState extends State<SafetyScreen>
     // needs this screen's own fresh cache read to correct the shared
     // notifier too.
     appIsSeniorNotifier.value = isSeniorRole;
+    appDisplayNameNotifier.value = _displayName;
+    if (initialSeniorName.isNotEmpty) {
+      appSeniorNameNotifier.value = initialSeniorName;
+    }
     _setupAnimations();
     _entranceController.forward();
 
@@ -224,6 +234,8 @@ class _SafetyScreenState extends State<SafetyScreen>
                 seniorPreferred.isNotEmpty ? seniorPreferred : seniorDisplay;
             if (name.isNotEmpty && mounted) {
               setState(() => _seniorName = name);
+              appSeniorNameNotifier.value = name;
+              await prefs.setString('cached_checkin_senior_name', name);
             }
           }
         }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/app_state.dart';
 import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 class FeedTopBarWidget extends StatefulWidget {
@@ -27,7 +28,7 @@ class FeedTopBarWidget extends StatefulWidget {
 
 class _FeedTopBarWidgetState extends State<FeedTopBarWidget> {
   Map<String, dynamic>? _profileData;
-  String _displayName = '';
+  String _displayName = appDisplayNameNotifier.value;
 
   @override
   void initState() {
@@ -50,6 +51,7 @@ class _FeedTopBarWidgetState extends State<FeedTopBarWidget> {
           } catch (_) {}
         }
       });
+      appDisplayNameNotifier.value = name;
     }
   }
 

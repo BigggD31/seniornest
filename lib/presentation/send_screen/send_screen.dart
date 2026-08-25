@@ -33,7 +33,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   int _currentNavIndex = 1;
   bool _isSenior = appIsSeniorNotifier.value;
   bool _isNestOwner = false;
-  String _displayName = '';
+  String _displayName = appDisplayNameNotifier.value;
   // Seeded from the already-resolved app-wide notifier instead of a
   // hardcoded false -- see messages_inbox_screen.dart for the full
   // explanation of the white-flash bug this fixes.
@@ -249,6 +249,9 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     // needs this screen's own fresh cache read to correct the shared
     // notifier too.
     appIsSeniorNotifier.value = (prefs.getString('user_role') ?? 'senior') == 'senior';
+    appDisplayNameNotifier.value = (prefs.getString('preferred_name') ?? '').isNotEmpty
+        ? prefs.getString('preferred_name')!
+        : (prefs.getString('display_name') ?? 'You');
     _entranceController.forward();
   }
 

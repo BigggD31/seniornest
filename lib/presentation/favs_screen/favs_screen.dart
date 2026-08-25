@@ -30,7 +30,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
   bool _isLoading = true;
   int _selectedCategory = 0; // 0=All, 1=Text, 2=Photos, 3=Audio, 4=Video
   Map<String, dynamic>? _profileData;
-  String _displayName = '';
+  String _displayName = appDisplayNameNotifier.value;
   List<Map<String, dynamic>> _bookmarkedItems = [];
   bool _sampleBannerDismissed = false;
   // Aug 21 2026: collapsible year/month grouping, same shared component
@@ -109,6 +109,9 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
       _bookmarkedItems = items.reversed.toList(); // most recent first
       _sampleBannerDismissed = prefs.getBool('favs_sample_banner_dismissed') ?? false;
     });
+    appDisplayNameNotifier.value = (prefs.getString('preferred_name') ?? '').isNotEmpty
+        ? prefs.getString('preferred_name')!
+        : (prefs.getString('display_name') ?? '');
     _entranceController.forward();
   }
 
