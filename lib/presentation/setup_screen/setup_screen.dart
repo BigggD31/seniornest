@@ -73,7 +73,18 @@ class _SetupScreenState extends State<SetupScreen>
     final role = prefs.getString('user_role') ?? 'senior';
     final isSenior = role == 'senior';
     final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
-    bool isNestOwner = !joinedViaInvite;
+    // Aug 25 2026: was always recomputing this from the joined_via_invite
+    // shortcut, even when a reliable, previously-confirmed value already
+    // existed in cache -- overwriting the correct value the field was
+    // already seeded with (from appIsNestOwnerNotifier) with a worse
+    // guess, then a live Supabase check further down would correct it
+    // back a moment later. That round trip (correct -> wrong -> correct)
+    // was the Setup screen's own flash D Von reported (Aug 25). Now
+    // prefers the same persisted cached_is_nest_owner value main.dart
+    // already trusts, only falling back to the rough proxy when that
+    // cache has genuinely never been set (a true first-ever resolve).
+    final cachedIsNestOwner = prefs.getBool('cached_is_nest_owner');
+    bool isNestOwner = cachedIsNestOwner ?? !joinedViaInvite;
     final defaultSize = isSenior ? 'Large' : 'Normal';
 
     String savedName = prefs.getString('display_name') ?? '';
