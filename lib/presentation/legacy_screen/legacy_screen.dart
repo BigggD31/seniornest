@@ -477,6 +477,10 @@ class _LegacyScreenState extends State<LegacyScreen>
           'authorName': authorNames[e['user_id']] ?? '',
           'authorAvatarUrl': authorAvatars[e['user_id']] ?? '',
           'isAuthorSenior': authorRoles[e['user_id']] == 'senior',
+          // Aug 25 2026: distinguishes "answering a question someone
+          // else asked" from a senior's self-initiated story. Drives the
+          // terracotta border -- see border condition below.
+          'isAnswerToQuestion': e['is_answer_to_question'] as bool? ?? false,
         }).toList();
 
         if (mounted) {
@@ -2034,6 +2038,7 @@ class _LegacyScreenState extends State<LegacyScreen>
               builder: (ctx2) => _LegacyVoiceRecordSheet(
                 isDarkMode: _isDarkMode,
                 onRecordingComplete: () => _removeAnsweredPrompt(prompt),
+                isAnsweringQuestion: true,
               ),
             );
           },
@@ -2046,6 +2051,7 @@ class _LegacyScreenState extends State<LegacyScreen>
               builder: (ctx2) => _LegacyVideoRecordSheet(
                 isDarkMode: _isDarkMode,
                 onRecordingComplete: () => _removeAnsweredPrompt(prompt),
+                isAnsweringQuestion: true,
               ),
             );
           },
@@ -2063,6 +2069,7 @@ class _LegacyScreenState extends State<LegacyScreen>
         prompt: prompt,
         isDarkMode: _isDarkMode,
         onStorySaved: () => _removeAnsweredPrompt(prompt),
+        isAnsweringQuestion: true,
       ),
     );
   }
@@ -2308,10 +2315,16 @@ class _WriteStorySheet extends StatefulWidget {
     this.prompt,
     required this.isDarkMode,
     this.onStorySaved,
+    this.isAnsweringQuestion = false,
   });
   final String? prompt;
   final bool isDarkMode;
   final VoidCallback? onStorySaved;
+  // Aug 25 2026: true only when this sheet was opened via the "Answer"
+  // flow on a question someone else submitted (predesigned or custom).
+  // Self-initiated stories (Tell Your Story, Home's AI daily prompt)
+  // leave this false. Drives the terracotta border scoping fix.
+  final bool isAnsweringQuestion;
 
   @override
   State<_WriteStorySheet> createState() => _WriteStorySheetState();
@@ -2392,6 +2405,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
           'entry_type': 'text',
           'category': _selectedCategory,
           'is_custom': true,
+          'is_answer_to_question': widget.isAnsweringQuestion,
         });
         await prefs.setBool('has_sent_stories', true);
         appHasSentStoriesNotifier.value = true;
@@ -3401,9 +3415,13 @@ class _LegacyVoiceRecordSheet extends StatefulWidget {
   const _LegacyVoiceRecordSheet({
     required this.isDarkMode,
     this.onRecordingComplete,
+    this.isAnsweringQuestion = false,
   });
   final bool isDarkMode;
   final VoidCallback? onRecordingComplete;
+  // Aug 25 2026: see _WriteStorySheet -- same purpose, threaded through
+  // for the voice-recording path.
+  final bool isAnsweringQuestion;
 
   @override
   State<_LegacyVoiceRecordSheet> createState() =>
@@ -3586,6 +3604,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
           'media_url': mediaUrl,
           'category': _selectedCategory,
           'is_custom': true,
+          'is_answer_to_question': widget.isAnsweringQuestion,
         });
         await prefs.setBool('has_sent_stories', true);
         appHasSentStoriesNotifier.value = true;
@@ -4066,9 +4085,13 @@ class _LegacyVideoRecordSheet extends StatefulWidget {
   const _LegacyVideoRecordSheet({
     required this.isDarkMode,
     this.onRecordingComplete,
+    this.isAnsweringQuestion = false,
   });
   final bool isDarkMode;
   final VoidCallback? onRecordingComplete;
+  // Aug 25 2026: see _WriteStorySheet -- same purpose, threaded through
+  // for the video-recording path.
+  final bool isAnsweringQuestion;
 
   @override
   State<_LegacyVideoRecordSheet> createState() =>
@@ -4196,6 +4219,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
           'media_url': mediaUrl,
           'category': _selectedCategory,
           'is_custom': true,
+          'is_answer_to_question': widget.isAnsweringQuestion,
         });
         await prefs.setBool('has_sent_stories', true);
         appHasSentStoriesNotifier.value = true;
@@ -4913,14 +4937,17 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
     final heartCount = story['heartCount'] as int? ?? 0;
     final entryType = story['entry_type'] as String? ?? 'text';
     final mediaUrl = story['media_url'] as String? ?? '';
-    // Aug 24 2026: D Von's direct ask -- every story authored by a
-    // senior gets a terracotta border (same 0xFFC97B4A as pin slot 3 on
-    // Home), so it visually stands out from the rest of the Legacy
-    // feed, which otherwise all blends together. Applies whether the
-    // senior is answering a family member's suggested prompt or writing
-    // their own self-initiated story -- driven purely by who the real
-    // author is, not by which path created the story.
-    final isAuthorSenior = story['isAuthorSenior'] as bool? ?? false;
+    // Aug 25 2026: D Von's scope correction -- the terracotta border
+    // (same 0xFFC97B4A as pin slot 3 on Home) marks a story that
+    // answers a question someone else asked (a predesigned prompt or a
+    // custom-typed one, submitted via legacy_story_prompts and answered
+    // through the "Answer" flow). It no longer applies to every senior
+    // story -- a senior's self-initiated post (Tell Your Story, or the
+    // Home AI daily prompt) keeps the normal border, since nobody asked
+    // for it. Was previously keyed on isAuthorSenior alone (Aug 24); see
+    // isAnswerToQuestion above, sourced from the DB column
+    // is_answer_to_question, set only by the Answer-flow save paths.
+    final isAnswerToQuestion = story['isAnswerToQuestion'] as bool? ?? false;
 
     return Container(
       margin: EdgeInsets.fromLTRB(widget.isTablet ? 28 : 20, 0, widget.isTablet ? 28 : 20, 14),
@@ -4928,8 +4955,8 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
         color: _cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isAuthorSenior ? const Color(0xFFC97B4A) : _cardBorder,
-          width: isAuthorSenior ? 2 : 1.5,
+          color: isAnswerToQuestion ? const Color(0xFFC97B4A) : _cardBorder,
+          width: isAnswerToQuestion ? 2 : 1.5,
         ),
       ),
       child: ClipRRect(
