@@ -466,10 +466,18 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         }
 
         await prefs.setString('nest_id', nestId);
-        await supabase.from('nest_members').upsert({
-          'nest_id': nestId,
-          'user_id': userId,
-        });
+        // onConflict targets the real unique constraint (nest_id, user_id)
+        // -- without it, Supabase checks the surrogate 'id' PK instead,
+        // which never collides for a new row, so this threw a raw 23505
+        // duplicate-key error instead of updating whenever this ran for a
+        // membership that already existed.
+        await supabase.from('nest_members').upsert(
+          {
+            'nest_id': nestId,
+            'user_id': userId,
+          },
+          onConflict: 'nest_id,user_id',
+        );
       }
       return true;
     } catch (e) {
@@ -606,10 +614,17 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
                 if (nestResponse != null) {
                   final nestId = nestResponse['id'] as String;
                   await prefs.setString('nest_id', nestId);
-                  await supabase.from('nest_members').upsert({
-                    'nest_id': nestId,
-                    'user_id': userId,
-                  });
+                  // onConflict targets the real unique constraint
+                  // (nest_id, user_id) -- see comment at the first
+                  // nest_members upsert in this file for the full
+                  // explanation.
+                  await supabase.from('nest_members').upsert(
+                    {
+                      'nest_id': nestId,
+                      'user_id': userId,
+                    },
+                    onConflict: 'nest_id,user_id',
+                  );
                   // Show the real nest being joined on the confirmation
                   // screen, instead of falling through to the generic
                   // "$name's Nest" default meant for the owner-creates-nest
@@ -672,10 +687,17 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
                 throw Exception('Could not generate a unique invite code after 5 attempts');
               }
               await prefs.setString('nest_id', nestId);
-              await supabase.from('nest_members').upsert({
-                'nest_id': nestId,
-                'user_id': userId,
-              });
+              // onConflict targets the real unique constraint
+              // (nest_id, user_id) -- see comment at the first
+              // nest_members upsert in this file for the full
+              // explanation.
+              await supabase.from('nest_members').upsert(
+                {
+                  'nest_id': nestId,
+                  'user_id': userId,
+                },
+                onConflict: 'nest_id,user_id',
+              );
             }
           } else {
             // This account is already a valid member of existingNestId --

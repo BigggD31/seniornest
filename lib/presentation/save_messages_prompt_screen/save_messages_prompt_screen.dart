@@ -163,6 +163,24 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
         String preferredName = prefs.getString('preferred_name') ?? '';
         String role = prefs.getString('user_role') ?? 'senior';
         String relationshipType = prefs.getString('relationship') ?? '';
+        // Aug 25 2026: build-204 root cause fix. These three flags control
+        // whether name/preferredName/role are allowed into the updateData
+        // write-back further down. Default true (a brand-new profile with
+        // no existingProfile row yet legitimately needs its local,
+        // just-entered onboarding values pushed up for the first time).
+        // Each flips to false the moment Supabase is confirmed to already
+        // have a real value for that field -- at that point the local
+        // cache is used for display only and is NEVER written back,
+        // closing off the exact vector that let a stale 'family' role
+        // cached from a different account on this same device get
+        // permanently written into Popy's own real database row as if it
+        // were fact. A local value can only ever fill a genuine gap
+        // (Supabase truly has nothing yet), never overwrite a value
+        // Supabase already confirms is real -- same self-heal-only
+        // pattern already proven safe for avatar_url below.
+        bool writeName = true;
+        bool writePreferredName = true;
+        bool writeRole = true;
         // Set below if local cache has an avatar Supabase is missing --
         // see self-heal push logic further down.
         String? avatarToPush;
@@ -172,33 +190,38 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           final supabasePreferredName = existingProfile['preferred_name'] as String? ?? '';
           final supabaseRole = existingProfile['role'] as String? ?? '';
           final supabaseRelation = existingProfile['relation_type'] as String? ?? '';
-          // If Supabase already has real data, use it (returning user)
+          // If Supabase already has real data, use it (returning user) --
+          // and lock the corresponding field out of the write-back below,
+          // since it's already correct and does not need this sign-in to
+          // touch it at all.
           if (supabaseName.isNotEmpty) {
             name = supabaseName;
             await prefs.setString('display_name', name);
+            writeName = false;
           }
           if (supabasePreferredName.isNotEmpty) {
             preferredName = supabasePreferredName;
             await prefs.setString('preferred_name', preferredName);
+            writePreferredName = false;
           }
-          if (supabaseRole.isNotEmpty && supabaseRole != role) {
-            // Aug 21 2026: found the real, precise cause of D Von's dead
-            // Answer-button report. This used to be
-            // `supabaseRole != 'senior'` -- meaning a sign-in only ever
-            // updated the local cache when the real role was 'family',
-            // and silently left it untouched whenever the real role was
-            // 'senior'. That's backwards: it correctly refreshed the
-            // cache when signing INTO a family account, but never
-            // refreshed it when signing back INTO a senior account,
-            // leaving 'family' (set moments earlier during that
-            // family member's own onboarding, on the same device)
-            // permanently stuck for the senior's own session -- even
-            // though the senior had genuinely signed in fresh. Now
-            // compares against the actual current local value instead,
-            // so a real, confirmed role from the server always wins,
-            // regardless of which specific role it happens to be.
+          if (supabaseRole.isNotEmpty) {
+            // Aug 25 2026: role is now unconditional read-only sync from
+            // the server whenever Supabase already has one -- no
+            // comparison against the local cache at all (that comparison
+            // was the actual corruption vector: it only updated the local
+            // display value, but writeRole=false below is what actually
+            // matters, since it's the write-back gate, not the local
+            // display value, that determines whether this sign-in can
+            // touch the server's role). The true, authoritative writers of
+            // role are senior_onboarding_screen.dart and
+            // family_onboarding_screen.dart, which always write a hardcoded
+            // literal ('senior' / 'family') matching the screen the person
+            // is actually on -- never a value read back from a cache. This
+            // function should never independently re-decide someone's role
+            // during an ordinary sign-in.
             role = supabaseRole;
             await prefs.setString('user_role', role);
+            writeRole = false;
           }
           if (supabaseRelation.isNotEmpty) {
             relationshipType = supabaseRelation;
@@ -281,11 +304,17 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           final updateData = <String, dynamic>{
             'id': checkUserId,
             if (userEmail.isNotEmpty) 'email': userEmail,
-            if (name.isNotEmpty) 'display_name': name,
-            if (name.isNotEmpty) 'full_name': name,
-            if (name.isNotEmpty) 'role': role,
+            if (name.isNotEmpty && writeName) 'display_name': name,
+            if (name.isNotEmpty && writeName) 'full_name': name,
+            // writeRole gates this independently of writeName -- a brand
+            // new profile (existingProfile == null) has both true
+            // together, but keeping them as separate conditions here
+            // means a future change to one can never accidentally smuggle
+            // a stale role through under cover of a name write, or vice
+            // versa.
+            if (writeRole) 'role': role,
           };
-          if (preferredName.isNotEmpty) {
+          if (preferredName.isNotEmpty && writePreferredName) {
             updateData['preferred_name'] = preferredName;
           }
           if (relationshipType.isNotEmpty) {
@@ -490,10 +519,19 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
               }
 
               await prefs.setString('nest_id', nestId);
-              await supabase.from('nest_members').upsert({
-                'nest_id': nestId,
-                'user_id': effectiveUserId,
-              });
+              // onConflict targets the real unique constraint
+              // (nest_id, user_id) -- without it, Supabase checks the
+              // surrogate 'id' PK instead, which never collides for a new
+              // row, so this threw a raw 23505 duplicate-key error instead
+              // of updating whenever this ran for a membership that
+              // already existed.
+              await supabase.from('nest_members').upsert(
+                {
+                  'nest_id': nestId,
+                  'user_id': effectiveUserId,
+                },
+                onConflict: 'nest_id,user_id',
+              );
               print('NEST_DEBUG: joined existing nest = $nestId');
             } else {
               print('NEST_DEBUG: invite code not found = $typedInviteCode');
@@ -563,11 +601,16 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             await prefs.setString('nest_id', nestId);
             print('NEST_DEBUG: nest created = $nestId');
 
-            // Add as member
-            await supabase.from('nest_members').upsert({
-              'nest_id': nestId,
-              'user_id': effectiveUserId,
-            });
+            // Add as member. onConflict targets the real unique constraint
+            // (nest_id, user_id) -- see comment at the other nest_members
+            // upsert above for the full explanation.
+            await supabase.from('nest_members').upsert(
+              {
+                'nest_id': nestId,
+                'user_id': effectiveUserId,
+              },
+              onConflict: 'nest_id,user_id',
+            );
             print('NEST_DEBUG: nest_member added');
           }
         } catch (e) {
