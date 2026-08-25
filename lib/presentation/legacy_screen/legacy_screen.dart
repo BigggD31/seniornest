@@ -413,11 +413,16 @@ class _LegacyScreenState extends State<LegacyScreen>
             .toList();
         final Map<String, String> authorNames = {};
         final Map<String, String> authorAvatars = {};
+        // Aug 24 2026: authorRoles added for the terracotta senior-
+        // response border D Von asked for -- every story authored by a
+        // senior (whether answering a suggested prompt or writing their
+        // own) should visually stand out from the rest of the feed.
+        final Map<String, String> authorRoles = {};
         if (authorIds.isNotEmpty) {
           try {
             final profilesResponse = await supabase
                 .from('user_profiles')
-                .select('id, display_name, preferred_name, full_name, avatar_url')
+                .select('id, display_name, preferred_name, full_name, avatar_url, role')
                 .inFilter('id', authorIds);
             for (final p in (profilesResponse as List<dynamic>)) {
               final pid = p['id'] as String;
@@ -429,6 +434,7 @@ class _LegacyScreenState extends State<LegacyScreen>
               if (name.trim().isNotEmpty) authorNames[pid] = name.trim();
               final avatar = p['avatar_url'] as String? ?? '';
               if (avatar.isNotEmpty) authorAvatars[pid] = avatar;
+              authorRoles[pid] = p['role'] as String? ?? '';
             }
           } catch (e) {
             debugPrint('LEGACY AUTHOR LOAD ERROR: $e');
@@ -470,6 +476,7 @@ class _LegacyScreenState extends State<LegacyScreen>
           'userId': e['user_id'] ?? '',
           'authorName': authorNames[e['user_id']] ?? '',
           'authorAvatarUrl': authorAvatars[e['user_id']] ?? '',
+          'isAuthorSenior': authorRoles[e['user_id']] == 'senior',
         }).toList();
 
         if (mounted) {
@@ -4906,13 +4913,24 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
     final heartCount = story['heartCount'] as int? ?? 0;
     final entryType = story['entry_type'] as String? ?? 'text';
     final mediaUrl = story['media_url'] as String? ?? '';
+    // Aug 24 2026: D Von's direct ask -- every story authored by a
+    // senior gets a terracotta border (same 0xFFC97B4A as pin slot 3 on
+    // Home), so it visually stands out from the rest of the Legacy
+    // feed, which otherwise all blends together. Applies whether the
+    // senior is answering a family member's suggested prompt or writing
+    // their own self-initiated story -- driven purely by who the real
+    // author is, not by which path created the story.
+    final isAuthorSenior = story['isAuthorSenior'] as bool? ?? false;
 
     return Container(
       margin: EdgeInsets.fromLTRB(widget.isTablet ? 28 : 20, 0, widget.isTablet ? 28 : 20, 14),
       decoration: BoxDecoration(
         color: _cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _cardBorder, width: 1.5),
+        border: Border.all(
+          color: isAuthorSenior ? const Color(0xFFC97B4A) : _cardBorder,
+          width: isAuthorSenior ? 2 : 1.5,
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14.5),
