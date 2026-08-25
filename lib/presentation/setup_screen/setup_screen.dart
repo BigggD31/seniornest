@@ -2068,9 +2068,35 @@ class _SetupScreenState extends State<SetupScreen>
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
+              // Aug 25 2026: was catching the delete_user RPC failure and
+              // silently swallowing it, then proceeding with local
+              // sign-out/wipe/navigation regardless -- someone could
+              // genuinely believe their account and data were gone when
+              // the server call never actually succeeded. Now stops and
+              // shows a real error on a genuine failure, matching the
+              // same reverts-on-failure pattern already used for the
+              // bookmark desync fix.
               try {
                 await Supabase.instance.client.rpc('delete_user');
-              } catch (_) {}
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Couldn\'t delete your account -- please check your connection and try again.',
+                        style: GoogleFonts.nunitoSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                      ),
+                      backgroundColor: const Color(0xFFC97B4A),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+                return;
+              }
               try {
                 await Supabase.instance.client.auth.signOut();
               } catch (_) {}
