@@ -171,6 +171,12 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             : (prefs.getString('preferred_name') ?? '');
         String role = prefs.getString('user_role') ?? 'senior';
         print('ROLE_DEBUG: (top of _navigateToHome) prefs.getString(user_role) = ${prefs.getString('user_role')}, checkUserId=$checkUserId');
+        try {
+          await supabaseClient.from('temp_debug_logs').insert({
+            'tag': 'ROLE_DEBUG_TOP',
+            'message': 'user_role=${prefs.getString('user_role')} checkUserId=$checkUserId',
+          });
+        } catch (_) {}
         String relationshipType = prefs.getString('relationship') ?? '';
         // Aug 25 2026: build-204 root cause fix. These three flags control
         // whether name/preferredName/role are allowed into the updateData
@@ -502,6 +508,12 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           // theorizing. Remove once confirmed.
           final rawUserRole = prefs.getString('user_role');
           print('ROLE_DEBUG: prefs.getString(user_role) = $rawUserRole (effectiveUserId=$effectiveUserId)');
+          try {
+            await supabase.from('temp_debug_logs').insert({
+              'tag': 'ROLE_DEBUG_NESTCREATE',
+              'message': 'rawUserRole=$rawUserRole effectiveUserId=$effectiveUserId',
+            });
+          } catch (_) {}
           final role = rawUserRole ?? 'senior';
           final userEmail = supabase.auth.currentUser?.email ?? '';
           final relationshipType = prefs.getString('relationship') ?? '';
