@@ -187,7 +187,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   bool _inviteCodeShared =
       true; // tracks if family owner has shared invite code
   bool _isGuest = appIsGuestNotifier.value;
-  final bool _isNestOwner = appIsNestOwnerNotifier.value;
+  bool _isNestOwner = appIsNestOwnerNotifier.value;
   // Author IDs of anyone removed from this nest -- used only to gate the
   // post-delete icon for the nest owner (delete a removed member's post).
   // Not critical-path, so a plain fetch after the main load is enough;
@@ -783,8 +783,14 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       // with the raw proxy on every load undid that for Home specifically,
       // silently reintroducing the "ownership must come from Supabase, not
       // a local flag" bug in exactly the screen the pin feature's owner
-      // check depends on. Removed -- _isNestOwner now just keeps whatever
-      // value it was already correctly given.
+      // check depends on. Removed the overwrite here. Aug 25 2026 update:
+      // _isNestOwner was still declared `final`, so even though the raw
+      // proxy overwrite was gone, a wrong best-guess at construction time
+      // could never self-correct for the rest of the screen's life --
+      // exactly what caused pin icons to vanish for a confirmed real nest
+      // owner (D Von's screenshots, Aug 25). Now a real mutable field,
+      // corrected by a genuine live Supabase check further down (see
+      // "_isNestOwner used to be declared final" below).
       _messages = initialMessages;
       _isLoading = false;
       _todayCelebrations = todayEvents;
@@ -815,6 +821,43 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     appDisplayNameNotifier.value = name;
     if (initialSeniorUserId.isNotEmpty) {
       appSeniorNameNotifier.value = initialSeniorName;
+    }
+
+    // Aug 25 2026: _isNestOwner used to be declared `final` here -- set
+    // once at construction from appIsNestOwnerNotifier.value and then
+    // permanently frozen for the rest of this screen's lifetime, unlike
+    // every other identity field on every other screen, all of which get
+    // corrected by a live check shortly after load. If the notifier's
+    // best-guess value at the moment Home first built happened to be
+    // wrong, the real nest owner's own pin controls (canPin, line ~370)
+    // would vanish for the whole session with no way to self-correct --
+    // exactly what D Von's screenshots showed for Popy, a confirmed real
+    // nest owner (Setup screen: "Popy -- Nest Owner"), whose own posts
+    // showed the pinned border correctly but never the pin icon itself.
+    // Unlike Setup/Safety, Home can plausibly be the very first screen a
+    // brand-new nest owner ever sees, before cached_is_nest_owner has
+    // ever been written (that key is only ever set by setup_screen.dart)
+    // -- so this needs a genuine live check here, not just "prefer the
+    // cache," since there may be no cache yet to prefer.
+    try {
+      final currentAuthUserId = Supabase.instance.client.auth.currentUser?.id;
+      if (currentAuthUserId != null) {
+        final ownedNest = await Supabase.instance.client
+            .from('nests')
+            .select('id')
+            .eq('created_by', currentAuthUserId)
+            .maybeSingle();
+        final confirmedIsNestOwner = ownedNest != null;
+        if (mounted) {
+          setState(() => _isNestOwner = confirmedIsNestOwner);
+        }
+        appIsNestOwnerNotifier.value = confirmedIsNestOwner;
+        await prefs.setBool('cached_is_nest_owner', confirmedIsNestOwner);
+      }
+    } catch (_) {
+      // Network error -- leave whatever value _isNestOwner already has
+      // (the notifier's best guess) rather than risk overwriting a
+      // possibly-correct value with a wrong one on a failed check.
     }
 
     _setupItemAnimations();
