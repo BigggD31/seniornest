@@ -159,9 +159,18 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             .eq('id', checkUserId)
             .maybeSingle();
 
-        String name = prefs.getString('display_name') ?? '';
-        String preferredName = prefs.getString('preferred_name') ?? '';
+        // Aug 26 2026: same draft-key fix as the nest-creation branch below
+        // -- for a brand-new signup, the final display_name/preferred_name
+        // keys aren't populated yet at this point, only the onboarding
+        // draft keys are.
+        String name = (prefs.getString('onboarding_draft_display_name') ?? '').isNotEmpty
+            ? prefs.getString('onboarding_draft_display_name')!
+            : (prefs.getString('display_name') ?? '');
+        String preferredName = (prefs.getString('onboarding_draft_preferred_name') ?? '').isNotEmpty
+            ? prefs.getString('onboarding_draft_preferred_name')!
+            : (prefs.getString('preferred_name') ?? '');
         String role = prefs.getString('user_role') ?? 'senior';
+        print('ROLE_DEBUG: (top of _navigateToHome) prefs.getString(user_role) = ${prefs.getString('user_role')}, checkUserId=$checkUserId');
         String relationshipType = prefs.getString('relationship') ?? '';
         // Aug 25 2026: build-204 root cause fix. These three flags control
         // whether name/preferredName/role are allowed into the updateData
@@ -453,9 +462,47 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       final existingNestId = prefs.getString('nest_id') ?? '';
       if (existingNestId.isEmpty) {
         try {
-          final name = prefs.getString('display_name') ?? '';
-          final preferredNestName = prefs.getString('preferred_name') ?? '';
-          final role = prefs.getString('user_role') ?? 'senior';
+          // Aug 26 2026: was reading the final 'display_name'/'preferred_name'
+          // keys directly -- but for a brand-new signup with no invite code
+          // (the exact "Owner creating new nest" case this whole block
+          // handles), those final keys are never populated at this point.
+          // senior_onboarding_screen.dart and family_onboarding_screen.dart
+          // both write to onboarding-scoped DRAFT keys during onboarding
+          // itself (Aug 21 fix, to stop a still-in-progress signup from
+          // leaking into an already-signed-in account's real data) -- the
+          // final keys only ever get written later, inside
+          // _finishOnboarding()'s own Supabase block, which requires a
+          // real userId that doesn't exist yet for this exact flow (auth
+          // happens on THIS screen, after onboarding, not before). So this
+          // read was always empty for a fresh Family/Senior Nest Owner
+          // signup -- confirmed via direct DB check, D Von's real Aug 26
+          // test: display_name came back blank in the database despite
+          // the person having typed a real name. Now checks the draft key
+          // first (the actual source for this flow), falling back to the
+          // final key for any other path that might already have it.
+          final name = (prefs.getString('onboarding_draft_display_name') ?? '').isNotEmpty
+              ? prefs.getString('onboarding_draft_display_name')!
+              : (prefs.getString('display_name') ?? '');
+          final preferredNestName = (prefs.getString('onboarding_draft_preferred_name') ?? '').isNotEmpty
+              ? prefs.getString('onboarding_draft_preferred_name')!
+              : (prefs.getString('preferred_name') ?? '');
+          // Aug 26 2026: D Von reported a Family Nest Owner signup (fresh
+          // Google account, confirmed via auth.users timestamps 143ms
+          // apart -- no prior account, no reuse) landing in the database
+          // with role='senior' despite every explicit write in the
+          // onboarding flow (role_choice_screen, family_onboarding_screen
+          // x2) correctly writing 'family'. Traced the full write chain --
+          // found no code that explicitly resets it to 'senior' anywhere
+          // in this flow, but the user_profiles.role column itself
+          // defaults to 'senior' if omitted from an insert, and this exact
+          // read falls back to 'senior' if the local cache is ever empty.
+          // Root mechanism not yet fully confirmed -- this print is
+          // temporary, to get a definitive read on the actual prefs value
+          // at this exact point on the next test, rather than continue
+          // theorizing. Remove once confirmed.
+          final rawUserRole = prefs.getString('user_role');
+          print('ROLE_DEBUG: prefs.getString(user_role) = $rawUserRole (effectiveUserId=$effectiveUserId)');
+          final role = rawUserRole ?? 'senior';
           final userEmail = supabase.auth.currentUser?.email ?? '';
           final relationshipType = prefs.getString('relationship') ?? '';
           final nestProfileUpdate = <String, dynamic>{
