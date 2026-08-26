@@ -375,6 +375,45 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           }
           return;
         }
+
+        // Aug 26 2026: was relying entirely on this device still having a
+        // cached invite_code + joined_via_invite flag to ever reach the
+        // ban check further down -- but a completely ordinary Sign Out
+        // (setup_screen.dart) wipes both of those via prefs.clear(),
+        // unrelated to ever being removed. So anyone who'd signed out at
+        // any point before being removed would silently fall through to
+        // creating themselves a brand-new nest instead of ever seeing the
+        // "you've been removed" message, with zero explanation of what
+        // happened -- confirmed via direct DB check (D Von's real Aug 25
+        // test: a genuine ban record existed, but the removed account
+        // still ended up owning a fresh, separate nest named "My Family").
+        // This checks the real ban record directly, independent of
+        // anything cached locally, the moment no active membership is
+        // found -- so it can't be silently skipped by an unrelated
+        // sign-out wiping local state.
+        final everBanned = await supabaseClient.rpc(
+          'is_user_banned_from_any_nest',
+          params: {'p_user_id': checkUserId},
+        );
+        if (everBanned == true) {
+          await prefs.remove('nest_id');
+          await prefs.remove('invite_code');
+          await prefs.setBool('joined_via_invite', false);
+          await prefs.setBool('has_onboarded', false);
+          await prefs.setBool('onboarding_complete', false);
+          if (mounted) {
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/splash-screen',
+              (route) => false,
+              arguments: {
+                'bannerMessage':
+                    'You\'ve been removed from that nest. Please ask the nest owner for a new invite if you\'d like to rejoin, or create your own nest below.',
+              },
+            );
+          }
+          return;
+        }
       } catch (_) {}
     }
 
