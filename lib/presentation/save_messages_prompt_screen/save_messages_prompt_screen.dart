@@ -656,7 +656,17 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             // own (fixed the same day as this). Only fall back to
             // generating fresh if the cached code somehow already exists
             // (an actual collision), not as the default first move.
-            final nestName = prefs.getString('nest_name') ?? 'My Family';
+            // Aug 26 2026: same draft-key fix as name/preferredName/avatar
+            // above -- was reading only the final 'nest_name' key, which
+            // this exact flow (fresh Owner-creating-new-nest signup) never
+            // populates, only 'onboarding_draft_nest_name' does -- so this
+            // always fell straight to the literal 'My Family' default,
+            // silently discarding whatever real name (e.g. "Grandmas
+            // Nest") the person actually typed during onboarding.
+            // Confirmed via D Von's real Aug 26 test.
+            final nestName = (prefs.getString('onboarding_draft_nest_name') ?? '').isNotEmpty
+                ? prefs.getString('onboarding_draft_nest_name')!
+                : (prefs.getString('nest_name') ?? 'My Family');
             final cachedCode = prefs.getString('invite_code') ?? '';
             final reusableCachedCode =
                 RegExp(r'^NEST\d{6}$').hasMatch(cachedCode) ? cachedCode : null;
