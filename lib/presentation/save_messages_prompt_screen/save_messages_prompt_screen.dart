@@ -526,6 +526,21 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           if (localAnniversary2 != null) {
             nestProfileUpdate['anniversary'] = localAnniversary2;
           }
+          // Aug 26 2026: this upsert never included avatar_url in any
+          // branch -- confirmed via D Von's real test (seniornest.test2,
+          // a genuinely fresh account): he picked an avatar during
+          // onboarding, but Settings showed the default letter instead,
+          // because the avatar the person chose was simply never sent to
+          // Supabase at all for this exact "Owner creating new nest"
+          // signup path. Same local key (kProfilePhotoKey) already used
+          // and trusted everywhere else in this file for a returning
+          // user's avatar -- stores the same JSON-string format the
+          // avatar_url column already holds, confirmed via direct DB
+          // check on a working account.
+          final localAvatarJson = prefs.getString(kProfilePhotoKey);
+          if (localAvatarJson != null && localAvatarJson.isNotEmpty) {
+            nestProfileUpdate['avatar_url'] = localAvatarJson;
+          }
           await supabase.from('user_profiles').upsert(nestProfileUpdate);
           print('NEST_DEBUG: profile upserted');
 
