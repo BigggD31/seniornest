@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -316,6 +317,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
   List<MessageModel> _messages = [];
   Set<String> _bookmarkedIds = {};
+  // Aug 27 2026: real-time feed updates -- see initState/_subscribeToFeedRealtime.
+  RealtimeChannel? _feedChannel;
+  Timer? _realtimeRefreshDebounce;
 
   @override
   void initState() {
@@ -326,6 +330,47 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     );
     _loadData();
     _loadRemovedMemberIds();
+    _subscribeToFeedRealtime();
+  }
+
+  // Aug 27 2026: pre-ship backlog item -- new posts/edits/deletes now show
+  // up live without a manual refresh. Deliberately NOT hand-patching
+  // _messages incrementally per INSERT/UPDATE/DELETE event (real risk of
+  // subtly diverging from the proven-correct mapping/pin-ordering/dedup
+  // logic already in _loadFeedFromSupabase). Instead: any change on this
+  // nest's feed_posts triggers a debounced re-run of that same,
+  // already-correct fetch -- slightly more network traffic than a hand-
+  // rolled patch, but far lower risk of a new, subtle feed bug. Debounced
+  // 400ms so a burst of changes (e.g. someone editing then immediately
+  // pinning a post) doesn't trigger several overlapping refetches.
+  Future<void> _subscribeToFeedRealtime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isEmpty || !mounted) return;
+
+      _feedChannel = Supabase.instance.client
+          .channel('feed_posts_realtime_$nestId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'feed_posts',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'nest_id',
+              value: nestId,
+            ),
+            callback: (payload) {
+              _realtimeRefreshDebounce?.cancel();
+              _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
+                if (mounted) _loadFeedFromSupabase();
+              });
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('FEED_REALTIME: subscribe failed, feed still works via manual refresh: $e');
+    }
   }
 
   Future<void> _loadRemovedMemberIds() async {
@@ -1678,6 +1723,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
   @override
   void dispose() {
+    _realtimeRefreshDebounce?.cancel();
+    _feedChannel?.unsubscribe();
     _listEntranceController.dispose();
     _scrollController.dispose();
     super.dispose();
