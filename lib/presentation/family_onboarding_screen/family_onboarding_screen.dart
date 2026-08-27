@@ -983,7 +983,9 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         ),
         const SizedBox(height: 24),
         Text(
-          'You\'re joining the\nnest! 🏡',
+          _joinedViaInvite
+              ? 'You\'re joining the\nnest! 🏡'
+              : 'Let\'s set up your\nfamily nest! 🏡',
           style: GoogleFonts.nunitoSans(
             fontSize: isTablet ? 30 : 26,
             fontWeight: FontWeight.w800,
@@ -993,7 +995,9 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         ),
         const SizedBox(height: 10),
         Text(
-          'Your loved one will be so happy to see you here. Let\'s get you set up in just a few steps.',
+          _joinedViaInvite
+              ? 'Your loved one will be so happy to see you here. Let\'s get you set up in just a few steps.'
+              : 'You\'ll be the Nest Owner, connecting your loved one with the whole family. Let\'s get set up in just a few steps.',
           style: GoogleFonts.nunitoSans(
             fontSize: isTablet ? 17 : 15,
             color: textSecondary,
