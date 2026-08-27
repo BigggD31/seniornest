@@ -53,7 +53,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       if (args != null && args['signInMode'] == true) {
-        _showCreateAccountSheet();
+        _showCreateAccountSheet(signIn: true);
       }
     });
     _fadeAnim = Tween<double>(
@@ -836,7 +836,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
   }
 
   // ── Auth bottom sheet ─────────────────────────────────────────────────────
-  void _showCreateAccountSheet() {
+  void _showCreateAccountSheet({bool signIn = false}) {
     setState(() => _authError = null);
     showModalBottomSheet(
       context: context,
@@ -845,6 +845,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       builder: (ctx) => _AuthOptionsSheet(
         isAuthLoading: _isAuthLoading,
         authError: _authError,
+        isSignInMode: signIn,
         onGoogleTap: () {
           Navigator.pop(ctx);
           _handleGoogleSignIn();
@@ -1148,6 +1149,7 @@ class _AuthOptionsSheet extends StatelessWidget {
     required this.onAppleTap,
     required this.onEmailSignUp,
     required this.onEmailSignIn,
+    this.isSignInMode = false,
   });
 
   final bool isAuthLoading;
@@ -1156,6 +1158,17 @@ class _AuthOptionsSheet extends StatelessWidget {
   final VoidCallback onAppleTap;
   final VoidCallback onEmailSignUp;
   final VoidCallback onEmailSignIn;
+  // Aug 27 2026: D Von's direct report -- tapping the top-level "Sign In"
+  // button on the Welcome Back screen landed on this exact sheet, but it
+  // always showed "Create your account" / "Sign up with Email" regardless
+  // of intent. A working path to sign-in already existed (the small
+  // "Already have an account?" link at the bottom), but the sheet's whole
+  // primary presentation contradicted what the person just told the app
+  // they wanted. This flag flips the header and the big email button to
+  // match sign-in intent when the sheet is opened that way; Google/Apple
+  // buttons behave identically either way since OAuth doesn't care about
+  // this screen's mode.
+  final bool isSignInMode;
 
   @override
   Widget build(BuildContext context) {
@@ -1187,7 +1200,7 @@ class _AuthOptionsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            'Create your account',
+            isSignInMode ? 'Welcome back' : 'Create your account',
             style: GoogleFonts.nunitoSans(
               fontSize: 22,
               fontWeight: FontWeight.w800,
@@ -1196,7 +1209,9 @@ class _AuthOptionsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Your messages and stories will be saved securely.',
+            isSignInMode
+                ? 'Sign in to pick up right where you left off.'
+                : 'Your messages and stories will be saved securely.',
             style: GoogleFonts.nunitoSans(
               fontSize: 13,
               color: const Color(0xFF9E8E7E),
@@ -1229,22 +1244,23 @@ class _AuthOptionsSheet extends StatelessWidget {
           const SizedBox(height: 8),
           // Email button
           _buildSocialButton(
-            onTap: isAuthLoading ? null : onEmailSignUp,
+            onTap: isAuthLoading ? null : (isSignInMode ? onEmailSignIn : onEmailSignUp),
             icon: const Icon(
               Icons.email_outlined,
               color: Color(0xFF5DA399),
               size: 20,
             ),
-            label: 'Sign up with Email',
+            label: isSignInMode ? 'Sign in with Email' : 'Sign up with Email',
             bgColor: const Color(0xFF5DA399),
             borderColor: const Color(0xFF5DA399),
             textColor: Colors.white,
           ),
           const SizedBox(height: 14),
-          // Sign in link
+          // Sign in / create account link -- flips to match whichever
+          // action ISN'T the primary one above
           Center(
             child: GestureDetector(
-              onTap: isAuthLoading ? null : onEmailSignIn,
+              onTap: isAuthLoading ? null : (isSignInMode ? onEmailSignUp : onEmailSignIn),
               child: RichText(
                 text: TextSpan(
                   style: GoogleFonts.nunitoSans(
@@ -1252,9 +1268,9 @@ class _AuthOptionsSheet extends StatelessWidget {
                     color: const Color(0xFF9E8E7E),
                   ),
                   children: [
-                    const TextSpan(text: 'Already have an account? '),
+                    TextSpan(text: isSignInMode ? 'New here? ' : 'Already have an account? '),
                     TextSpan(
-                      text: 'Sign In',
+                      text: isSignInMode ? 'Create Account' : 'Sign In',
                       style: GoogleFonts.nunitoSans(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
