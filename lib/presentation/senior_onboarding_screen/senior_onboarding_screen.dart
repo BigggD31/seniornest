@@ -8,7 +8,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../routes/app_routes.dart';
-import '../splash_screen/widgets/nest_logo_widget.dart';
 import '../../core/app_state.dart';
 import '../../services/share_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
@@ -648,12 +647,46 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 2),
-        // Large logo at top
-        Center(child: NestLogoWidget(size: isTablet ? 211.0 : 208.0)),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
+        // Aug 27 2026: D Von's direct ask -- match the icon/title/subtitle
+        // treatment already used on the family onboarding flow's first
+        // screen (gold-teal gradient circle, bold two-line title, warm
+        // subtitle), instead of the plain logo + generic "Welcome!" that
+        // was here before. Uses the same _joinedViaInvite branching family
+        // already has, with elderly_rounded (the same icon role_choice_
+        // screen.dart already uses for "I'm the Senior") instead of
+        // family's family_restroom_rounded.
+        Center(
+          child: Container(
+            width: 90,
+            height: 90,
+            decoration: BoxDecoration(
+              gradient: const RadialGradient(
+                colors: [Color(0xFFD4AA00), Color(0xFF5DA399)],
+                center: Alignment.topLeft,
+                radius: 1.5,
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFD4AA00).withAlpha(50),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.elderly_rounded,
+              color: Colors.white,
+              size: 44,
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
         Text(
-          'Welcome! 🏡',
+          _joinedViaInvite
+              ? 'You\'re joining the\nnest! 🏡'
+              : 'Let\'s set up your\nnest! 🏡',
           style: GoogleFonts.nunitoSans(
             fontSize: isTablet ? 30 : 26,
             fontWeight: FontWeight.w800,
@@ -661,9 +694,9 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
             height: 1.2,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         Text(
-          'Your family is so glad you\'re here. Let\'s set up your cozy corner — it only takes a minute.',
+          'Your family is so glad you\'re here. Let\'s set up your cozy corner in just a few steps.',
           style: GoogleFonts.nunitoSans(
             fontSize: isTablet ? 17 : 15,
             color: const Color(0xFF6B5E4E),

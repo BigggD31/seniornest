@@ -323,13 +323,11 @@ class _LegacyScreenState extends State<LegacyScreen>
       _sampleBannerDismissed = prefs.getBool('legacy_sample_banner_dismissed') ?? false;
       _stories = initialStories.isNotEmpty
           ? initialStories
-          : (isSeniorInitial
-              ? _mockStories.map((s) {
-                  final m = Map<String, dynamic>.from(s);
-                  m['isBookmarked'] = bookmarkedIds.contains(m['id'] as String);
-                  return m;
-                }).toList()
-              : <Map<String, dynamic>>[]);
+          : _mockStories.map((s) {
+              final m = Map<String, dynamic>.from(s);
+              m['isBookmarked'] = bookmarkedIds.contains(m['id'] as String);
+              return m;
+            }).toList();
       _submittedPrompts = loadedPrompts;
       _isLoading = false;
       _profileData = profileData;
@@ -813,9 +811,13 @@ class _LegacyScreenState extends State<LegacyScreen>
                             SliverToBoxAdapter(
                               child: _buildSeniorWriteHero(isTablet),
                             ),
-                          // Sample content explainer banner (senior, only while sample stories are showing)
-                          if (_isSenior &&
-                              !_sampleBannerDismissed &&
+                          // Sample content explainer banner (either role, only while sample stories are showing)
+                          // Aug 27 2026: was gated senior-only, but family
+                          // members now also see sample stories when no
+                          // real content exists yet (fixed same session) --
+                          // without this banner they'd have no way to know
+                          // these aren't their loved one's real stories.
+                          if (!_sampleBannerDismissed &&
                               _stories.isNotEmpty &&
                               _stories.every((s) => s['isSample'] == true))
                             SliverToBoxAdapter(
