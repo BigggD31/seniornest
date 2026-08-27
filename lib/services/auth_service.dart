@@ -275,7 +275,22 @@ class AuthService {
     // button is still being investigated.
     'cached_nest_members', 'cached_nest_members_nest_id', 'cached_nest_members_user_id',
     'cached_real_messages', 'cached_real_messages_nest_id',
-    // cached_checkin_* deliberately excluded -- "has the senior checked in
+    // Aug 27 2026: cached_checkin_senior_name/senior_id/nest_id were
+    // caught in the "cached_checkin_* deliberately excluded" exemption
+    // below too, but that reasoning only actually applies to STATUS
+    // flags ("has the senior checked in today," "were meds taken") --
+    // these three are IDENTITY, not status: which nest this is and who
+    // the senior in it is. A stale identity value surviving a genuine
+    // account switch is exactly the kind of cross-account bleed this
+    // whole list exists to prevent -- confirmed via D Von's real Aug 26
+    // test: a brand-new account with a brand-new empty nest (zero real
+    // members yet) showed a previous test's senior's name on Safety and
+    // Legacy, sourced from this exact cache. The status flags below
+    // stay excluded -- their own self-correction-via-live-check
+    // reasoning is still correct and unrelated to this.
+    'cached_checkin_senior_name', 'cached_checkin_senior_id', 'cached_checkin_nest_id',
+    // cached_checkin_* (status only: checked_in, date, meds_taken,
+    // meds_time, time) deliberately excluded -- "has the senior checked in
     // today" is a nest-level fact, not tied to who's currently viewing it.
     // Wiping it briefly showed "not checked in" right after switching
     // accounts, even though a live server re-check should correct it
