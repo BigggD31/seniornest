@@ -423,6 +423,7 @@ class _SafetyScreenState extends State<SafetyScreen>
     required bool isEmergency,
   }) async {
     setState(() => _isSendingAlert = true);
+    bool smsComposerOpened = false;
     try {
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
@@ -454,25 +455,46 @@ class _SafetyScreenState extends State<SafetyScreen>
         }
       }
 
-      // For real emergencies, also open the phone's native texting app,
-      // pre-filled to the primary emergency contact's real number. There
-      // is no SMS/push backend in this app, so this is what actually gets
-      // a genuine text out -- even to a contact who doesn't have the app.
-      if (isEmergency && _mockContacts.isNotEmpty) {
-        final primary = _mockContacts.firstWhere(
-          (c) => c['isPrimary'] == true,
-          orElse: () => _mockContacts.first,
-        );
-        final phone = (primary['phone'] as String?)?.trim();
-        if (phone != null && phone.isNotEmpty) {
-          final smsUri =
-              Uri.parse('sms:$phone&body=${Uri.encodeComponent(message)}');
+      // Aug 27 2026: D Von's direct ask, confirmed via earlier audit --
+      // "I Need Help" was unconditionally DMing every nest member
+      // regardless of emergency status, while the confirmation dialog
+      // claimed emergency contacts had been notified when they never
+      // actually were (only the single primary contact got a real text,
+      // and only their number, not the whole configured list). Real
+      // contact data (safety_contacts table) already existed, just
+      // wasn't being used for genuine emergency routing.
+      //
+      // For a real emergency: text every configured contact that has a
+      // phone number, in one native SMS composer (iOS/Android both
+      // support comma-separated recipients, so this doesn't force
+      // multiple app-switches). The nest-wide DM above already fires
+      // unconditionally for both emergency and non-emergency cases --
+      // that's fine for "I'm Okay" (a general check-in), but for a real
+      // emergency it should only be the whole story if there's truly
+      // nobody else to reach: no configured contacts with a real number
+      // at all.
+      if (isEmergency) {
+        final phones = _mockContacts
+            .map((c) => (c['phone'] as String?)?.trim())
+            .whereType<String>()
+            .where((p) => p.isNotEmpty)
+            .toSet()
+            .toList();
+        if (phones.isNotEmpty) {
+          final smsUri = Uri.parse(
+            'sms:${phones.join(",")}&body=${Uri.encodeComponent(message)}',
+          );
           try {
             await launchUrl(smsUri);
+            smsComposerOpened = true;
           } catch (e) {
             debugPrint('SAFETY_ALERT: could not launch SMS composer: $e');
           }
         }
+        // phones.isEmpty: nobody configured with a real number -- the
+        // nest-wide DM sent above is the only notification that goes
+        // out, which is the correct, honest fallback rather than
+        // silently doing nothing.
       }
     } catch (e) {
       debugPrint('SAFETY_ALERT ERROR: $e');
@@ -511,7 +533,9 @@ class _SafetyScreenState extends State<SafetyScreen>
           ),
           content: Text(
             isEmergency
-                ? 'Your emergency contacts have been notified. Help is on the way.'
+                ? (smsComposerOpened
+                      ? 'A text to your emergency contacts is ready to send — check your Messages app to send it now. Your family has also been notified in the app.'
+                      : 'No emergency contacts are set up yet, so your family has been notified in the app. Add emergency contacts on this page so a real text can go out next time.')
                 : 'Your family has been notified that you\'re okay.',
             style: GoogleFonts.nunitoSans(
               fontSize: 15,
