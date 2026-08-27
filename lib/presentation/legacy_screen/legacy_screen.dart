@@ -1836,46 +1836,70 @@ class _LegacyScreenState extends State<LegacyScreen>
   }
 
   Widget _buildEmptyState() {
+    // Aug 27 2026: was bare centered text/emoji with no card, border, or
+    // background -- the only placeholder on this page that didn't match
+    // the styling already established just above it (No story requests
+    // yet: bordered card, colored icon box, proper text hierarchy).
+    // D Von's direct ask -- reuse the pattern that already works instead
+    // of a one-off. Text logic unchanged, just the container around it.
+    final title = _hasSentStories
+        ? 'No stories in this category yet'
+        : (_isSenior
+              ? 'Your stories are waiting to be told ✨'
+              : 'No stories yet');
+    final subtitle = _hasSentStories
+        ? (_isSenior
+              ? 'Tap "Tell Your Story" above to begin'
+              : 'Check back soon for new stories')
+        : (_isSenior
+              ? 'Tap "Tell Your Story" above to share your first memory with your family 🌿'
+              : 'Check back soon — your loved one\'s stories will appear here 🌿');
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('📖', style: TextStyle(fontSize: 48)),
-            const SizedBox(height: 16),
-            Text(
-              _hasSentStories
-                  ? (_isSenior
-                        ? 'No stories in this category yet'
-                        : 'No stories in this category yet')
-                  : (_isSenior
-                        ? 'Your stories are waiting to be told ✨'
-                        : 'No stories yet'),
-              style: GoogleFonts.nunitoSans(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: _hasSentStories ? _textPrimary : const Color(0xFFD4AA00),
+        padding: const EdgeInsets.all(20),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+          decoration: BoxDecoration(
+            color: _cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _cardBorder, width: 1.5),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: (_hasSentStories ? const Color(0xFF5DA399) : const Color(0xFFD4AA00)).withAlpha(20),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Center(
+                  child: Text('📖', style: const TextStyle(fontSize: 24)),
+                ),
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _hasSentStories
-                  ? (_isSenior
-                        ? 'Tap "Tell Your Story" above to begin'
-                        : 'Check back soon for new stories')
-                  : (_isSenior
-                        ? 'Tap "Tell Your Story" above to share your first memory with your family 🌿'
-                        : 'Check back soon — your loved one\'s stories will appear here 🌿'),
-              style: GoogleFonts.nunitoSans(
-                fontSize: 15,
-                color: _textSecondary,
-                height: 1.5,
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: _hasSentStories ? _textPrimary : const Color(0xFFD4AA00),
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 13,
+                  color: _textSecondary,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
