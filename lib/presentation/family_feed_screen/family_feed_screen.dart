@@ -331,6 +331,109 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     _loadData();
     _loadRemovedMemberIds();
     _subscribeToFeedRealtime();
+    _checkPendingSuccessionForOwner();
+  }
+
+  // Aug 28 2026: D Von's direct ask -- the Nest Ownership section in
+  // Setup works correctly, but an owner who's slowing down or getting
+  // sicker might not think to go looking for it. This surfaces a request
+  // right on Home, the very first screen they see, instead of leaving it
+  // buried in a settings page they'd have to know to check. Deliberately
+  // re-checks ownership independently here rather than trusting
+  // _isNestOwner's timing, since that field updates asynchronously
+  // elsewhere and this needs to be correct the moment it runs.
+  Future<void> _checkPendingSuccessionForOwner() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final myUserId = supabase.auth.currentUser?.id;
+      if (myUserId == null) return;
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isEmpty) return;
+
+      final nest = await supabase
+          .from('nests')
+          .select('created_by')
+          .eq('id', nestId)
+          .maybeSingle();
+      if (nest?['created_by'] != myUserId) return;
+
+      final pending = await supabase
+          .from('nest_succession_requests')
+          .select('id, requested_by')
+          .eq('nest_id', nestId)
+          .eq('status', 'pending')
+          .maybeSingle();
+      if (pending == null) return;
+
+      final requesterId = pending['requested_by'] as String;
+      final rp = await supabase
+          .from('user_profiles')
+          .select('display_name, preferred_name')
+          .eq('id', requesterId)
+          .maybeSingle();
+      final preferred = (rp?['preferred_name'] as String?) ?? '';
+      final display = (rp?['display_name'] as String?) ?? '';
+      final requesterName = preferred.isNotEmpty
+          ? preferred
+          : (display.isNotEmpty ? display : 'A family member');
+
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showSuccessionRequestPopup(requesterName);
+        });
+      }
+    } catch (e) {
+      debugPrint('SUCCESSION_HOME_CHECK_ERROR: $e');
+    }
+  }
+
+  void _showSuccessionRequestPopup(String requesterName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF242018) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          '$requesterName wants to become Nest Owner',
+          style: GoogleFonts.nunitoSans(
+            fontSize: 19,
+            fontWeight: FontWeight.w700,
+            color: _isDarkMode ? const Color(0xFFF5F0E8) : const Color(0xFF2C2417),
+          ),
+        ),
+        content: Text(
+          'You can approve or deny this in Setup. If you don\'t respond, other family members can still weigh in, and it won\'t happen without everyone being able to see it.',
+          style: GoogleFonts.nunitoSans(
+            fontSize: 15,
+            color: _isDarkMode ? const Color(0xFFB8AC98) : const Color(0xFF6B5E4E),
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Later',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 15,
+                color: _isDarkMode ? const Color(0xFFB8AC98) : const Color(0xFF6B5E4E),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pushNamed(context, AppRoutes.setupScreen);
+            },
+            child: Text(
+              'View Request',
+              style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF5DA399)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // Aug 27 2026: pre-ship backlog item -- new posts/edits/deletes now show
