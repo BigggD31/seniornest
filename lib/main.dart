@@ -162,26 +162,64 @@ class _MyAppState extends State<MyApp> {
   // A subscription with no expiry recorded (lifetime/VIP) never expires;
   // everything else is checked against its expires_at against now, and
   // their estimated expiry. No row at all means never subscribed.
-  Future<bool> _isCurrentlyEntitled() async {
+  //
+  // Aug 27 2026: was checking ONLY the currently signed-in user's own
+  // subscriptions row -- meaning family members, who are never expected
+  // to personally pay (per the app's own onboarding text: "the person
+  // who creates the Nest is the Nest Owner and pays the subscription"),
+  // would get sent to the paywall themselves despite the actual Nest
+  // Owner already having an active subscription covering everyone.
+  // Confirmed via direct code read this was the real, live behavior --
+  // nothing anywhere checked the owner's status on a member's behalf.
+  // This is also the reason Nest Succession couldn't work correctly:
+  // succession changes who nests.created_by points to, but the old
+  // per-user-only check would never notice that change meant anything.
+  //
+  // Fixed: still checks the signed-in person's own subscription first
+  // (fast path for the common case, and correctly preserves anyone who
+  // personally redeemed their own VIP code independent of nest
+  // ownership) -- only if that comes back empty does it look up who
+  // actually owns their nest and check that person's subscription
+  // instead. A newly-transferred owner who hasn't subscribed yet is
+  // correctly NOT covered by either check, by design -- that's exactly
+  // the signal that sends them to the subscribe screen after succession.
+  Future<bool> _isCurrentlyEntitled(SharedPreferences prefs) async {
     try {
       final userId = await _waitForRestoredUserId();
       if (userId == null) return false;
-      final row = await Supabase.instance.client
-          .from('subscriptions')
-          .select('status, expires_at')
-          .eq('user_id', userId)
+
+      if (await _hasActiveSubscriptionRow(userId)) return true;
+
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isEmpty) return false;
+      final nest = await Supabase.instance.client
+          .from('nests')
+          .select('created_by')
+          .eq('id', nestId)
           .maybeSingle();
-      if (row == null) return false;
-      if (row['status'] == 'lifetime') return true;
-      final expiresAt = row['expires_at'] as String?;
-      if (expiresAt == null) return false;
-      return DateTime.parse(expiresAt).isAfter(DateTime.now());
+      final ownerId = nest?['created_by'] as String?;
+      if (ownerId == null || ownerId == userId) return false;
+      return await _hasActiveSubscriptionRow(ownerId);
     } catch (e) {
       debugPrint('ENTITLEMENT_CHECK_ERROR: $e');
       // Fail open on a network/error blip rather than locking someone out
       // due to a connectivity hiccup at launch.
       return true;
     }
+  }
+
+  // Aug 27 2026: was a direct table select, which only works for a
+  // person's OWN row -- confirmed via RLS check that subscriptions only
+  // allows auth.uid() = user_id, so this would have silently returned
+  // nothing for every family member checking their nest owner's status,
+  // making the whole fix above a no-op for the exact population it's
+  // meant to help. Uses the same SECURITY DEFINER RPC pattern already
+  // proven for the ban checks -- returns only a boolean, never exposes
+  // anyone's actual subscription details to someone who isn't them.
+  Future<bool> _hasActiveSubscriptionRow(String userId) async {
+    final result = await Supabase.instance.client
+        .rpc('is_user_entitled', params: {'p_user_id': userId});
+    return result == true;
   }
 
   // Confirms the locally cached nest_id is still a real membership in
@@ -354,7 +392,7 @@ class _MyAppState extends State<MyApp> {
         // app if they're currently entitled. Previously this went straight
         // to Home regardless of subscription status, since nothing
         // anywhere checked it.
-        final entitled = await _isCurrentlyEntitled();
+        final entitled = await _isCurrentlyEntitled(prefs);
         if (!entitled) {
           _initialRoute = AppRoutes.subscribeNestScreen;
         } else {
