@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_state.dart';
+import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../services/share_service.dart';
 import '../../widgets/app_navigation.dart';
@@ -47,6 +48,12 @@ class _SetupScreenState extends State<SetupScreen>
   String _textSize = 'Large';
   bool _isGuest = appIsGuestNotifier.value;
   String _inviteCode = '';
+  // Aug 27 2026: Nest Succession feature -- see _loadSuccessionStatus.
+  Map<String, dynamic>? _nestOwnerProfile;
+  Map<String, dynamic>? _pendingSuccessionRequest;
+  List<Map<String, dynamic>> _successionObjections = [];
+  String? _justBecameOwnerRequestId;
+  bool _successionActionLoading = false;
   Map<String, dynamic>? _profileData;
   DateTime? _birthday;
   DateTime? _anniversary;
@@ -66,6 +73,7 @@ class _SetupScreenState extends State<SetupScreen>
     );
     _itemAnimations = [];
     _loadData();
+    _loadSuccessionStatus();
   }
 
   Future<void> _loadData() async {
@@ -399,6 +407,527 @@ class _SetupScreenState extends State<SetupScreen>
     }
   }
 
+  // ── Nest Succession ─────────────────────────────────────────────
+  // Aug 27 2026: real feature build, scoped and agreed with D Von across
+  // several rounds of discussion. Deliberately never asks "why" someone's
+  // unreachable (death, missed payment, hospital, anything else) -- it
+  // only ever asks "is the current owner responding." See the RPC
+  // functions in Supabase for the actual business rules; this just reads
+  // and displays their result and calls them.
+  Future<void> _loadSuccessionStatus() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isEmpty) return;
+
+      // Safe to call from anyone -- only ever touches rows objectively
+      // past their own deadline, nothing scoped to the calling user.
+      try {
+        await supabase.rpc('resolve_expired_succession_requests');
+      } catch (_) {}
+
+      final nest = await supabase
+          .from('nests')
+          .select('created_by')
+          .eq('id', nestId)
+          .maybeSingle();
+      final ownerId = nest?['created_by'] as String?;
+
+      Map<String, dynamic>? ownerProfile;
+      if (ownerId != null) {
+        final p = await supabase
+            .from('user_profiles')
+            .select('id, display_name, preferred_name')
+            .eq('id', ownerId)
+            .maybeSingle();
+        if (p != null) {
+          final preferred = (p['preferred_name'] as String?) ?? '';
+          final display = (p['display_name'] as String?) ?? '';
+          ownerProfile = {
+            'id': ownerId,
+            'name': preferred.isNotEmpty ? preferred : (display.isNotEmpty ? display : 'the owner'),
+          };
+        }
+      }
+
+      final pending = await supabase
+          .from('nest_succession_requests')
+          .select('id, requested_by, deadline, status')
+          .eq('nest_id', nestId)
+          .eq('status', 'pending')
+          .maybeSingle();
+
+      Map<String, dynamic>? pendingWithName;
+      List<Map<String, dynamic>> objections = [];
+      if (pending != null) {
+        final requesterId = pending['requested_by'] as String;
+        final rp = await supabase
+            .from('user_profiles')
+            .select('display_name, preferred_name')
+            .eq('id', requesterId)
+            .maybeSingle();
+        final preferred = (rp?['preferred_name'] as String?) ?? '';
+        final display = (rp?['display_name'] as String?) ?? '';
+        pendingWithName = {
+          ...pending,
+          'requester_name': preferred.isNotEmpty ? preferred : (display.isNotEmpty ? display : 'A family member'),
+        };
+
+        final objRows = await supabase
+            .from('nest_succession_objections')
+            .select('objected_by')
+            .eq('request_id', pending['id']);
+        objections = (objRows as List)
+            .map((r) => Map<String, dynamic>.from(r as Map))
+            .toList();
+      }
+
+      // One-time "you're the new owner" prompt -- only shown if the
+      // person hasn't already dismissed it (per-request ack flag) and
+      // they're genuinely the current owner now, not stale info from an
+      // older resolved request.
+      final myUserId = supabase.auth.currentUser?.id;
+      String? justResolvedId;
+      if (myUserId != null && ownerId == myUserId) {
+        final resolved = await supabase
+            .from('nest_succession_requests')
+            .select('id, resolved_at')
+            .eq('nest_id', nestId)
+            .eq('requested_by', myUserId)
+            .inFilter('status', ['approved', 'auto_transferred'])
+            .order('resolved_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (resolved != null) {
+          final ackKey = 'succession_ack_${resolved['id']}';
+          final alreadyAcked = prefs.getBool(ackKey) ?? false;
+          if (!alreadyAcked) justResolvedId = resolved['id'] as String;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _nestOwnerProfile = ownerProfile;
+          _pendingSuccessionRequest = pendingWithName;
+          _successionObjections = objections;
+          _justBecameOwnerRequestId = justResolvedId;
+        });
+      }
+    } catch (e) {
+      debugPrint('SUCCESSION_LOAD_ERROR: $e');
+    }
+  }
+
+  void _showSuccessionError(Object e) {
+    if (!mounted) return;
+    final message = e.toString().contains('Exception:')
+        ? e.toString().split('Exception:').last.trim()
+        : 'Something went wrong. Please try again.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.nunitoSans(fontSize: 14, color: Colors.white),
+        ),
+        backgroundColor: const Color(0xFFC97B4A),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showSuccessionSuccess(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.nunitoSans(fontSize: 14, color: Colors.white),
+        ),
+        backgroundColor: const Color(0xFF5DA399),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _confirmRequestOwnership() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Request Nest Ownership?',
+          style: GoogleFonts.nunitoSans(fontSize: 20, fontWeight: FontWeight.w700, color: _textPrimary),
+        ),
+        content: Text(
+          'Everyone in the nest will be notified. The current owner can approve or deny it directly; if they don\'t respond within 7 days and nobody objects, ownership transfers automatically.',
+          style: GoogleFonts.nunitoSans(fontSize: 15, color: _textSecondary, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.nunitoSans(fontSize: 15, color: _textSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _requestNestOwnership();
+            },
+            child: Text(
+              'Send Request',
+              style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF5DA399)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _requestNestOwnership() async {
+    setState(() => _successionActionLoading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      await Supabase.instance.client.rpc(
+        'create_succession_request',
+        params: {'p_nest_id': nestId},
+      );
+      await _loadSuccessionStatus();
+      _showSuccessionSuccess('Request sent — everyone in the nest has been notified.');
+    } catch (e) {
+      _showSuccessionError(e);
+    } finally {
+      if (mounted) setState(() => _successionActionLoading = false);
+    }
+  }
+
+  void _confirmApprove(String requestId, String requesterName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Make $requesterName the Nest Owner?',
+          style: GoogleFonts.nunitoSans(fontSize: 20, fontWeight: FontWeight.w700, color: _textPrimary),
+        ),
+        content: Text(
+          'This happens immediately. You will no longer be the Nest Owner.',
+          style: GoogleFonts.nunitoSans(fontSize: 15, color: _textSecondary, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.nunitoSans(fontSize: 15, color: _textSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _approveSuccession(requestId);
+            },
+            child: Text(
+              'Approve',
+              style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF5DA399)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _approveSuccession(String requestId) async {
+    setState(() => _successionActionLoading = true);
+    try {
+      await Supabase.instance.client.rpc(
+        'approve_succession_request',
+        params: {'p_request_id': requestId},
+      );
+      // The approving user is the OUTGOING owner -- reflect that locally
+      // right away rather than waiting for the next cold start.
+      appIsNestOwnerNotifier.value = false;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('cached_is_nest_owner', false);
+      if (mounted) setState(() => _isNestOwner = false);
+      await _loadSuccessionStatus();
+      _showSuccessionSuccess('Ownership transferred.');
+    } catch (e) {
+      _showSuccessionError(e);
+    } finally {
+      if (mounted) setState(() => _successionActionLoading = false);
+    }
+  }
+
+  Future<void> _denySuccession(String requestId) async {
+    setState(() => _successionActionLoading = true);
+    try {
+      await Supabase.instance.client.rpc(
+        'deny_succession_request',
+        params: {'p_request_id': requestId},
+      );
+      await _loadSuccessionStatus();
+      _showSuccessionSuccess('Request denied.');
+    } catch (e) {
+      _showSuccessionError(e);
+    } finally {
+      if (mounted) setState(() => _successionActionLoading = false);
+    }
+  }
+
+  Future<void> _objectToSuccession(String requestId) async {
+    setState(() => _successionActionLoading = true);
+    try {
+      await Supabase.instance.client.rpc(
+        'object_to_succession_request',
+        params: {'p_request_id': requestId},
+      );
+      await _loadSuccessionStatus();
+      _showSuccessionSuccess('Your objection has been recorded.');
+    } catch (e) {
+      _showSuccessionError(e);
+    } finally {
+      if (mounted) setState(() => _successionActionLoading = false);
+    }
+  }
+
+  Future<void> _dismissNewOwnerBanner() async {
+    final requestId = _justBecameOwnerRequestId;
+    if (requestId == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('succession_ack_$requestId', true);
+    if (mounted) setState(() => _justBecameOwnerRequestId = null);
+  }
+
+  Widget _buildNewOwnerBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD4AA00).withAlpha(20),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD4AA00), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'You\'re now the Nest Owner',
+            style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w700, color: _textPrimary),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Subscribe to keep everything active for the whole family.',
+            style: GoogleFonts.nunitoSans(fontSize: 13, color: _textSecondary),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pushNamed(context, AppRoutes.subscribeNestScreen),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4AA00),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: Text('Subscribe Now', style: GoogleFonts.nunitoSans(fontSize: 14, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: _dismissNewOwnerBanner,
+                child: Text('Later', style: GoogleFonts.nunitoSans(fontSize: 14, color: _textSecondary)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoPendingSuccessionCard(bool iAmOwner, String ownerName) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _cardBorder, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.workspace_premium_rounded, color: Color(0xFF5DA399), size: 20),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  iAmOwner ? 'You are the Nest Owner' : '$ownerName is the Nest Owner',
+                  style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w600, color: _textPrimary),
+                ),
+              ),
+            ],
+          ),
+          if (!iAmOwner) ...[
+            const SizedBox(height: 12),
+            Text(
+              'If something happens and the current owner becomes unreachable — for any reason — anyone in the nest can request to take over. Everyone is notified, and the current owner has a chance to respond first.',
+              style: GoogleFonts.nunitoSans(fontSize: 12, color: _textSecondary, height: 1.5),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _successionActionLoading ? null : _confirmRequestOwnership,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF5DA399)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(
+                  'Request Nest Ownership',
+                  style: GoogleFonts.nunitoSans(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF5DA399)),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingSuccessionCard(bool iAmOwner, String? myUserId) {
+    final req = _pendingSuccessionRequest!;
+    final requesterId = req['requested_by'] as String;
+    final requesterName = req['requester_name'] as String;
+    final deadline = DateTime.parse(req['deadline'] as String);
+    final now = DateTime.now();
+    final iAmRequester = myUserId == requesterId;
+    final iHaveObjected = _successionObjections.any((o) => o['objected_by'] == myUserId);
+
+    String timeLeftLabel;
+    final hoursLeft = deadline.difference(now).inHours;
+    if (hoursLeft >= 24) {
+      final daysLeft = (hoursLeft / 24).ceil();
+      timeLeftLabel = '$daysLeft day${daysLeft == 1 ? '' : 's'} left';
+    } else if (hoursLeft > 0) {
+      timeLeftLabel = '$hoursLeft hour${hoursLeft == 1 ? '' : 's'} left';
+    } else {
+      timeLeftLabel = 'Resolving soon';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFC97B4A), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            iAmRequester
+                ? 'Your request to become Nest Owner is pending'
+                : '$requesterName has requested to become Nest Owner',
+            style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w700, color: _textPrimary),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '$timeLeftLabel for the current owner to respond. If nobody objects, ownership transfers automatically.',
+            style: GoogleFonts.nunitoSans(fontSize: 12, color: _textSecondary, height: 1.5),
+          ),
+          if (_successionObjections.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${_successionObjections.length} member${_successionObjections.length == 1 ? ' has' : 's have'} objected',
+              style: GoogleFonts.nunitoSans(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFC97B4A)),
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (iAmOwner)
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _successionActionLoading
+                        ? null
+                        : () => _confirmApprove(req['id'] as String, requesterName),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF5DA399),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: Text('Approve', style: GoogleFonts.nunitoSans(fontSize: 14, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _successionActionLoading ? null : () => _denySuccession(req['id'] as String),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFC97B4A)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: Text(
+                      'Deny',
+                      style: GoogleFonts.nunitoSans(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFFC97B4A)),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else if (!iAmRequester)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: (_successionActionLoading || iHaveObjected)
+                    ? null
+                    : () => _objectToSuccession(req['id'] as String),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFC97B4A)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(
+                  iHaveObjected ? 'You Objected' : 'Object to This',
+                  style: GoogleFonts.nunitoSans(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFFC97B4A)),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNestOwnershipSection(bool isTablet) {
+    final myUserId = Supabase.instance.client.auth.currentUser?.id;
+    final ownerId = _nestOwnerProfile?['id'] as String?;
+    final ownerName = _nestOwnerProfile?['name'] as String? ?? 'the owner';
+    final iAmOwner = myUserId != null && ownerId == myUserId;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(isTablet ? 28 : 20, 20, isTablet ? 28 : 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('👑', 'Nest Ownership'),
+          const SizedBox(height: 12),
+          if (_justBecameOwnerRequestId != null) _buildNewOwnerBanner(),
+          if (_pendingSuccessionRequest == null)
+            _buildNoPendingSuccessionCard(iAmOwner, ownerName)
+          else
+            _buildPendingSuccessionCard(iAmOwner, myUserId),
+        ],
+      ),
+    );
+  }
+  // ── End Nest Succession ─────────────────────────────────────────
+
   void _setupAnimations() {
     _itemAnimations.clear();
     for (int i = 0; i < 12; i++) {
@@ -528,6 +1057,7 @@ class _SetupScreenState extends State<SetupScreen>
                   if (_isNestOwner)
                     SliverToBoxAdapter(child: _buildInviteCodeCard(isTablet)),
                   SliverToBoxAdapter(child: _buildNestSection(isTablet)),
+                  SliverToBoxAdapter(child: _buildNestOwnershipSectionWrapper(isTablet)),
                   SliverToBoxAdapter(child: _buildPreferencesSection(isTablet)),
                   SliverToBoxAdapter(
                     child: _buildNotificationsSection(isTablet),
@@ -1247,6 +1777,17 @@ class _SetupScreenState extends State<SetupScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildNestOwnershipSectionWrapper(bool isTablet) {
+    final anim = _itemAnimations.length > 3
+        ? _itemAnimations[3]
+        : const AlwaysStoppedAnimation(1.0);
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, child) => Opacity(opacity: anim.value, child: child),
+      child: _buildNestOwnershipSection(isTablet),
     );
   }
 
