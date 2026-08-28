@@ -955,6 +955,31 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         _seniorMedsTakenTime = initialSeniorMedsTakenTime;
       }
     });
+    // Aug 28 2026: D Von's direct, specific report -- Home was the only
+    // one of the six tabs where content didn't come in smoothly; every
+    // other tab loads its whole screen instantly with no visible
+    // rebuild, so the bigger tab-architecture item on the backlog isn't
+    // actually needed for those. This is a narrower, real bug specific
+    // to Home's very first paint: _setupItemAnimations()/.forward() used
+    // to run only after a SEPARATE network round-trip further down (the
+    // live nest-owner check), even though _isLoading had already flipped
+    // false and the real content was already rendering right here.
+    // Rendered items fall back to AlwaysStoppedAnimation(1.0) (full
+    // opacity, no animation) whenever _itemAnimations is still empty --
+    // so content appeared instantly, fully visible, the moment this
+    // setState ran. Then, a moment later, once that unrelated network
+    // call finally finished, the real animation objects were built for
+    // the first time and .forward() ran on them -- snapping the same,
+    // already-visible content back down and re-animating it in, which is
+    // exactly what would read as "doesn't smoothly come in." Starting
+    // the entrance animation here, the instant real content exists,
+    // means there's only ever one entrance, not two. The nest-owner
+    // check below is unrelated correctness logic and doesn't need to
+    // gate this at all -- it keeps running the same as before, just no
+    // longer in the way.
+    _setupItemAnimations();
+    _listEntranceController.forward();
+    _hasPlayedEntranceOnce = true;
     // appIsSeniorNotifier is only resolved once at true cold-start/resume
     // (main.dart) -- switching accounts within one running session (sign
     // out, sign into a different account, no full app relaunch) never hit
@@ -1008,9 +1033,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       // possibly-correct value with a wrong one on a failed check.
     }
 
-    _setupItemAnimations();
-    _listEntranceController.forward();
-    _hasPlayedEntranceOnce = true;
+    // _setupItemAnimations()/.forward() now run right after content
+    // first becomes visible, above -- see the Aug 28 2026 note there.
+    // Calling them again here would restart an already-playing (or
+    // already-finished) animation, undoing the actual fix.
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
