@@ -1057,12 +1057,12 @@ class _SetupScreenState extends State<SetupScreen>
                   if (_isNestOwner)
                     SliverToBoxAdapter(child: _buildInviteCodeCard(isTablet)),
                   SliverToBoxAdapter(child: _buildNestSection(isTablet)),
-                  SliverToBoxAdapter(child: _buildNestOwnershipSectionWrapper(isTablet)),
                   SliverToBoxAdapter(child: _buildPreferencesSection(isTablet)),
                   SliverToBoxAdapter(
                     child: _buildNotificationsSection(isTablet),
                   ),
                   SliverToBoxAdapter(child: _buildAppearanceSection(isTablet)),
+                  SliverToBoxAdapter(child: _buildNestOwnershipSectionWrapper(isTablet)),
                   SliverToBoxAdapter(child: _buildAccountSection(isTablet)),
                   const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
                 ],
