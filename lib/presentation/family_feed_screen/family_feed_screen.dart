@@ -2457,8 +2457,30 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     );
   }
 
-  void _showNestSwitcher() {
-    // TODO: Replace with Supabase nest list for production
+  Future<List<Map<String, dynamic>>> _fetchMyNests() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return [];
+      final response = await supabase
+          .from('nest_members')
+          .select('nests(id, name)')
+          .eq('user_id', userId);
+      return (response as List<dynamic>)
+          .map((row) => (row as Map<String, dynamic>)['nests'] as Map<String, dynamic>?)
+          .whereType<Map<String, dynamic>>()
+          .toList();
+    } catch (e) {
+      debugPrint('FETCH_MY_NESTS_ERROR: $e');
+      return [];
+    }
+  }
+
+  void _showNestSwitcher() async {
+    final myNests = await _fetchMyNests();
+    final prefs = await SharedPreferences.getInstance();
+    final activeNestId = prefs.getString('nest_id') ?? '';
+    if (!mounted) return;
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -2552,12 +2574,42 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                             ),
                           ),
                           const SizedBox(height: 16),
-                          // Active nest tile
-                          _buildNestTile(
-                            _nestName,
-                            true,
-                            onTap: () => Navigator.pop(ctx),
-                          ),
+                          // Real nest list, fetched in _showNestSwitcher
+                          // before this dialog opened. Falls back to the
+                          // cached name/active-only tile if the fetch came
+                          // back empty (e.g. offline), so this never shows
+                          // a completely blank sheet.
+                          if (myNests.isEmpty)
+                            _buildNestTile(_nestName, true, onTap: () => Navigator.pop(ctx))
+                          else
+                            ...myNests.map((nest) {
+                              final nestId = nest['id'] as String?;
+                              final nestNameVal = nest['name'] as String? ?? 'Unnamed Nest';
+                              final isActive = nestId == activeNestId;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _buildNestTile(
+                                  nestNameVal,
+                                  isActive,
+                                  onTap: () async {
+                                    Navigator.pop(ctx);
+                                    if (isActive || nestId == null) return;
+                                    await prefs.setString('nest_id', nestId);
+                                    await prefs.setString('nest_name', nestNameVal);
+                                    appNestNameNotifier.value = nestNameVal;
+                                    // Fresh instance of this same screen so
+                                    // every load method re-reads the new
+                                    // active nest_id from prefs, including
+                                    // the realtime subscription -- safer
+                                    // than hot-swapping state in place.
+                                    if (mounted) {
+                                      Navigator.pushReplacementNamed(
+                                        context, AppRoutes.familyFeedScreen);
+                                    }
+                                  },
+                                ),
+                              );
+                            }),
                           const SizedBox(height: 8),
                           _buildAddNestButton(),
                         ],
@@ -2651,7 +2703,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     return GestureDetector(
       onTap: () {
         Navigator.pop(context);
-        Navigator.pushNamed(context, AppRoutes.subscribeNestScreen);
+        Navigator.pushNamed(context, AppRoutes.subscribeNestScreen,
+          arguments: {'additionalNest': true});
       },
       child: Container(
         padding: const EdgeInsets.all(16),

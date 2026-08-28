@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
+import 'dart:math';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../routes/app_routes.dart';
+import '../../core/app_state.dart';
 
 const String _monthlyProductId = 'com.devonmurphy.seniornest.monthly';
 const String _yearlyProductId = 'com.devonmurphy.seniornest.yearly';
@@ -31,6 +34,11 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   List<ProductDetails> _products = [];
   StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
 
+  final TextEditingController _vipCodeController = TextEditingController();
+  bool _showVipField = false;
+  bool _isRedeemingVip = false;
+  String? _vipError;
+
   @override
   void initState() {
     super.initState();
@@ -50,12 +58,13 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
     _animController.forward();
     _initIAP();
-    _purchaseSubscription = _iap.purchaseStream.listen((purchases) {
+    _purchaseSubscription = _iap.purchaseStream.listen((purchases) async {
       for (final purchase in purchases) {
         if (purchase.status == PurchaseStatus.purchased ||
             purchase.status == PurchaseStatus.restored) {
           _iap.completePurchase(purchase);
-          _recordSubscription(purchase.productID, purchase.purchaseID);
+          await _recordSubscription(purchase.productID, purchase.purchaseID);
+          if (_isAdditionalNest) await _createAdditionalNest();
           if (mounted) {
             setState(() => _isPurchasing = false);
             _navigateForward();
@@ -69,10 +78,100 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     });
   }
 
+  // True when this screen was opened from the "Create a new Nest" option in
+  // the Home nest switcher -- an existing signed-in owner adding a second
+  // nest, as opposed to a first-time signup. Read lazily via ModalRoute
+  // (same pattern _navigateForward already uses) rather than cached in
+  // initState, since route arguments aren't reliably available that early.
+  bool get _isAdditionalNest {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    return args?['additionalNest'] == true;
+  }
+
+  // Runs after a successful purchase/redemption when _isAdditionalNest is
+  // true -- an existing signed-in owner adding a second nest, not a
+  // first-time signup. The nest doesn't exist until this method creates it
+  // (same reason nest_id was null on the subscription row this purchase
+  // just recorded), so this mirrors the create-nest-then-attach pattern in
+  // save_messages_prompt_screen.dart, then switches the app's active nest
+  // to the new one so Home reflects it immediately on the next screen.
+  Future<void> _createAdditionalNest() async {
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null || !mounted) return;
+
+    final nameController = TextEditingController();
+    final enteredName = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text('Name Your New Nest',
+          style: GoogleFonts.manrope(fontWeight: FontWeight.w700, fontSize: 18)),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(hintText: 'e.g. "Mom and Dad\'s House"'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, nameController.text.trim()),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+    final nestName = (enteredName != null && enteredName.isNotEmpty) ? enteredName : 'New Nest';
+
+    String? nestId;
+    for (int attempt = 0; attempt < 5 && nestId == null; attempt++) {
+      final inviteCode = 'NEST${(100000 + Random().nextInt(900000))}';
+      try {
+        final nestResponse = await supabase
+            .from('nests')
+            .insert({'name': nestName, 'created_by': userId, 'invite_code': inviteCode})
+            .select('id')
+            .single();
+        nestId = nestResponse['id'] as String;
+      } on PostgrestException catch (e) {
+        if (e.code == '23505') continue; // invite_code collision, retry
+        rethrow;
+      }
+    }
+    if (nestId == null) {
+      debugPrint('ADDITIONAL_NEST_ERROR: could not generate a unique invite code after 5 attempts');
+      return;
+    }
+
+    await supabase.from('nest_members').upsert(
+      {'nest_id': nestId, 'user_id': userId},
+      onConflict: 'nest_id,user_id',
+    );
+
+    // Attach this purchase's subscription row (still nest_id = NULL) to the
+    // nest that just got created. Only touches a NULL row, so it can't
+    // clobber this person's other nest(s).
+    await supabase.from('subscriptions')
+        .update({'nest_id': nestId})
+        .eq('user_id', userId)
+        .isFilter('nest_id', null);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('nest_id', nestId);
+    await prefs.setString('nest_name', nestName);
+    appNestNameNotifier.value = nestName;
+  }
+
   // Actually records the purchase in Supabase so the rest of the app can
   // tell whether this person is currently entitled. Previously nothing
   // wrote this down anywhere -- purchasing and access were disconnected.
-  Future<void> _recordSubscription(String productId, String? transactionId) async {
+  // nestId is null for a first-time signup subscribing before their nest
+  // exists (confirmed via splash_screen.dart trace -- Get Started sends
+  // people here before roleChoiceScreen/nest creation). It gets attached
+  // retroactively once the nest is actually created. For someone creating
+  // an *additional* nest from an existing account, the nest already exists
+  // by the time they land here, so nestId will be passed in directly.
+  Future<void> _recordSubscription(String productId, String? transactionId, {String? nestId}) async {
     try {
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
@@ -92,15 +191,29 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         expiresAt = null;
         status = 'lifetime';
       }
-      await supabase.from('subscriptions').upsert({
+      final row = {
         'user_id': userId,
+        'nest_id': nestId,
         'product_id': productId,
         'status': status,
         'purchase_date': now.toIso8601String(),
         'expires_at': expiresAt?.toIso8601String(),
         'transaction_id': transactionId,
         'updated_at': now.toIso8601String(),
-      }, onConflict: 'user_id');
+      };
+      // Explicit check-then-write instead of upsert(onConflict: 'user_id,nest_id'):
+      // Postgres unique constraints don't treat NULL = NULL, so a plain
+      // upsert wouldn't reliably catch a retry/double-tap when nestId is null
+      // (the first-time-signup case). Mirrors the same pattern used in the
+      // redeem_vip_code() DB function for the same reason.
+      var query = supabase.from('subscriptions').select('id').eq('user_id', userId);
+      query = nestId == null ? query.isFilter('nest_id', null) : query.eq('nest_id', nestId);
+      final existing = await query.maybeSingle();
+      if (existing != null) {
+        await supabase.from('subscriptions').update(row).eq('id', existing['id'] as String);
+      } else {
+        await supabase.from('subscriptions').insert(row);
+      }
     } catch (e) {
       debugPrint('SUBSCRIPTION_RECORD_ERROR: $e');
     }
@@ -122,7 +235,48 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   void dispose() {
     _purchaseSubscription?.cancel();
     _animController.dispose();
+    _vipCodeController.dispose();
     super.dispose();
+  }
+
+  // p_nest_id is left null in the RPC call below for the same reason
+  // _recordSubscription() leaves nestId null on this screen -- at this
+  // point the nest doesn't exist yet, whether this is a first-time signup
+  // or an existing owner adding a second nest. save_messages_prompt_screen.dart
+  // (first-time) and _createAdditionalNest() below (existing owner) each
+  // attach the real nest_id retroactively once their nest actually gets created.
+  Future<void> _redeemVipCode() async {
+    final code = _vipCodeController.text.trim();
+    if (code.isEmpty || _isRedeemingVip) return;
+    setState(() { _isRedeemingVip = true; _vipError = null; });
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) {
+        setState(() { _isRedeemingVip = false; _vipError = 'Please sign in first.'; });
+        return;
+      }
+      final result = await supabase.rpc('redeem_vip_code', params: {
+        'p_code': code,
+        'p_user_id': userId,
+        'p_nest_id': null,
+      });
+      if (!mounted) return;
+      if (result == true) {
+        if (_isAdditionalNest) await _createAdditionalNest();
+        if (!mounted) return;
+        _navigateForward();
+      } else {
+        setState(() {
+          _isRedeemingVip = false;
+          _vipError = "That code isn't valid or has already been fully used.";
+        });
+      }
+    } catch (e) {
+      debugPrint('VIP_CODE_REDEEM_ERROR: $e');
+      if (!mounted) return;
+      setState(() { _isRedeemingVip = false; _vipError = 'Something went wrong. Please try again.'; });
+    }
   }
 
   void _onSubscribeNow() async {
@@ -258,8 +412,67 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         const SizedBox(height: 20),
         _buildLegalLinks(),
         const SizedBox(height: 16),
+        _buildVipCodeSection(),
       ],
     );
+  }
+
+  Widget _buildVipCodeSection() {
+    if (!_showVipField) {
+      return Center(
+        child: GestureDetector(
+          onTap: () => setState(() => _showVipField = true),
+          child: Text('Have a VIP code?',
+            style: GoogleFonts.manrope(fontSize: 13, fontWeight: FontWeight.w600,
+              color: const Color(0xFF9E9080), decoration: TextDecoration.underline)),
+        ),
+      );
+    }
+    return Column(children: [
+      Row(children: [
+        Expanded(
+          child: TextField(
+            controller: _vipCodeController,
+            textCapitalization: TextCapitalization.characters,
+            enabled: !_isRedeemingVip,
+            onSubmitted: (_) => _redeemVipCode(),
+            decoration: InputDecoration(
+              hintText: 'Enter VIP code',
+              hintStyle: GoogleFonts.manrope(fontSize: 14, color: const Color(0xFFB0A898)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: const Color(0xFF2C2417).withAlpha(30))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: const Color(0xFF2C2417).withAlpha(30))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF5DA399), width: 1.5)),
+            ),
+            style: GoogleFonts.manrope(fontSize: 14, color: const Color(0xFF2C2417)),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          height: 44,
+          child: ElevatedButton(
+            onPressed: _isRedeemingVip ? null : _redeemVipCode,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2C2417),
+              foregroundColor: Colors.white, elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16)),
+            child: _isRedeemingVip
+              ? const SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : Text('Apply', style: GoogleFonts.manrope(fontSize: 14, fontWeight: FontWeight.w700)),
+          ),
+        ),
+      ]),
+      if (_vipError != null) ...[
+        const SizedBox(height: 8),
+        Text(_vipError!, style: GoogleFonts.manrope(fontSize: 12,
+          fontWeight: FontWeight.w500, color: const Color(0xFFC0392B))),
+      ],
+    ]);
   }
 
   Widget _buildLegalLinks() {

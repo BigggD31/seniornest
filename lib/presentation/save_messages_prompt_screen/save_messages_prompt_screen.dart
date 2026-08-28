@@ -735,6 +735,26 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
               onConflict: 'nest_id,user_id',
             );
             print('NEST_DEBUG: nest_member added');
+
+            // Retroactive nest_id attach: this person subscribed on the
+            // previous screen before this nest existed (splash_screen.dart's
+            // Get Started sends people to Subscribe before nest creation --
+            // confirmed by trace), so their subscription row still has
+            // nest_id = NULL at this point. Attach it now that the real
+            // nest_id is known. Only touches a NULL row, so this can never
+            // clobber a real second-nest entitlement created later. A
+            // failure here shouldn't fail the nest creation that already
+            // succeeded, so it's isolated in its own try/catch.
+            try {
+              await supabase
+                  .from('subscriptions')
+                  .update({'nest_id': nestId})
+                  .eq('user_id', effectiveUserId)
+                  .isFilter('nest_id', null);
+              print('NEST_DEBUG: subscription nest_id attached = $nestId');
+            } catch (e) {
+              print('NEST_DEBUG: subscription nest_id attach failed = $e');
+            }
           }
         } catch (e) {
           print('NEST_DEBUG: error = $e');
