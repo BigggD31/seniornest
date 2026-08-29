@@ -2660,7 +2660,7 @@ class _SetupScreenState extends State<SetupScreen>
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Type your email address ($userEmail) to confirm.',
+                  'Type your email address to confirm.',
                   style: GoogleFonts.nunitoSans(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
