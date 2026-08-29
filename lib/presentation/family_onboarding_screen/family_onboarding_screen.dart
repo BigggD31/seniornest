@@ -206,6 +206,10 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('onboarding_draft_display_name', _nameController.text.trim());
       await prefs.setString('onboarding_draft_preferred_name', _preferredNameController.text.trim());
+      await prefs.setString(
+        'onboarding_draft_owner_id',
+        Supabase.instance.client.auth.currentUser?.id ?? '',
+      );
       setState(() => _savedName = _nameController.text.trim());
       // Save birthday/anniversary now so they survive the pushReplacementNamed detour
       if (_birthday != null) {
@@ -289,6 +293,15 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         : nameFromPrefs;
     await prefs.setString('onboarding_draft_display_name', name);
     await prefs.setString('onboarding_draft_preferred_name', _preferredNameController.text.trim());
+    // Aug 29 2026: tag these drafts with whoever is actually signed in
+    // right now, so _finishOnboarding's fallback read below can tell a
+    // real in-progress draft apart from a leftover from a previous
+    // account on this device -- same fix as senior_onboarding_screen.dart
+    // (see its _loadSavedName comment for the full story).
+    await prefs.setString(
+      'onboarding_draft_owner_id',
+      Supabase.instance.client.auth.currentUser?.id ?? '',
+    );
     // Guarded by the required-selection check in _nextStep, so this
     // fallback shouldn't fire in practice — but 'other' is used instead
     // of 'Family' as defense-in-depth, since 'Family' is not a valid
@@ -516,13 +529,27 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       // _savePreferences already proved correct, so the live typed name
       // is always used regardless of whether the draft key happened to
       // be written yet.
-      final nameFromDraftKey = prefs.getString('onboarding_draft_display_name') ?? '';
+      // Aug 29 2026: only trust these draft-key fallbacks if they were
+      // tagged as written by whoever is actually signed in right now --
+      // otherwise a leftover draft from a previous account on this
+      // device could silently become this brand-new profile's saved
+      // name. See the owner-id tagging added in _savePreferences above.
+      final draftOwnerId = prefs.getString('onboarding_draft_owner_id') ?? '';
+      final currentUidForDraft = supabase.auth.currentUser?.id ?? '';
+      final draftBelongsToCurrentUser = draftOwnerId.isNotEmpty &&
+          currentUidForDraft.isNotEmpty &&
+          draftOwnerId == currentUidForDraft;
+      final nameFromDraftKey = draftBelongsToCurrentUser
+          ? (prefs.getString('onboarding_draft_display_name') ?? '')
+          : '';
       final name = _nameController.text.trim().isNotEmpty
           ? _nameController.text.trim()
           : _savedName.isNotEmpty
               ? _savedName
               : nameFromDraftKey;
-      final preferredName = prefs.getString('onboarding_draft_preferred_name') ?? '';
+      final preferredName = draftBelongsToCurrentUser
+          ? (prefs.getString('onboarding_draft_preferred_name') ?? '')
+          : '';
       final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
       final inviteCode = prefs.getString('invite_code') ?? '';
 

@@ -107,9 +107,40 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
     // the app reads them. _finishOnboarding() below still writes the
     // real, shared keys, but only once an account is actually being
     // confirmed and created, not on every keystroke.
-    final name = prefs.getString('onboarding_draft_display_name') ?? '';
-    final preferredName = prefs.getString('onboarding_draft_preferred_name') ?? '';
-    final savedNestName = prefs.getString('onboarding_draft_nest_name') ?? '';
+    // Aug 29 2026: found a sibling of the exact leak this Aug 21 fix
+    // describes, just running the other direction. The fix above stopped
+    // an in-progress draft from bleeding INTO an already-signed-in other
+    // account. But nothing stopped a leftover draft from a PREVIOUS
+    // account's onboarding attempt from bleeding into a brand-new
+    // account's onboarding screen -- D Von hit this directly: set up one
+    // account with nest name "Grandmas Nest," signed out, started a
+    // second brand-new account's onboarding, and "Grandmas Nest" was
+    // sitting in the nest name field before he typed anything. These
+    // draft keys are now tagged with the id of whoever wrote them
+    // (see _nextStep above); only restore them here if that matches
+    // whoever is actually signed in right now. A mismatch (or a draft
+    // saved before this fix existed, with no tag at all) means it's not
+    // safe to trust -- clear it instead of risking it showing up a third
+    // time for someone else.
+    final draftOwnerId = prefs.getString('onboarding_draft_owner_id') ?? '';
+    final currentUid = Supabase.instance.client.auth.currentUser?.id ?? '';
+    final draftBelongsToCurrentUser =
+        draftOwnerId.isNotEmpty && currentUid.isNotEmpty && draftOwnerId == currentUid;
+    if (!draftBelongsToCurrentUser) {
+      await prefs.remove('onboarding_draft_display_name');
+      await prefs.remove('onboarding_draft_preferred_name');
+      await prefs.remove('onboarding_draft_nest_name');
+      await prefs.remove('onboarding_draft_owner_id');
+    }
+    final name = draftBelongsToCurrentUser
+        ? (prefs.getString('onboarding_draft_display_name') ?? '')
+        : '';
+    final preferredName = draftBelongsToCurrentUser
+        ? (prefs.getString('onboarding_draft_preferred_name') ?? '')
+        : '';
+    final savedNestName = draftBelongsToCurrentUser
+        ? (prefs.getString('onboarding_draft_nest_name') ?? '')
+        : '';
     final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
     final profileJson = prefs.getString(kProfilePhotoKey);
     // Restore birthday/anniversary saved before the subscribe-screen detour
@@ -172,6 +203,13 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
       await prefs.setString('onboarding_draft_display_name', _nameController.text.trim());
       await prefs.setString('onboarding_draft_preferred_name', _preferredNameController.text.trim());
       await prefs.setString('onboarding_draft_nest_name', _nestNameController.text.trim());
+      // Tag this draft with whoever is actually signed in right now, so
+      // _loadSavedName can tell "my own in-progress draft, safe to
+      // restore" apart from "a leftover draft from a previous account on
+      // this device, must not be shown." Without this tag these drafts
+      // have no connection to who wrote them at all.
+      final draftOwnerId = Supabase.instance.client.auth.currentUser?.id ?? '';
+      await prefs.setString('onboarding_draft_owner_id', draftOwnerId);
       // Save birthday/anniversary now so they survive the pushReplacementNamed detour
       if (_birthday != null) {
         await prefs.setString('birthday', _birthday!.toIso8601String());
