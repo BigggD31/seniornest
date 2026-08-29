@@ -106,7 +106,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
       _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
           ? prefs.getString('preferred_name')!
           : (prefs.getString('display_name') ?? '');
-      _bookmarkedItems = items.reversed.toList(); // most recent first
+      _bookmarkedItems = items; // query already orders newest first
       _sampleBannerDismissed = prefs.getBool('favs_sample_banner_dismissed') ?? false;
     });
     appDisplayNameNotifier.value = (prefs.getString('preferred_name') ?? '').isNotEmpty
