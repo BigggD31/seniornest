@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -1180,6 +1181,22 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Aug 29 2026: same gap as the list card -- the
+                    // sheet's header 'title' is always the sender's name,
+                    // so the story's real title (what was typed when
+                    // creating it) never appeared anywhere in here either.
+                    if (category == 'Legacy' && (item['storyTitle'] as String? ?? '').isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          item['storyTitle'] as String,
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: _isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417),
+                          ),
+                        ),
+                      ),
                     // Previously audio/video/photo and text were all one
                     // if/else-if chain -- whichever matched first was
                     // shown, and any caption text was silently dropped for
@@ -1418,6 +1435,28 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                       ],
                     ),
                     const SizedBox(height: 10),
+                    // Aug 29 2026: the story's actual title (what D Von
+                    // typed when creating it, e.g. "Test bookmarks") was
+                    // being silently dropped everywhere on this card --
+                    // 'title' above is always the sender's name (never
+                    // null/empty, so it always won the ?? fallback), and
+                    // 'subtitle'/content falls back to a generic label
+                    // like "Voice story" when no caption was added. Only
+                    // Legacy bookmarks carry a real storyTitle at all.
+                    if (category == 'Legacy' && (item['storyTitle'] as String? ?? '').isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          item['storyTitle'] as String,
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: _textPrimary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     // Content — audio player, video player, or nothing extra
                     // (photo has its own thumbnail block above already).
                     // Caption text now shows alongside any of these instead
@@ -1493,8 +1532,21 @@ class _FavsAudioPlayerState extends State<_FavsAudioPlayer> {
       if (mounted) setState(() => _position = p.inSeconds);
     });
     _player.playerStateStream.listen((s) {
+      if (!mounted) return;
+      // Aug 29 2026: same fix shape already proven in
+      // message_card_widget.dart's _VoiceNotePlayer -- _isPlaying must be
+      // derived from the player's own real-time "playing" flag, not
+      // manually set right after calling play(). just_audio's play()
+      // future doesn't reliably resolve the moment playback actually
+      // starts, so a manual setState there left the icon stuck on "play"
+      // until a second tap happened to catch it up.
+      final reallyPlaying =
+          s.playing && s.processingState != ProcessingState.completed;
+      if (reallyPlaying != _isPlaying) {
+        setState(() => _isPlaying = reallyPlaying);
+      }
       if (s.processingState == ProcessingState.completed && mounted) {
-        setState(() { _isPlaying = false; _position = 0; });
+        setState(() { _position = 0; });
         _player.seek(Duration.zero);
       }
     });
@@ -1531,14 +1583,15 @@ class _FavsAudioPlayerState extends State<_FavsAudioPlayer> {
             onTap: () async {
               if (_isPlaying) {
                 await _player.pause();
-                setState(() => _isPlaying = false);
               } else {
                 if (_player.processingState == ProcessingState.idle ||
                     _player.processingState == ProcessingState.completed) {
                   await _player.setUrl(widget.audioUrl);
                 }
-                await _player.play();
-                setState(() => _isPlaying = true);
+                // Not awaited on purpose -- see playerStateStream comment
+                // in initState. The stream listener is what actually
+                // flips _isPlaying now, the instant playback truly starts.
+                unawaited(_player.play());
               }
             },
             child: Container(
