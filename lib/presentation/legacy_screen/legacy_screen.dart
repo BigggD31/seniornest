@@ -465,6 +465,37 @@ class _LegacyScreenState extends State<LegacyScreen>
           }
         }
 
+        // Aug 29 2026: bookmark state was previously derived purely from
+        // a local 'bookmarks' SharedPreferences cache, which never
+        // resynced against the real Supabase-backed user_favourites
+        // table. That meant unbookmarking from the Favs tab (which only
+        // touches user_favourites, see favs_screen.dart) left this
+        // screen still showing the story as bookmarked, and a fresh
+        // install/different device always showed every bookmark icon as
+        // empty regardless of what was actually saved server-side. Same
+        // fix shape as the hearts query above -- treat Supabase as the
+        // source of truth, then refresh the local cache to match so the
+        // next cache-first paint on this screen starts correct too.
+        Set<String> realBookmarkedIds = {};
+        if (entryIds.isNotEmpty) {
+          try {
+            final bookmarksResponse = await supabase
+                .from('user_favourites')
+                .select('item_id')
+                .eq('user_id', userId)
+                .inFilter('item_id', entryIds);
+            for (final b in (bookmarksResponse as List<dynamic>)) {
+              realBookmarkedIds.add(b['item_id'] as String);
+            }
+            await prefs.setString('bookmarks', jsonEncode(realBookmarkedIds.toList()));
+          } catch (e) {
+            debugPrint('LEGACY BOOKMARKS LOAD ERROR: $e');
+            // Fall back to whatever the local cache already had rather
+            // than showing every story as unbookmarked on a network hiccup.
+            realBookmarkedIds = bookmarkedIds;
+          }
+        }
+
         realStories = entries.map((e) => <String, dynamic>{
           'id': e['id'],
           'title': e['prompt'] ?? 'My Story',
@@ -473,7 +504,7 @@ class _LegacyScreenState extends State<LegacyScreen>
           'date': e['created_at']?.toString().substring(0, 10) ?? '',
           'entry_type': e['entry_type'] ?? 'text',
           'media_url': e['media_url'] ?? '',
-          'isBookmarked': bookmarkedIds.contains(e['id'] as String),
+          'isBookmarked': realBookmarkedIds.contains(e['id'] as String),
           'heartCount': heartCounts[e['id']] ?? 0,
           'isHearted': heartedByMe.contains(e['id']),
           'isMine': e['user_id'] == userId,

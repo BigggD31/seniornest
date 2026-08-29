@@ -2574,93 +2574,209 @@ class _SetupScreenState extends State<SetupScreen>
   }
 
   void _showDeleteAccountDialog() {
+    // Aug 29 2026: Owners are blocked from deleting their own account here
+    // -- deleting their profile would cascade-delete the entire nest out
+    // from under every other member. This is enforced server-side too
+    // (delete_user() raises OWNER_MUST_TRANSFER_OR_DELETE_NEST), this is
+    // just a friendlier up-front message instead of a raw RPC error.
+    if (_isNestOwner) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: _bg,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Transfer or Delete Your Nest First',
+            style: GoogleFonts.nunitoSans(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: _textPrimary,
+            ),
+          ),
+          content: Text(
+            'You\'re the owner of this nest, so deleting your account would also delete it for everyone in your family. Please transfer ownership to another member, or delete the whole nest, before deleting your own account.',
+            style: GoogleFonts.nunitoSans(
+              fontSize: 15,
+              color: _textSecondary,
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                'Got it',
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF5DA399),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final userEmail =
+        Supabase.instance.client.auth.currentUser?.email?.trim() ?? '';
+    final confirmController = TextEditingController();
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _bg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          'Delete Account?',
-          style: GoogleFonts.nunitoSans(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: _textPrimary,
-          ),
-        ),
-        content: Text(
-          'This will permanently delete your account and all your data. This cannot be undone.',
-          style: GoogleFonts.nunitoSans(
-            fontSize: 15,
-            color: _textSecondary,
-            height: 1.5,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.nunitoSans(
-                fontSize: 15,
-                color: _textSecondary,
-              ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final typedEmail = confirmController.text.trim();
+          final emailMatches = userEmail.isNotEmpty &&
+              typedEmail.toLowerCase() == userEmail.toLowerCase();
+
+          return AlertDialog(
+            backgroundColor: _bg,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
             ),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              // Aug 25 2026: was catching the delete_user RPC failure and
-              // silently swallowing it, then proceeding with local
-              // sign-out/wipe/navigation regardless -- someone could
-              // genuinely believe their account and data were gone when
-              // the server call never actually succeeded. Now stops and
-              // shows a real error on a genuine failure, matching the
-              // same reverts-on-failure pattern already used for the
-              // bookmark desync fix.
-              try {
-                await Supabase.instance.client.rpc('delete_user');
-              } catch (_) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Couldn\'t delete your account -- please check your connection and try again.',
-                        style: GoogleFonts.nunitoSans(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
-                        ),
-                      ),
-                      backgroundColor: const Color(0xFFC97B4A),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-                return;
-              }
-              try {
-                await Supabase.instance.client.auth.signOut();
-              } catch (_) {}
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.clear();
-              if (mounted) {
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  '/splash-screen',
-                  (route) => false,
-                );
-              }
-            },
-            child: Text(
-              'Delete Account',
+            title: Text(
+              'Delete Account?',
               style: GoogleFonts.nunitoSans(
-                fontSize: 15,
+                fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF8B0000),
+                color: _textPrimary,
               ),
             ),
-          ),
-        ],
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Deleting your account will remove your profile, subscription, medication and check-in history from this nest permanently. Your past messages and photos shared with the family will also be deleted and can\'t be recovered -- the family will lose those memories too. This cannot be undone.',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 15,
+                    color: _textSecondary,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Type your email address ($userEmail) to confirm.',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: confirmController,
+                  keyboardType: TextInputType.emailAddress,
+                  textCapitalization: TextCapitalization.none,
+                  autocorrect: false,
+                  onChanged: (_) => setDialogState(() {}),
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 16,
+                    color: _textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'your@email.com',
+                    hintStyle: GoogleFonts.nunitoSans(
+                      fontSize: 16,
+                      color: _textSecondary.withAlpha(120),
+                    ),
+                    enabledBorder: const UnderlineInputBorder(
+                      borderSide:
+                          BorderSide(color: Color(0xFFE8E0D0), width: 1.5),
+                    ),
+                    focusedBorder: const UnderlineInputBorder(
+                      borderSide:
+                          BorderSide(color: Color(0xFF8B0000), width: 2),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  'Cancel',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 15,
+                    color: _textSecondary,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: !emailMatches
+                    ? null
+                    : () async {
+                        Navigator.pop(ctx);
+                        // Aug 25 2026: was catching the delete_user RPC
+                        // failure and silently swallowing it, then
+                        // proceeding with local sign-out/wipe/navigation
+                        // regardless -- someone could genuinely believe
+                        // their account and data were gone when the
+                        // server call never actually succeeded. Now stops
+                        // and shows a real error on a genuine failure.
+                        //
+                        // Aug 29 2026: delete_user() now also raises
+                        // OWNER_MUST_TRANSFER_OR_DELETE_NEST as a
+                        // server-side backstop for the owner block above
+                        // -- handled here in case nest-owner status was
+                        // stale on this screen.
+                        try {
+                          await Supabase.instance.client.rpc('delete_user');
+                        } catch (e) {
+                          if (!mounted) return;
+                          if (e.toString().contains(
+                              'OWNER_MUST_TRANSFER_OR_DELETE_NEST')) {
+                            _showDeleteAccountDialog();
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Couldn\'t delete your account -- please check your connection and try again.',
+                                style: GoogleFonts.nunitoSans(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              backgroundColor: const Color(0xFFC97B4A),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                          return;
+                        }
+                        try {
+                          await Supabase.instance.client.auth.signOut();
+                        } catch (_) {}
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.clear();
+                        if (mounted) {
+                          Navigator.pushNamedAndRemoveUntil(
+                            context,
+                            '/splash-screen',
+                            (route) => false,
+                          );
+                        }
+                      },
+                child: Text(
+                  'Delete Account',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: emailMatches
+                        ? const Color(0xFF8B0000)
+                        : _textSecondary.withAlpha(100),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
