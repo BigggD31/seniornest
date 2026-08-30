@@ -332,6 +332,27 @@ class AuthService {
     // found while checking for siblings of the same bug shape, fixed
     // here too rather than waiting to be reported separately.
     'cached_is_nest_owner', 'cached_is_vip_member',
+    // Aug 29 2026: found during a systematic audit prompted by D Von
+    // still seeing "flash of old info then correct" after switching
+    // between 10+ accounts -- these four are core identity fields
+    // (resolved into app-wide notifiers at cold-start in main.dart's
+    // _resolveInitialRoute, gated behind the branded loading screen,
+    // same correct one-time-hydration architecture already used
+    // correctly for nest_name/cached_is_nest_owner/etc. above). They're
+    // only ever written during onboarding or a Setup edit -- never
+    // automatically re-synced from Supabase just because an
+    // already-onboarded account signs back in on this device. Missing
+    // from this list meant that correct architecture was occasionally
+    // hydrating itself from the PREVIOUS account's leftover values.
+    // Same root cause, same fix shape as every entry above.
+    'display_name', 'preferred_name', 'user_name', 'relationship',
+    'birthday', 'anniversary',
+    // vip_code is shorter-lived (read only within the onboarding flow
+    // itself, to carry a redeemed code from role_choice_screen forward
+    // into account creation), but it's exactly the same bug shape as the
+    // onboarding-draft bleed fixed Aug 29: a stale value from one
+    // abandoned onboarding attempt surviving into a brand-new one.
+    'vip_code',
   ];
 
   /// Detects a genuine account switch on this device and wipes every

@@ -123,6 +123,14 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     final preWipeNestId = preWipePrefs.getString('nest_id');
     final preWipeInviteCode = preWipePrefs.getString('invite_code');
     final preWipeJoinedViaInvite = preWipePrefs.getBool('joined_via_invite');
+    // Aug 29 2026: birthday/anniversary joined the account-scoped wipe
+    // list today (auth_service.dart), for the same reason nest_name etc.
+    // did back on Aug 21 -- but this function reads them from prefs
+    // further down (to sync to Supabase) AFTER the wipe below runs, the
+    // exact same timing risk nest_name already had. Same fix: capture
+    // before, restore after.
+    final preWipeBirthday = preWipePrefs.getString('birthday');
+    final preWipeAnniversary = preWipePrefs.getString('anniversary');
 
     // Must run before anything else that reads account-scoped data --
     // detects a genuine account switch on this device and wipes every
@@ -138,6 +146,8 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     if (preWipeNestId != null) await prefs.setString('nest_id', preWipeNestId);
     if (preWipeInviteCode != null) await prefs.setString('invite_code', preWipeInviteCode);
     if (preWipeJoinedViaInvite != null) await prefs.setBool('joined_via_invite', preWipeJoinedViaInvite);
+    if (preWipeBirthday != null) await prefs.setString('birthday', preWipeBirthday);
+    if (preWipeAnniversary != null) await prefs.setString('anniversary', preWipeAnniversary);
 
     await prefs.setBool('onboarding_complete', true);
     await prefs.setBool('first_load', true);
