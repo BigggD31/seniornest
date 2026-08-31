@@ -289,6 +289,13 @@ class AuthService {
     // stay excluded -- their own self-correction-via-live-check
     // reasoning is still correct and unrelated to this.
     'cached_checkin_senior_name', 'cached_checkin_senior_id', 'cached_checkin_nest_id',
+    // Aug 31 2026: found via Audit 1 (cross-session state sweep) --
+    // "has this nest's owner shared their invite code yet" is a
+    // nest-specific fact, not a device preference, and wasn't in this
+    // list or self-guarded anywhere else. Without this, a brand-new
+    // nest on the same device could incorrectly inherit "already
+    // shared" from whichever account used this device last.
+    'invite_code_shared',
     // cached_checkin_* (status only: checked_in, date, meds_taken,
     // meds_time, time) deliberately excluded -- "has the senior checked in
     // today" is a nest-level fact, not tied to who's currently viewing it.

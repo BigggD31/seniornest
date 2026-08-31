@@ -178,7 +178,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // lands back on.
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _hasRealPost = appHasRealPostNotifier.value; // tracks if user has made their first real post
-  bool _sampleBannerDismissed = false; // tracks if user closed the sample-content explainer banner
   String _seniorName = appSeniorNameNotifier.value; // display name of the senior in this nest (for the pinned check-in card)
   String _seniorUserId = '';
   bool _seniorCheckedInToday = appSeniorCheckedInTodayNotifier.value;
@@ -732,7 +731,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     final firstLoad = prefs.getBool('first_load') ?? true;
     final darkMode = prefs.getBool('dark_mode') ?? false;
     final hasRealPost = prefs.getBool('has_real_post') ?? false;
-    final sampleBannerDismissed = prefs.getBool('sample_banner_dismissed') ?? false;
     final inviteCodeShared = prefs.getBool('invite_code_shared') ?? false;
     final isGuest = prefs.getBool('is_guest') ?? false;
 
@@ -919,7 +917,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       _showWelcomeToast = firstLoad;
       _isDarkMode = darkMode;
       _hasRealPost = hasRealPost;
-      _sampleBannerDismissed = sampleBannerDismissed;
       _inviteCodeShared = inviteCodeShared;
       _isGuest = isGuest;
       // Aug 19 2026: this used to be reset to !joinedViaInvite here, right
@@ -2057,7 +2054,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                   ),
                 const SizedBox(height: 20),
                 // Sample content explainer banner (shown once, while sample cards are visible)
-                if (!_hasRealPost && !_sampleBannerDismissed) ...[
+                if (!_hasRealPost) ...[
                   _buildSampleContentBanner(),
                   const SizedBox(height: 14),
                 ],
@@ -2121,14 +2118,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     );
   }
 
-  Future<void> _dismissSampleBanner() async {
-    setState(() {
-      _sampleBannerDismissed = true;
-    });
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('sample_banner_dismissed', true);
-  }
-
   Widget _buildSampleContentBanner() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -2162,18 +2151,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 color: _isDarkMode
                     ? const Color(0xFFB8A888)
                     : const Color(0xFF6B5E4E),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _dismissSampleBanner,
-            child: const Padding(
-              padding: EdgeInsets.all(2),
-              child: Icon(
-                Icons.close_rounded,
-                color: Color(0xFFB8860B),
-                size: 16,
               ),
             ),
           ),

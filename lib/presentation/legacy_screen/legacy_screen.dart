@@ -48,7 +48,6 @@ class _LegacyScreenState extends State<LegacyScreen>
   bool _isLoading = true;
   int _selectedCategory = 0;
   bool _hasSentStories = appHasSentStoriesNotifier.value; // hides placeholder once first story saved
-  bool _sampleBannerDismissed = false;
 
   // Family-submitted story prompts (persisted via SharedPreferences)
   List<String> _submittedPrompts = [];
@@ -320,7 +319,6 @@ class _LegacyScreenState extends State<LegacyScreen>
       _isSenior = isSeniorInitial;
       _isDarkMode = prefs.getBool('dark_mode') ?? false;
       _hasSentStories = prefs.getBool('has_sent_stories') ?? false;
-      _sampleBannerDismissed = prefs.getBool('legacy_sample_banner_dismissed') ?? false;
       _stories = initialStories.isNotEmpty
           ? initialStories
           : _mockStories.map((s) {
@@ -848,8 +846,7 @@ class _LegacyScreenState extends State<LegacyScreen>
                           // real content exists yet (fixed same session) --
                           // without this banner they'd have no way to know
                           // these aren't their loved one's real stories.
-                          if (!_sampleBannerDismissed &&
-                              _stories.isNotEmpty &&
+                          if (_stories.isNotEmpty &&
                               _stories.every((s) => s['isSample'] == true))
                             SliverToBoxAdapter(
                               child: _buildLegacySampleBanner(isTablet),
@@ -976,12 +973,6 @@ class _LegacyScreenState extends State<LegacyScreen>
   }
 
   // ── Sample content explainer banner ─────────────────────────────────────
-  Future<void> _dismissLegacySampleBanner() async {
-    setState(() => _sampleBannerDismissed = true);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('legacy_sample_banner_dismissed', true);
-  }
-
   Widget _buildLegacySampleBanner(bool isTablet) {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: isTablet ? 28 : 20, vertical: 8),
@@ -1008,14 +999,6 @@ class _LegacyScreenState extends State<LegacyScreen>
                 height: 1.4,
                 color: _isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _dismissLegacySampleBanner,
-            child: const Padding(
-              padding: EdgeInsets.all(2),
-              child: Icon(Icons.close_rounded, color: Color(0xFFB8860B), size: 16),
             ),
           ),
         ],

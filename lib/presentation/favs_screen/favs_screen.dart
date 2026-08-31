@@ -33,7 +33,6 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
   Map<String, dynamic>? _profileData;
   String _displayName = appDisplayNameNotifier.value;
   List<Map<String, dynamic>> _bookmarkedItems = [];
-  bool _sampleBannerDismissed = false;
   // Aug 21 2026: collapsible year/month grouping, same shared component
   // and same in-memory-only collapse state already used on Home/Legacy.
   final Set<String> _collapsedGroupKeys = {};
@@ -108,7 +107,6 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
           ? prefs.getString('preferred_name')!
           : (prefs.getString('display_name') ?? '');
       _bookmarkedItems = items; // query already orders newest first
-      _sampleBannerDismissed = prefs.getBool('favs_sample_banner_dismissed') ?? false;
     });
     appDisplayNameNotifier.value = (prefs.getString('preferred_name') ?? '').isNotEmpty
         ? prefs.getString('preferred_name')!
@@ -227,7 +225,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
           children: [
             _buildTopBar(isTablet),
             _buildCategoryFilter(isTablet),
-            if (!_sampleBannerDismissed && _bookmarkedItems.isEmpty) _buildFavsSampleBanner(isTablet),
+            if (_bookmarkedItems.isEmpty) _buildFavsSampleBanner(isTablet),
             Expanded(
               child: _isLoading
                   ? _buildLoadingState()
@@ -246,12 +244,6 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
         onTap: _onNavTap,
       ),
     );
-  }
-
-  Future<void> _dismissFavsSampleBanner() async {
-    setState(() => _sampleBannerDismissed = true);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('favs_sample_banner_dismissed', true);
   }
 
   Widget _buildFavsSampleBanner(bool isTablet) {
@@ -280,14 +272,6 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                 height: 1.4,
                 color: _isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _dismissFavsSampleBanner,
-            child: const Padding(
-              padding: EdgeInsets.all(2),
-              child: Icon(Icons.close_rounded, color: Color(0xFFB8860B), size: 16),
             ),
           ),
         ],

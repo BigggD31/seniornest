@@ -40,7 +40,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _isSending = false;
   bool _hasSentMessages = false; // hides placeholder once first message sent
-  bool _sampleBannerDismissed = false;
   int _topTabIndex = 0; // 0 = Messages (broadcast composer), 1 = For You (private threads)
   Map<String, dynamic>? _profileData;
 
@@ -241,7 +240,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           : (prefs.getString('display_name') ?? 'You');
       _isDarkMode = prefs.getBool('dark_mode') ?? false;
       _hasSentMessages = prefs.getBool('has_sent_messages') ?? false;
-      _sampleBannerDismissed = prefs.getBool('messages_sample_banner_dismissed') ?? false;
       _profileData = profileData;
     });
     // See the matching comment in family_feed_screen.dart -- appIsSeniorNotifier
@@ -1787,7 +1785,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (!_hasSentMessages && !_sampleBannerDismissed)
+                          if (!_hasSentMessages)
                             _buildMessagesSampleBanner(),
                           if (!_hasSentMessages)
                             _buildFirstMessagePlaceholder(),
@@ -1968,12 +1966,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     );
   }
 
-  Future<void> _dismissMessagesSampleBanner() async {
-    setState(() => _sampleBannerDismissed = true);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('messages_sample_banner_dismissed', true);
-  }
-
   Widget _buildMessagesSampleBanner() {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -2000,14 +1992,6 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 height: 1.4,
                 color: _isDarkMode ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _dismissMessagesSampleBanner,
-            child: const Padding(
-              padding: EdgeInsets.all(2),
-              child: Icon(Icons.close_rounded, color: Color(0xFFB8860B), size: 16),
             ),
           ),
         ],
