@@ -27,6 +27,7 @@ class _SafetyScreenState extends State<SafetyScreen>
   // explanation of the white-flash bug this fixes.
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _isLoading = true;
+  bool _isNestArchived = false; // Aug 31 2026: Archive Nest Mode -- quiets SOS/check-in section when true
   bool _isSendingAlert = false;
   String _seniorName = appSeniorNameNotifier.value;
   // Was reading its own local prefs copy separately -- now points at the
@@ -195,6 +196,28 @@ class _SafetyScreenState extends State<SafetyScreen>
       }
     } catch (e) {
       debugPrint('Load contacts error: $e');
+    }
+
+    // Archive Nest Mode: live read every load, same reasoning as
+    // family_feed_screen.dart's matching fetch -- this is a rare,
+    // deliberate owner action, not identity data needing a cache/notifier.
+    try {
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isNotEmpty) {
+        final nestRow = await Supabase.instance.client
+            .from('nests')
+            .select('is_archived')
+            .eq('id', nestId)
+            .maybeSingle();
+        final archived = nestRow?['is_archived'] as bool? ?? false;
+        if (mounted) {
+          setState(() {
+            _isNestArchived = archived;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Load nest archive status error: $e');
     }
 
     // Resolve the real senior's name from Supabase for family members.
@@ -603,14 +626,26 @@ class _SafetyScreenState extends State<SafetyScreen>
                     SliverToBoxAdapter(
                       child: _buildFamilyReadOnlyNote(isTablet),
                     ),
-                  if (_isSenior) ...[
-                    SliverToBoxAdapter(child: _buildSOSButton(isTablet)),
-                  ] else ...[
+                  if (_isNestArchived) ...[
                     SliverToBoxAdapter(
-                      child: _buildSOSButton(isTablet, deadButton: true),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isTablet ? 28 : 20,
+                          vertical: 10,
+                        ),
+                        child: _buildArchivedNestBanner(),
+                      ),
                     ),
+                  ] else ...[
+                    if (_isSenior) ...[
+                      SliverToBoxAdapter(child: _buildSOSButton(isTablet)),
+                    ] else ...[
+                      SliverToBoxAdapter(
+                        child: _buildSOSButton(isTablet, deadButton: true),
+                      ),
+                    ],
+                    SliverToBoxAdapter(child: _buildCheckInSection(isTablet)),
                   ],
-                  SliverToBoxAdapter(child: _buildCheckInSection(isTablet)),
                   if (_isSenior)
                     SliverToBoxAdapter(
                       child: _buildEmergencyContacts(isTablet),
@@ -836,6 +871,52 @@ class _SafetyScreenState extends State<SafetyScreen>
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Archive Nest Mode (Aug 31 2026): shown in place of the SOS button and
+  // check-in section once the nest owner has archived this nest. Same
+  // widget/copy as family_feed_screen.dart's version -- kept as a
+  // duplicate rather than a shared widget file since each screen already
+  // manages its own local dark-mode color logic independently.
+  Widget _buildArchivedNestBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD4AA00).withAlpha(20),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFD4AA00).withAlpha(60),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(
+              Icons.info_outline_rounded,
+              color: Color(0xFFB8860B),
+              size: 17,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'This Nest is now a memorial space. Daily check-ins are turned off, but Legacy, photos, and messages are still here whenever you\'d like to visit.',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+                color: _isDarkMode
+                    ? const Color(0xFFB8A888)
+                    : const Color(0xFF6B5E4E),
+              ),
             ),
           ),
         ],

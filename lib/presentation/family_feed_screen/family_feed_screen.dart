@@ -178,6 +178,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // lands back on.
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _hasRealPost = appHasRealPostNotifier.value; // tracks if user has made their first real post
+  bool _isNestArchived = false; // Aug 31 2026: Archive Nest Mode -- quiets check-in/meds/SOS once true, everything else stays untouched
   String _seniorName = appSeniorNameNotifier.value; // display name of the senior in this nest (for the pinned check-in card)
   String _seniorUserId = '';
   bool _seniorCheckedInToday = appSeniorCheckedInTodayNotifier.value;
@@ -702,6 +703,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // flow sharing the same nest (e.g. a family member's own device).
     // Now sourced live from Supabase, with local cache as fallback.
     String nestName = prefs.getString('nest_name') ?? '';
+    bool isNestArchived = false;
     // _nestName is now seeded synchronously from appNestNameNotifier at
     // field declaration (see the comment there), so it's already correct
     // from the very first build -- no early setState needed here anymore.
@@ -710,7 +712,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       if (nestIdForName.isNotEmpty) {
         final nestRow = await Supabase.instance.client
             .from('nests')
-            .select('name')
+            .select('name, is_archived')
             .eq('id', nestIdForName)
             .maybeSingle();
         final remoteName = nestRow?['name'] as String?;
@@ -722,6 +724,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           // rename immediately, not just this one.
           appNestNameNotifier.value = remoteName;
         }
+        // Archive Nest Mode: deliberately a live read every load, not
+        // cached/notifier-backed like nest_name -- this is a rare,
+        // deliberate owner action, not identity data needing zero-flash
+        // instant display, so a live fetch each time Home loads is the
+        // right level of infrastructure for it.
+        isNestArchived = nestRow?['is_archived'] as bool? ?? false;
       }
     } catch (e) {
       print('NEST_NAME_LOAD_ERROR: $e');
@@ -912,6 +920,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       _isSenior = role == 'senior';
       _displayName = name;
       _nestName = nestName;
+      _isNestArchived = isNestArchived;
       _isGoodTodaySent = goodToday;
       _showMedsReminder = medsReminder;
       _showWelcomeToast = firstLoad;
@@ -1984,7 +1993,16 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                       ),
                     );
                   },
-                  child: _seniorUserId.isNotEmpty
+                  child: _isNestArchived
+                      ? Column(
+                          key: const ValueKey('checkinArchived'),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildArchivedNestBanner(),
+                            const SizedBox(height: 14),
+                          ],
+                        )
+                      : _seniorUserId.isNotEmpty
                       ? Column(
                           key: const ValueKey('checkinPresent'),
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2019,7 +2037,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 // today" card above it. Now it hides once the real record
                 // says today's dose is already logged, same as every other
                 // confirmed-state card on this screen.
-                if (_isSenior && _showMedsReminder && !_seniorMedsTakenToday) ...[
+                if (!_isNestArchived && _isSenior && _showMedsReminder && !_seniorMedsTakenToday) ...[
                   MedsReminderCardWidget(
                     isDarkMode: _isDarkMode,
                     onTaken: _handleMedsTaken,
@@ -2144,6 +2162,52 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           Expanded(
             child: Text(
               'This is what your Nest will look like. These examples disappear once your family starts posting.',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+                color: _isDarkMode
+                    ? const Color(0xFFB8A888)
+                    : const Color(0xFF6B5E4E),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Archive Nest Mode (Aug 31 2026): shown in place of the check-in/meds
+  // cards once the nest owner has archived this nest. Same visual
+  // language as the sample-content explainer banners, but warmer copy --
+  // this isn't explaining placeholder content, it's a quiet, permanent
+  // state of the nest itself.
+  Widget _buildArchivedNestBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD4AA00).withAlpha(20),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFD4AA00).withAlpha(60),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(
+              Icons.info_outline_rounded,
+              color: Color(0xFFB8860B),
+              size: 17,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'This Nest is now a memorial space. Daily check-ins are turned off, but Legacy, photos, and messages are still here whenever you\'d like to visit.',
               style: GoogleFonts.nunitoSans(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
