@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
@@ -436,15 +435,18 @@ class AuthService {
       }
     }
 
-    // dark_mode's underlying prefs value gets correctly wiped above, but
-    // the app-wide notifier that actually drives the visible toggle and
-    // theme is a separate, in-memory value -- main.dart only re-syncs it
-    // at cold app launch, not at an in-session sign-out/sign-in cycle
-    // (the exact scenario this whole function exists for). Without this,
-    // the underlying data was correct but the toggle stayed visually
-    // stuck on the previous account's setting until manually tapped.
-    final brightness = SchedulerBinding.instance.platformDispatcher.platformBrightness;
-    appDarkModeNotifier.value = brightness == Brightness.dark;
+    // Aug 21 2026: originally just re-synced appDarkModeNotifier here,
+    // since main.dart only re-syncs notifiers at cold app launch, not at
+    // an in-session sign-out/sign-in cycle (the exact scenario this whole
+    // function exists for). Aug 31 2026, Pre-Ship Audit 1: that gap was
+    // never actually specific to dark_mode -- every account-relevant
+    // notifier had the same problem, just less visible than a theme
+    // flipping. Now calls the same shared resolution function main.dart
+    // uses at cold start (see resolveAppNotifiersFromPrefs in
+    // app_state.dart for the full reasoning), so a warm switch gets every
+    // notifier reset from the storage just wiped above -- not just the
+    // one that happened to get noticed first.
+    await resolveAppNotifiersFromPrefs(prefs);
 
     await prefs.setString('last_known_user_id', currentUserId);
   }

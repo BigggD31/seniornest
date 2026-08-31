@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:app_links/app_links.dart';
 import 'dart:async';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -255,102 +254,14 @@ class _MyAppState extends State<MyApp> {
       await AuthService.clearStaleAccountDataIfUserChanged();
 
       final prefs = await SharedPreferences.getInstance();
-      // Load persisted dark mode preference; if never set, follow system brightness
-      final savedDarkMode = prefs.getBool('dark_mode');
-      if (savedDarkMode != null) {
-        appDarkModeNotifier.value = savedDarkMode;
-      } else {
-        // Default: follow system setting (light by default on most devices)
-        final brightness =
-            SchedulerBinding.instance.platformDispatcher.platformBrightness;
-        appDarkModeNotifier.value = brightness == Brightness.dark;
-      }
 
-      // Resolved once here, before any screen ever builds -- see the
-      // comment on appNestNameNotifier in app_state.dart for the full
-      // reasoning. Once someone has named their nest, every screen should
-      // show that name instantly, every time, with zero wait regardless
-      // of connection speed.
-      final savedNestName = prefs.getString('nest_name');
-      if (savedNestName != null && savedNestName.isNotEmpty) {
-        appNestNameNotifier.value = savedNestName;
-      }
-
-      // Resolved once here, before splash_screen (if that's where routing
-      // below ends up) ever builds -- see the comment on
-      // appIsReturningUserNotifier in app_state.dart.
-      appIsReturningUserNotifier.value = prefs.getBool('just_signed_out') ?? false;
-
-      // Resolved once here, before setup_screen or family_feed_screen ever
-      // build -- see the comment on appIsNestOwnerNotifier in app_state.dart.
-      // Prefer the confirmed value from a prior session if one was ever
-      // saved; fall back to the instant joined-via-invite proxy for a
-      // genuinely first-ever resolve, same fallback either screen used
-      // locally before this fix.
-      final cachedIsNestOwner = prefs.getBool('cached_is_nest_owner');
-      if (cachedIsNestOwner != null) {
-        appIsNestOwnerNotifier.value = cachedIsNestOwner;
-      } else {
-        final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
-        appIsNestOwnerNotifier.value = !joinedViaInvite;
-      }
-
-      // Resolved once here, before family_feed_screen ever builds -- see
-      // the comment on appSeniorCheckedInTodayNotifier in app_state.dart.
-      // Mirrors the exact date/nest scoping family_feed_screen already used
-      // locally: only trust the cached checked-in flag if it was cached for
-      // this same nest, on this same calendar day.
-      final cachedCheckinNestId = prefs.getString('cached_checkin_nest_id') ?? '';
-      final cachedCheckinDate = prefs.getString('cached_checkin_date') ?? '';
-      final currentNestId = prefs.getString('nest_id') ?? '';
-      final now = DateTime.now();
-      final todayDateString =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      if (cachedCheckinNestId.isNotEmpty &&
-          cachedCheckinNestId == currentNestId &&
-          cachedCheckinDate == todayDateString) {
-        appSeniorCheckedInTodayNotifier.value =
-            prefs.getBool('cached_checkin_checked_in') ?? false;
-        // Same cache family, same scoping -- meds-taken-today is only
-        // meaningful for today, same as check-in status above.
-        appSeniorMedsTakenTodayNotifier.value =
-            prefs.getBool('cached_checkin_meds_taken') ?? false;
-      }
-
-      // Resolved once here -- see appIsGoodTodaySentNotifier's comment in
-      // app_state.dart. Key format must match family_feed_screen.dart's
-      // _todayKey() exactly (unpadded year_month_day), which is different
-      // from the padded todayDateString used just above for check-in/meds.
-      final goodTodayKey = '${now.year}_${now.month}_${now.day}';
-      appIsGoodTodaySentNotifier.value =
-          prefs.getBool('good_today_$goodTodayKey') ?? false;
-
-      // Resolved once here -- see the "Flash-of-wrong-content fix, rollout
-      // to remaining fields" section of app_state.dart. isSenior was
-      // independently duplicated across 5 screens, all deriving it from
-      // this same prefs key; one resolution here fixes the flash in all 5.
-      appIsSeniorNotifier.value =
-          (prefs.getString('user_role') ?? 'senior') == 'senior';
-      appIsGuestNotifier.value = prefs.getBool('is_guest') ?? false;
-      appHasRealPostNotifier.value = prefs.getBool('has_real_post') ?? false;
-      appHasSentStoriesNotifier.value =
-          prefs.getBool('has_sent_stories') ?? false;
-      appIsVipMemberNotifier.value =
-          prefs.getBool('cached_is_vip_member') ?? false;
-
-      // Resolved once here -- see appDisplayNameNotifier's comment in
-      // app_state.dart. Same preferred_name -> display_name fallback
-      // every one of the 7 duplicate screens already used independently.
-      final cachedPreferredName = prefs.getString('preferred_name') ?? '';
-      appDisplayNameNotifier.value = cachedPreferredName.isNotEmpty
-          ? cachedPreferredName
-          : (prefs.getString('display_name') ?? '');
-
-      // Resolved once here -- see appSeniorNameNotifier's comment in
-      // app_state.dart. Sourced from family_feed_screen's real, working
-      // cache key (not safety_screen's dead 'senior_name' key).
-      appSeniorNameNotifier.value =
-          prefs.getString('cached_checkin_senior_name') ?? '';
+      // Aug 31 2026: this used to be ~100 lines resolving each notifier
+      // inline, one at a time -- extracted to a shared function
+      // (app_state.dart's resolveAppNotifiersFromPrefs) so the exact same
+      // resolution logic can also run on a warm account switch, not just
+      // here at cold start. See that function's comment for the full
+      // reasoning (Pre-Ship Audit 1: cross-session state).
+      await resolveAppNotifiersFromPrefs(prefs);
 
       final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
       // This is the TRUE origin of the subscribe-screen flash and the

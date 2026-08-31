@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 
 /// Global notifier — setup_screen writes here; MyApp rebuilds immediately.
@@ -150,3 +152,106 @@ double textSizeToScale(String size) {
       return 1.0; // Normal
   }
 }
+
+// ── Notifier resolution (Aug 31 2026, Pre-Ship Audit 1) ────────────────────
+//
+// Every notifier above except appTextScaleNotifier and
+// appSuppressKeyboardDoneBarNotifier (device/UI preferences, not account
+// data) used to be resolved ONLY here: inline, once, inside main.dart's
+// _resolveInitialRoute(), which only ever runs at a true cold app launch.
+// Only appDarkModeNotifier got a second, separate resolution -- patched
+// directly into auth_service.dart's clearStaleAccountDataIfUserChanged()
+// on Aug 21 2026, specifically because a warm sign-out/sign-in (no
+// force-quit in between) never reaches _resolveInitialRoute() at all, so
+// nothing was refreshing it for that scenario.
+//
+// Audit 1 (the cross-session state sweep) found that gap was never
+// actually specific to dark_mode -- it applies to all 14 of these
+// notifiers equally. The underlying SharedPreferences values were already
+// being correctly wiped/reset on a genuine account switch (see the wipe
+// list a few lines above clearStaleAccountDataIfUserChanged in
+// auth_service.dart), but nothing told the notifiers themselves to
+// re-read from that now-correct storage until the next cold start. Since
+// almost every screen reads from these notifiers, not from prefs
+// directly, that gap is the most likely real explanation for D Von's
+// long-running "flash of old info from the previous account" reports
+// during rapid multi-account testing.
+//
+// This function is that one resolution, extracted so it can be called
+// from both places that need it: main.dart's cold-start path (unchanged
+// behavior) and, new as of this fix, right after the storage wipe inside
+// clearStaleAccountDataIfUserChanged() (the actual fix for a warm
+// switch). Takes an already-obtained SharedPreferences instance rather
+// than fetching its own, since both call sites already have one in scope.
+Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
+  // Dark mode: follow the saved preference if one was ever set, else
+  // follow system brightness -- same fallback this always had.
+  final savedDarkMode = prefs.getBool('dark_mode');
+  if (savedDarkMode != null) {
+    appDarkModeNotifier.value = savedDarkMode;
+  } else {
+    final brightness =
+        SchedulerBinding.instance.platformDispatcher.platformBrightness;
+    appDarkModeNotifier.value = brightness == Brightness.dark;
+  }
+
+  final savedNestName = prefs.getString('nest_name');
+  if (savedNestName != null && savedNestName.isNotEmpty) {
+    appNestNameNotifier.value = savedNestName;
+  }
+
+  appIsReturningUserNotifier.value = prefs.getBool('just_signed_out') ?? false;
+
+  final cachedIsNestOwner = prefs.getBool('cached_is_nest_owner');
+  if (cachedIsNestOwner != null) {
+    appIsNestOwnerNotifier.value = cachedIsNestOwner;
+  } else {
+    final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
+    appIsNestOwnerNotifier.value = !joinedViaInvite;
+  }
+
+  // Same date/nest scoping as before: only trust the cached checked-in/
+  // meds-taken flags if they were cached for this same nest, today.
+  final cachedCheckinNestId = prefs.getString('cached_checkin_nest_id') ?? '';
+  final cachedCheckinDate = prefs.getString('cached_checkin_date') ?? '';
+  final currentNestId = prefs.getString('nest_id') ?? '';
+  final now = DateTime.now();
+  final todayDateString =
+      '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  if (cachedCheckinNestId.isNotEmpty &&
+      cachedCheckinNestId == currentNestId &&
+      cachedCheckinDate == todayDateString) {
+    appSeniorCheckedInTodayNotifier.value =
+        prefs.getBool('cached_checkin_checked_in') ?? false;
+    appSeniorMedsTakenTodayNotifier.value =
+        prefs.getBool('cached_checkin_meds_taken') ?? false;
+  } else {
+    // On a genuine account switch, a stale nest/date match is impossible
+    // (nest_id itself was just wiped), so these correctly fall back to
+    // false here rather than carrying over the previous account's status.
+    appSeniorCheckedInTodayNotifier.value = false;
+    appSeniorMedsTakenTodayNotifier.value = false;
+  }
+
+  // Key format must match family_feed_screen.dart's _todayKey() exactly
+  // (unpadded year_month_day) -- different from todayDateString above.
+  final goodTodayKey = '${now.year}_${now.month}_${now.day}';
+  appIsGoodTodaySentNotifier.value =
+      prefs.getBool('good_today_$goodTodayKey') ?? false;
+
+  appIsSeniorNotifier.value =
+      (prefs.getString('user_role') ?? 'senior') == 'senior';
+  appIsGuestNotifier.value = prefs.getBool('is_guest') ?? false;
+  appHasRealPostNotifier.value = prefs.getBool('has_real_post') ?? false;
+  appHasSentStoriesNotifier.value = prefs.getBool('has_sent_stories') ?? false;
+  appIsVipMemberNotifier.value = prefs.getBool('cached_is_vip_member') ?? false;
+
+  final cachedPreferredName = prefs.getString('preferred_name') ?? '';
+  appDisplayNameNotifier.value = cachedPreferredName.isNotEmpty
+      ? cachedPreferredName
+      : (prefs.getString('display_name') ?? '');
+
+  appSeniorNameNotifier.value =
+      prefs.getString('cached_checkin_senior_name') ?? '';
+}
+
