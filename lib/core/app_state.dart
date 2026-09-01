@@ -180,6 +180,13 @@ final ValueNotifier<bool> appShowMedsReminderNotifier = ValueNotifier<bool>(true
 /// flashed on every single first-ever load, not just returning users.
 final ValueNotifier<bool> appInviteCodeSharedNotifier = ValueNotifier<bool>(true);
 
+/// Whether this account has sent its first real message yet (gates
+/// Messages' sample banner and placeholder card, same shape as
+/// appHasRealPostNotifier/appHasSentStoriesNotifier above -- Messages just
+/// never had a notifier for it, so it flashed real content behind a
+/// placeholder on every load with no cache backing it at first paint.
+final ValueNotifier<bool> appHasSentMessagesNotifier = ValueNotifier<bool>(false);
+
 /// Maps the stored string to a TextScaler multiplier.
 double textSizeToScale(String size) {
   switch (size) {
@@ -305,5 +312,8 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
 
   appInviteCodeSharedNotifier.value =
       prefs.getBool('invite_code_shared') ?? false;
+
+  appHasSentMessagesNotifier.value =
+      prefs.getBool('has_sent_messages') ?? false;
 }
 

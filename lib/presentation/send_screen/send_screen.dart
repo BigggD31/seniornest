@@ -39,7 +39,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   // explanation of the white-flash bug this fixes.
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _isSending = false;
-  bool _hasSentMessages = false; // hides placeholder once first message sent
+  bool _hasSentMessages = appHasSentMessagesNotifier.value; // hides placeholder once first message sent
   int _topTabIndex = 0; // 0 = Messages (broadcast composer), 1 = For You (private threads)
   Map<String, dynamic>? _profileData;
 
@@ -240,6 +240,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           : (prefs.getString('display_name') ?? 'You');
       _isDarkMode = prefs.getBool('dark_mode') ?? false;
       _hasSentMessages = prefs.getBool('has_sent_messages') ?? false;
+      appHasSentMessagesNotifier.value = _hasSentMessages;
       _profileData = profileData;
     });
     // See the matching comment in family_feed_screen.dart -- appIsSeniorNotifier
@@ -3674,6 +3675,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       setState(() {
         _isSending = false;
         _hasSentMessages = true;
+        appHasSentMessagesNotifier.value = true;
         _selectedRecipients.clear();
         _messageController.clear();
         _voiceCaptionController.clear();
