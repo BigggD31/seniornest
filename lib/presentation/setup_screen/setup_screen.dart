@@ -30,7 +30,7 @@ class _SetupScreenState extends State<SetupScreen>
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _isLoading = true;
   bool _isNestOwner = appIsNestOwnerNotifier.value;
-  bool _isNestArchived = false; // Aug 31 2026: Archive Nest Mode -- owner-only toggle, see _buildNestOwnershipSection
+  bool _isNestArchived = appIsNestArchivedNotifier.value; // Aug 31 2026: Archive Nest Mode -- owner-only toggle, see _buildNestOwnershipSection
   bool _isVipMember = appIsVipMemberNotifier.value;
   String _displayName = appDisplayNameNotifier.value;
   String _preferredName = '';
@@ -516,6 +516,7 @@ class _SetupScreenState extends State<SetupScreen>
           _justBecameOwnerRequestId = justResolvedId;
           _isNestArchived = isArchived;
         });
+        appIsNestArchivedNotifier.value = isArchived;
       }
     } catch (e) {
       debugPrint('SUCCESSION_LOAD_ERROR: $e');
@@ -982,6 +983,7 @@ class _SetupScreenState extends State<SetupScreen>
   Future<void> _setArchiveNestStatus(bool value) async {
     final previous = _isNestArchived;
     setState(() => _isNestArchived = value); // optimistic, reverted on failure below
+    appIsNestArchivedNotifier.value = value;
     try {
       final prefs = await SharedPreferences.getInstance();
       final nestId = prefs.getString('nest_id') ?? '';
@@ -989,8 +991,13 @@ class _SetupScreenState extends State<SetupScreen>
       await Supabase.instance.client
           .from('nests')
           .update({'is_archived': value}).eq('id', nestId);
+      // Keep the freshly-fetched cache in sync too -- family_feed_screen.dart
+      // reads cached_is_nest_archived at first paint, same shared source of
+      // truth as this notifier, so both need to agree.
+      await prefs.setBool('cached_is_nest_archived', value);
     } catch (e) {
       if (mounted) setState(() => _isNestArchived = previous);
+      appIsNestArchivedNotifier.value = previous;
       _showSuccessionError(e);
     }
   }
