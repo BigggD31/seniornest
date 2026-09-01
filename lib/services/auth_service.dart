@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
@@ -435,18 +436,31 @@ class AuthService {
       }
     }
 
-    // Aug 21 2026: originally just re-synced appDarkModeNotifier here,
-    // since main.dart only re-syncs notifiers at cold app launch, not at
-    // an in-session sign-out/sign-in cycle (the exact scenario this whole
-    // function exists for). Aug 31 2026, Pre-Ship Audit 1: that gap was
-    // never actually specific to dark_mode -- every account-relevant
-    // notifier had the same problem, just less visible than a theme
-    // flipping. Now calls the same shared resolution function main.dart
-    // uses at cold start (see resolveAppNotifiersFromPrefs in
-    // app_state.dart for the full reasoning), so a warm switch gets every
-    // notifier reset from the storage just wiped above -- not just the
-    // one that happened to get noticed first.
-    await resolveAppNotifiersFromPrefs(prefs);
+    // Aug 21 2026: re-syncs appDarkModeNotifier here, since main.dart only
+    // re-syncs notifiers at cold app launch, not at an in-session
+    // sign-out/sign-in cycle (the exact scenario this whole function
+    // exists for). Without this, the underlying data was correct but the
+    // toggle stayed visually stuck on the previous account's setting
+    // until manually tapped.
+    //
+    // Aug 31 2026, Pre-Ship Audit 1: briefly generalized this to call
+    // resolveAppNotifiersFromPrefs() here, resetting all 16 notifiers on
+    // every warm switch, not just dark_mode. Reverted the same day -- it
+    // traded one visible bug for a worse one. Screens like Home seed
+    // their state directly and synchronously from these notifiers at
+    // first build (e.g. family_feed_screen.dart's
+    // `_hasRealPost = appHasRealPostNotifier.value`), before their own
+    // live fetch ever runs. Resetting the notifier to blank/false here,
+    // before that live fetch has a chance to complete, meant every single
+    // login now flashed placeholder/empty content first, then the real
+    // content moments later -- happening every time, not just
+    // occasionally like the original stale-data problem this was meant
+    // to fix. D Von confirmed on-device: worse than before. Back to the
+    // narrower, proven-safe dark_mode-only fix until a version of the
+    // full fix exists that doesn't render before the real data is ready.
+    final brightness = SchedulerBinding.instance.platformDispatcher.platformBrightness;
+    final savedDarkMode = prefs.getBool('dark_mode');
+    appDarkModeNotifier.value = savedDarkMode ?? (brightness == Brightness.dark);
 
     await prefs.setString('last_known_user_id', currentUserId);
   }
