@@ -141,6 +141,45 @@ final ValueNotifier<String> appDisplayNameNotifier = ValueNotifier<String>('');
 /// appIsNestOwnerNotifier.
 final ValueNotifier<String> appSeniorNameNotifier = ValueNotifier<String>('');
 
+// ── Aug 31 2026: whole-app flash audit, prompted by D Von finding the "I'm
+// Good" button still flashing on a cold open even after Archive Nest Mode
+// itself worked correctly. Turned out to be the same hardcoded-false-
+// default pattern as everything above, just never brought into this
+// notifier system -- three fields across Home, Safety, and Setup were each
+// declaring their own local "bool _x = false/true;" and correcting it only
+// after their own async read finished, exactly like every fix in this file
+// already exists to prevent. Brought into the same system for the same
+// reason: one resolved-before-first-frame source of truth, shared instead
+// of duplicated.
+
+/// Whether this nest has been archived into a memorial space (Archive Nest
+/// Mode, built same day). Previously had no persisted cache at all --
+/// family_feed_screen declared "bool _isNestArchived = false;" with
+/// nothing backing it, so it was wrong on literally every load until its
+/// own live Supabase fetch corrected it moments later; that's what caused
+/// the "I'm Good" button flash D Von found. Safety and Setup each had
+/// their own separate local copy too, meaning even after fixing one,
+/// the other two could still disagree or flash independently. Now one
+/// shared notifier, cached under cached_is_nest_archived (added to the
+/// account-scoped wipe list in auth_service.dart), resolved before first
+/// frame like everything else here.
+final ValueNotifier<bool> appIsNestArchivedNotifier = ValueNotifier<bool>(false);
+
+/// Whether the senior's meds-reminder nudge card should still show today
+/// (separate from whether meds were actually taken). Was hardcoded true
+/// at field declaration in family_feed_screen regardless of what the
+/// person actually last set, while the real value it corrected to moments
+/// later came from a date-scoped meds_reminder_* prefs key that already
+/// existed -- this notifier just makes that existing value readable
+/// synchronously instead of only after an async read.
+final ValueNotifier<bool> appShowMedsReminderNotifier = ValueNotifier<bool>(true);
+
+/// Whether a family nest owner has already shared their invite code.
+/// Found via Pre-Ship Audit 1: the field default (true) and the real
+/// prefs fallback (false) didn't even agree with each other, so this
+/// flashed on every single first-ever load, not just returning users.
+final ValueNotifier<bool> appInviteCodeSharedNotifier = ValueNotifier<bool>(true);
+
 /// Maps the stored string to a TextScaler multiplier.
 double textSizeToScale(String size) {
   switch (size) {
@@ -253,5 +292,18 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
 
   appSeniorNameNotifier.value =
       prefs.getString('cached_checkin_senior_name') ?? '';
+
+  // Aug 31 2026: three new fields brought into this system, same reasoning
+  // as everything above -- see each notifier's own doc comment for why.
+  appIsNestArchivedNotifier.value =
+      prefs.getBool('cached_is_nest_archived') ?? false;
+
+  // Key format must match family_feed_screen.dart's _todayKey() exactly.
+  final medsReminderKey = '${now.year}_${now.month}_${now.day}';
+  appShowMedsReminderNotifier.value =
+      prefs.getBool('meds_reminder_$medsReminderKey') ?? true;
+
+  appInviteCodeSharedNotifier.value =
+      prefs.getBool('invite_code_shared') ?? false;
 }
 

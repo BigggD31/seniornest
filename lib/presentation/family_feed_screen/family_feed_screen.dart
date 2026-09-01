@@ -168,7 +168,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   String _nestName = appNestNameNotifier.value;
   bool _isGoodTodaySent = appIsGoodTodaySentNotifier.value;
   bool _justCheckedIn = false; // true only briefly right after tapping, to show the "Sent!" confirmation
-  bool _showMedsReminder = true;
+  bool _showMedsReminder = appShowMedsReminderNotifier.value;
   bool _showWelcomeToast = false;
   bool _isLoading = true;
   // Seeded from the already-resolved app-wide notifier instead of a
@@ -178,15 +178,14 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // lands back on.
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _hasRealPost = appHasRealPostNotifier.value; // tracks if user has made their first real post
-  bool _isNestArchived = false; // Aug 31 2026: Archive Nest Mode -- quiets check-in/meds/SOS once true, everything else stays untouched
+  bool _isNestArchived = appIsNestArchivedNotifier.value; // Aug 31 2026: Archive Nest Mode -- quiets check-in/meds/SOS once true, everything else stays untouched
   String _seniorName = appSeniorNameNotifier.value; // display name of the senior in this nest (for the pinned check-in card)
   String _seniorUserId = '';
   bool _seniorCheckedInToday = appSeniorCheckedInTodayNotifier.value;
   DateTime? _seniorCheckinTime;
   bool _seniorMedsTakenToday = appSeniorMedsTakenTodayNotifier.value;
   DateTime? _seniorMedsTakenTime;
-  bool _inviteCodeShared =
-      true; // tracks if family owner has shared invite code
+  bool _inviteCodeShared = appInviteCodeSharedNotifier.value; // tracks if family owner has shared invite code
   bool _isGuest = appIsGuestNotifier.value;
   bool _isNestOwner = appIsNestOwnerNotifier.value;
   // Author IDs of anyone removed from this nest -- used only to gate the
@@ -724,22 +723,26 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           // rename immediately, not just this one.
           appNestNameNotifier.value = remoteName;
         }
-        // Archive Nest Mode: deliberately a live read every load, not
-        // cached/notifier-backed like nest_name -- this is a rare,
-        // deliberate owner action, not identity data needing zero-flash
-        // instant display, so a live fetch each time Home loads is the
-        // right level of infrastructure for it.
+        // Aug 31 2026: previously a live read every load with no cache
+        // backing it -- that gap is what caused the "I'm Good" button
+        // flash D Von found (see appIsNestArchivedNotifier's comment in
+        // app_state.dart). Now cached and shared the same way nest_name
+        // is, right above.
         isNestArchived = nestRow?['is_archived'] as bool? ?? false;
+        await prefs.setBool('cached_is_nest_archived', isNestArchived);
+        appIsNestArchivedNotifier.value = isNestArchived;
       }
     } catch (e) {
       print('NEST_NAME_LOAD_ERROR: $e');
     }
     final goodToday = prefs.getBool('good_today_${_todayKey()}') ?? false;
     final medsReminder = prefs.getBool('meds_reminder_${_todayKey()}') ?? true;
+    appShowMedsReminderNotifier.value = medsReminder;
     final firstLoad = prefs.getBool('first_load') ?? true;
     final darkMode = prefs.getBool('dark_mode') ?? false;
     final hasRealPost = prefs.getBool('has_real_post') ?? false;
     final inviteCodeShared = prefs.getBool('invite_code_shared') ?? false;
+    appInviteCodeSharedNotifier.value = inviteCodeShared;
     final isGuest = prefs.getBool('is_guest') ?? false;
 
     if (firstLoad) {
@@ -1496,6 +1499,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('meds_reminder_${_todayKey()}', false);
     setState(() => _showMedsReminder = false);
+    appShowMedsReminderNotifier.value = false;
 
     // Previously this was purely local -- it dismissed the reminder card
     // on this one device only, with nothing written anywhere shared and

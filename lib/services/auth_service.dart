@@ -296,6 +296,11 @@ class AuthService {
     // nest on the same device could incorrectly inherit "already
     // shared" from whichever account used this device last.
     'invite_code_shared',
+    // Aug 31 2026: whole-app flash audit -- same nest-specific reasoning
+    // as invite_code_shared right above. Without this, a brand-new nest
+    // on the same device could incorrectly inherit "archived" from
+    // whichever account/nest used this device last.
+    'cached_is_nest_archived',
     // cached_checkin_* (status only: checked_in, date, meds_taken,
     // meds_time, time) deliberately excluded -- "has the senior checked in
     // today" is a nest-level fact, not tied to who's currently viewing it.

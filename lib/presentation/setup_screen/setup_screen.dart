@@ -1084,6 +1084,7 @@ class _SetupScreenState extends State<SetupScreen>
   void _shareInviteCode() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('invite_code_shared', true);
+    appInviteCodeSharedNotifier.value = true;
     ShareService.shareInviteCode(context, inviteCode: _inviteCode);
   }
 
