@@ -142,10 +142,35 @@ class _SafetyScreenState extends State<SafetyScreen>
       initialSeniorName = prefs.getString('cached_checkin_senior_name') ?? '';
     }
 
+    // Archive Nest Mode: fetched here, before the initial paint, not
+    // tacked on after -- Aug 31 2026, D Von found the original placement
+    // (after _isLoading flips false) caused the real SOS button and
+    // check-in section to render first, then get replaced by the banner
+    // a moment later. On fast navigation this fetch could also lose the
+    // mounted race entirely, since it ran after several other awaits.
+    // Deliberately still a live read every load (see the same reasoning
+    // in family_feed_screen.dart's matching fetch), just moved earlier so
+    // it's already resolved by the time anything paints.
+    bool isNestArchived = false;
+    try {
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isNotEmpty) {
+        final nestRow = await Supabase.instance.client
+            .from('nests')
+            .select('is_archived')
+            .eq('id', nestId)
+            .maybeSingle();
+        isNestArchived = nestRow?['is_archived'] as bool? ?? false;
+      }
+    } catch (e) {
+      debugPrint('Load nest archive status error: $e');
+    }
+
     setState(() {
       if (initialContacts.isNotEmpty) {
         _mockContacts = initialContacts;
       }
+      _isNestArchived = isNestArchived;
       _isSenior = isSeniorRole;
       _isDarkMode = prefs.getBool('dark_mode') ?? systemDark;
       _seniorName = initialSeniorName;
@@ -196,28 +221,6 @@ class _SafetyScreenState extends State<SafetyScreen>
       }
     } catch (e) {
       debugPrint('Load contacts error: $e');
-    }
-
-    // Archive Nest Mode: live read every load, same reasoning as
-    // family_feed_screen.dart's matching fetch -- this is a rare,
-    // deliberate owner action, not identity data needing a cache/notifier.
-    try {
-      final nestId = prefs.getString('nest_id') ?? '';
-      if (nestId.isNotEmpty) {
-        final nestRow = await Supabase.instance.client
-            .from('nests')
-            .select('is_archived')
-            .eq('id', nestId)
-            .maybeSingle();
-        final archived = nestRow?['is_archived'] as bool? ?? false;
-        if (mounted) {
-          setState(() {
-            _isNestArchived = archived;
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Load nest archive status error: $e');
     }
 
     // Resolve the real senior's name from Supabase for family members.

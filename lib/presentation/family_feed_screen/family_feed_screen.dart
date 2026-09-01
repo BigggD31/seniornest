@@ -1898,7 +1898,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           const KeyboardDoneBarOverlay(),
         ],
       ),
-      floatingActionButton: (_isSenior && (!_isGoodTodaySent || _justCheckedIn))
+      floatingActionButton: (!_isNestArchived && _isSenior && (!_isGoodTodaySent || _justCheckedIn))
           ? ImGoodTodayOrbWidget(
               isSent: _isGoodTodaySent,
               onTap: _handleGoodToday,
