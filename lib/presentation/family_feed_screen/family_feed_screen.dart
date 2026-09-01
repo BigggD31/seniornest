@@ -180,7 +180,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   bool _hasRealPost = appHasRealPostNotifier.value; // tracks if user has made their first real post
   bool _isNestArchived = appIsNestArchivedNotifier.value; // Aug 31 2026: Archive Nest Mode -- quiets check-in/meds/SOS once true, everything else stays untouched
   String _seniorName = appSeniorNameNotifier.value; // display name of the senior in this nest (for the pinned check-in card)
-  String _seniorUserId = '';
+  String _seniorUserId = appSeniorUserIdNotifier.value;
   bool _seniorCheckedInToday = appSeniorCheckedInTodayNotifier.value;
   DateTime? _seniorCheckinTime;
   bool _seniorMedsTakenToday = appSeniorMedsTakenTodayNotifier.value;
@@ -957,6 +957,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       }
       if (initialSeniorUserId.isNotEmpty) {
         _seniorUserId = initialSeniorUserId;
+        appSeniorUserIdNotifier.value = initialSeniorUserId;
         _seniorName = initialSeniorName;
         _seniorCheckedInToday = initialSeniorCheckedIn;
         _seniorCheckinTime = initialSeniorCheckinTime;
@@ -1188,6 +1189,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       if (mounted) {
         setState(() {
           _seniorUserId = seniorId;
+          appSeniorUserIdNotifier.value = seniorId;
           _seniorName = seniorName;
           _seniorCheckedInToday = checkinResponse != null;
           _seniorCheckinTime = checkinResponse != null

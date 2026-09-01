@@ -225,7 +225,16 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
           children: [
             _buildTopBar(isTablet),
             _buildCategoryFilter(isTablet),
-            if (_bookmarkedItems.isEmpty) _buildFavsSampleBanner(isTablet),
+            // Aug 31 2026: this used to render unconditionally based on
+            // _bookmarkedItems.isEmpty, which starts true by default
+            // before the real fetch ever runs -- so the "no bookmarks
+            // yet" sample banner showed first for literally everyone,
+            // including people with dozens of real bookmarks, then
+            // disappeared once the live fetch corrected it. Now behind
+            // the same _isLoading gate that already correctly masks the
+            // list below, so nothing wrong ever paints.
+            if (!_isLoading && _bookmarkedItems.isEmpty)
+              _buildFavsSampleBanner(isTablet),
             Expanded(
               child: _isLoading
                   ? _buildLoadingState()

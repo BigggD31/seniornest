@@ -141,6 +141,15 @@ final ValueNotifier<String> appDisplayNameNotifier = ValueNotifier<String>('');
 /// appIsNestOwnerNotifier.
 final ValueNotifier<String> appSeniorNameNotifier = ValueNotifier<String>('');
 
+/// The senior's user ID, same cache key family as appSeniorNameNotifier
+/// above (cached_checkin_senior_id, not cached_checkin_senior_name).
+/// Found during the whole-app flash audit: family_feed_screen used this
+/// ID, not the name, to decide whether the pinned check-in card shows at
+/// all -- started at '' (card absent) and only became non-empty after
+/// _loadData()'s async read finished, so the card appeared late on every
+/// load instead of being there from the first frame when a senior exists.
+final ValueNotifier<String> appSeniorUserIdNotifier = ValueNotifier<String>('');
+
 // ── Aug 31 2026: whole-app flash audit, prompted by D Von finding the "I'm
 // Good" button still flashing on a cold open even after Archive Nest Mode
 // itself worked correctly. Turned out to be the same hardcoded-false-
@@ -299,6 +308,9 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
 
   appSeniorNameNotifier.value =
       prefs.getString('cached_checkin_senior_name') ?? '';
+
+  appSeniorUserIdNotifier.value =
+      prefs.getString('cached_checkin_senior_id') ?? '';
 
   // Aug 31 2026: three new fields brought into this system, same reasoning
   // as everything above -- see each notifier's own doc comment for why.
