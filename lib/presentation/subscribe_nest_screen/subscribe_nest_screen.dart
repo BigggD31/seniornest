@@ -13,6 +13,8 @@ import '../../core/app_state.dart';
 
 const String _monthlyProductId = 'com.devonmurphy.seniornest.monthly';
 const String _yearlyProductId = 'com.devonmurphy.seniornest.yearly';
+const String _additionalNestMonthlyProductId = 'com.devonmurphy.seniornest.additionalnest.monthly';
+const String _additionalNestYearlyProductId = 'com.devonmurphy.seniornest.additionalnest.yearly';
 
 class SubscribeNestScreen extends StatefulWidget {
   const SubscribeNestScreen({super.key});
@@ -182,9 +184,9 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
       // Lifetime/promo entitlements never expire.
       DateTime? expiresAt;
       String status = 'active';
-      if (productId == _yearlyProductId) {
+      if (productId == _yearlyProductId || productId == _additionalNestYearlyProductId) {
         expiresAt = now.add(const Duration(days: 365));
-      } else if (productId == _monthlyProductId) {
+      } else if (productId == _monthlyProductId || productId == _additionalNestMonthlyProductId) {
         expiresAt = now.add(const Duration(days: 30));
       } else {
         // promo / lifetime-style entitlement
@@ -224,8 +226,14 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     if (!mounted) return;
     setState(() => _iapAvailable = available);
     if (available) {
-      final response = await _iap.queryProductDetails(
-        {_monthlyProductId, _yearlyProductId});
+      // Read _isAdditionalNest here, after the async gap above, not before
+      // it -- ModalRoute arguments aren't reliably available synchronously
+      // in initState (see _isAdditionalNest's own comment; _initIAP is
+      // called directly from initState at construction).
+      final productIds = _isAdditionalNest
+          ? {_additionalNestMonthlyProductId, _additionalNestYearlyProductId}
+          : {_monthlyProductId, _yearlyProductId};
+      final response = await _iap.queryProductDetails(productIds);
       if (!mounted) return;
       setState(() => _products = response.productDetails);
     }
@@ -282,7 +290,9 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   void _onSubscribeNow() async {
     if (_isPurchasing) return;
 
-    final productId = _isYearly ? _yearlyProductId : _monthlyProductId;
+    final productId = _isAdditionalNest
+        ? (_isYearly ? _additionalNestYearlyProductId : _additionalNestMonthlyProductId)
+        : (_isYearly ? _yearlyProductId : _monthlyProductId);
     final product = _products.where((p) => p.id == productId).firstOrNull;
 
     if (product != null && _iapAvailable) {
