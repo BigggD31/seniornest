@@ -10,6 +10,8 @@ import '../../widgets/app_navigation.dart';
 import '../../widgets/keyboard_done_bar.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../core/app_state.dart';
+import '../family_feed_screen/widgets/daily_checkin_card_widget.dart';
+import '../family_feed_screen/widgets/daily_meds_card_widget.dart';
 
 class SafetyScreen extends StatefulWidget {
   const SafetyScreen({super.key});
@@ -30,6 +32,11 @@ class _SafetyScreenState extends State<SafetyScreen>
   bool _isNestArchived = false; // Aug 31 2026: Archive Nest Mode -- quiets SOS/check-in section when true
   bool _isSendingAlert = false;
   String _seniorName = appSeniorNameNotifier.value;
+  // Sep 2 2026: every senior in the nest, each with their own check-in/meds
+  // status -- powers _buildCheckInSection's per-senior cards and the
+  // "This is what ___ sees" banner's name (single, joined, or generic
+  // plural depending on how many). See _loadData's tail for the fetch.
+  List<Map<String, dynamic>> _seniorStatuses = [];
   // Was reading its own local prefs copy separately -- now points at the
   // same already-resolved notifier every other screen uses, closing the
   // last gap in the app-wide nest-name flash fix (build 173).
@@ -223,52 +230,112 @@ class _SafetyScreenState extends State<SafetyScreen>
       debugPrint('Load contacts error: $e');
     }
 
-    // Resolve the real senior's name from Supabase for family members.
-    // Previously assumed the nest's creator is always the senior -- true
-    // for a senior setting up their own nest, but false for the VIP
-    // "family nest owner" flow, where a family member creates and owns the
-    // nest and the actual senior joins later via invite code. That wrong
-    // assumption meant this screen's "This is what ___ sees" banner showed
-    // the family owner's own name instead of the senior's, confirmed
-    // directly: a family nest owner named Devon saw "This is what Devon
-    // sees" on her own Safety screen. Correct lookup: whoever in this nest
-    // actually has the senior role, not whoever created it.
-    if (!isSeniorRole) {
-      try {
-        final supabase = Supabase.instance.client;
-        final nestId = prefs.getString('nest_id') ?? '';
-        if (nestId.isNotEmpty) {
-          final memberRows = await supabase
-              .from('nest_members')
-              .select('user_id')
-              .eq('nest_id', nestId);
-          final memberIds = (memberRows as List)
-              .map((r) => r['user_id'] as String)
-              .toList();
-          if (memberIds.isNotEmpty) {
-            final seniorProfile = await supabase
-                .from('user_profiles')
-                .select('display_name, preferred_name')
-                .inFilter('id', memberIds)
-                .eq('role', 'senior')
-                .maybeSingle();
-            final seniorPreferred =
-                seniorProfile?['preferred_name'] as String? ?? '';
-            final seniorDisplay =
-                seniorProfile?['display_name'] as String? ?? '';
-            final name =
-                seniorPreferred.isNotEmpty ? seniorPreferred : seniorDisplay;
-            if (name.isNotEmpty && mounted) {
-              setState(() => _seniorName = name);
-              appSeniorNameNotifier.value = name;
-              await prefs.setString('cached_checkin_senior_name', name);
-            }
+    // Sep 2 2026: replaced the old single-senior .maybeSingle() lookup --
+    // that call throws/fails silently the moment a nest has TWO seniors
+    // (role='senior' matching more than one row), since maybeSingle()
+    // only tolerates 0 or 1 results. Now fetches every senior in the
+    // nest, with today's real check-in/meds status for each, powering
+    // both the per-senior cards below and the "This is what ___ sees"
+    // banner's name (joined for 2, generic for 3+).
+    try {
+      final supabase = Supabase.instance.client;
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isNotEmpty) {
+        final memberRows = await supabase
+            .from('nest_members')
+            .select('user_id, user_profiles(display_name, preferred_name, role)')
+            .eq('nest_id', nestId);
+        final members = memberRows as List<dynamic>;
+
+        final List<Map<String, String>> seniors = [];
+        for (final m in members) {
+          final profile = m['user_profiles'] as Map<String, dynamic>?;
+          if (profile?['role'] == 'senior') {
+            final id = m['user_id'] as String? ?? '';
+            if (id.isEmpty) continue;
+            final preferred = profile?['preferred_name'] as String? ?? '';
+            final first = profile?['display_name'] as String? ?? '';
+            final name = preferred.isNotEmpty ? preferred : first;
+            seniors.add({'id': id, 'name': name.isNotEmpty ? name : 'Your senior'});
           }
         }
-      } catch (e) {
-        debugPrint('SAFETY SENIOR NAME LOAD ERROR: $e');
+
+        if (seniors.isNotEmpty) {
+          final today = _todayDateString();
+          final futures = <Future<dynamic>>[];
+          for (final s in seniors) {
+            futures.add(supabase
+                .from('daily_checkins')
+                .select('created_at')
+                .eq('user_id', s['id']!)
+                .eq('checkin_date', today)
+                .maybeSingle());
+            futures.add(supabase
+                .from('daily_medications')
+                .select('created_at')
+                .eq('user_id', s['id']!)
+                .eq('med_date', today)
+                .maybeSingle());
+          }
+          final results = await Future.wait(futures);
+
+          final List<Map<String, dynamic>> seniorStatuses = [];
+          for (int i = 0; i < seniors.length; i++) {
+            final checkinResponse = results[i * 2];
+            final medsResponse = results[i * 2 + 1];
+            seniorStatuses.add({
+              'id': seniors[i]['id']!,
+              'name': seniors[i]['name']!,
+              'checkedIn': checkinResponse != null,
+              'checkinTime': checkinResponse != null
+                  ? DateTime.parse(checkinResponse['created_at'] as String)
+                  : null,
+              'medsTaken': medsResponse != null,
+              'medsTime': medsResponse != null
+                  ? DateTime.parse(medsResponse['created_at'] as String)
+                  : null,
+            });
+          }
+
+          final joinedName = _joinSeniorNames(
+              seniorStatuses.map((s) => s['name'] as String).toList());
+
+          if (mounted) {
+            setState(() {
+              _seniorStatuses = seniorStatuses;
+              if (!isSeniorRole) _seniorName = joinedName;
+            });
+          }
+          if (!isSeniorRole) {
+            appSeniorNameNotifier.value = joinedName;
+            await prefs.setString('cached_checkin_senior_name', joinedName);
+          }
+        }
       }
+    } catch (e) {
+      debugPrint('SAFETY SENIOR NAME LOAD ERROR: $e');
     }
+  }
+
+  // Sep 2 2026: same implementation as family_feed_screen.dart's helper --
+  // needed here now that this screen also queries daily_checkins/
+  // daily_medications directly for the per-senior cards.
+  String _todayDateString() {
+    final now = DateTime.now();
+    final m = now.month.toString().padLeft(2, '0');
+    final d = now.day.toString().padLeft(2, '0');
+    return '${now.year}-$m-$d';
+  }
+
+  // Sep 2 2026: joins senior names naturally for the "This is what ___
+  // sees" banner and the per-senior card list -- one name unchanged,
+  // two names joined with "and", three or more fall back to a generic
+  // plural rather than an unwieldy list.
+  String _joinSeniorNames(List<String> names) {
+    if (names.isEmpty) return 'your loved one';
+    if (names.length == 1) return names.first;
+    if (names.length == 2) return '${names[0]} and ${names[1]}';
+    return 'your loved ones';
   }
 
   void _setupAnimations() {
@@ -819,63 +886,96 @@ class _SafetyScreenState extends State<SafetyScreen>
             ),
           ),
           const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFF5DA399).withAlpha(15),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFF5DA399).withAlpha(60),
-                width: 1.5,
+          // Sep 2 2026: real per-senior status once it's loaded -- one
+          // card pair per senior, same reusable widgets Home uses. Falls
+          // back to the original generic explainer for the brief window
+          // before the fetch resolves, or if no senior is in the nest yet
+          // (matches this screen's existing cache-then-refresh pattern).
+          if (_seniorStatuses.isNotEmpty)
+            Column(
+              children: [
+                for (final status in _seniorStatuses) ...[
+                  DailyCheckinCardWidget(
+                    isDarkMode: _isDarkMode,
+                    isSenior: _isSenior &&
+                        status['id'] ==
+                            Supabase.instance.client.auth.currentUser?.id,
+                    seniorName: status['name'] as String,
+                    checkedIn: status['checkedIn'] as bool,
+                    checkinTime: status['checkinTime'] as DateTime?,
+                  ),
+                  const SizedBox(height: 10),
+                  DailyMedsCardWidget(
+                    isDarkMode: _isDarkMode,
+                    isSenior: _isSenior &&
+                        status['id'] ==
+                            Supabase.instance.client.auth.currentUser?.id,
+                    seniorName: status['name'] as String,
+                    takenToday: status['medsTaken'] as bool,
+                    takenTime: status['medsTime'] as DateTime?,
+                  ),
+                  const SizedBox(height: 4),
+                ],
+              ],
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF5DA399).withAlpha(15),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFF5DA399).withAlpha(60),
+                  width: 1.5,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF5DA399).withAlpha(26),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.favorite_rounded,
+                      color: Color(0xFF5DA399),
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _isSenior
+                              ? 'Let your family know you\'re okay'
+                              : 'Waiting for today\'s check-in',
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: _textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _isSenior
+                              ? 'Tap "I\'m Good Today" on the Family Feed'
+                              : 'Your loved one hasn\'t checked in yet today',
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 12,
+                            color: _textSecondary,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Row(
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF5DA399).withAlpha(26),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.favorite_rounded,
-                    color: Color(0xFF5DA399),
-                    size: 26,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _isSenior
-                            ? 'Let your family know you\'re okay'
-                            : 'Waiting for today\'s check-in',
-                        style: GoogleFonts.nunitoSans(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: _textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _isSenior
-                            ? 'Tap "I\'m Good Today" on the Family Feed'
-                            : 'Your loved one hasn\'t checked in yet today',
-                        style: GoogleFonts.nunitoSans(
-                          fontSize: 12,
-                          color: _textSecondary,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

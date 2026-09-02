@@ -185,6 +185,16 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   DateTime? _seniorCheckinTime;
   bool _seniorMedsTakenToday = appSeniorMedsTakenTodayNotifier.value;
   DateTime? _seniorMedsTakenTime;
+  // Sep 2 2026: MY OWN meds status specifically, matched by my signed-in
+  // user id -- not the primary/first-found senior. Drives the self
+  // meds-reminder below, which is about whether I took my own meds
+  // today, not whichever senior happened to be found first in the nest.
+  bool _myMedsTakenToday = false;
+  // Sep 2 2026: every senior in the nest, each with their own check-in/meds
+  // status -- drives one small card pair per senior. The five fields above
+  // stay as "the primary/first senior" for other screens and the shared
+  // notifiers, which still only expect a single senior. See _loadCheckinStatus.
+  List<Map<String, dynamic>> _seniorStatuses = [];
   bool _inviteCodeShared = appInviteCodeSharedNotifier.value; // tracks if family owner has shared invite code
   bool _isGuest = appIsGuestNotifier.value;
   bool _isNestOwner = appIsNestOwnerNotifier.value;
@@ -918,6 +928,23 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       initialSeniorMedsTakenTime =
           cachedMedsTimeStr != null ? DateTime.tryParse(cachedMedsTimeStr) : null;
     }
+    // Sep 2 2026: cache only ever stored one senior, so this seed list can
+    // only ever have that one entry at first paint -- any additional
+    // seniors appear once _loadCheckinStatus's real fetch completes. Still
+    // eliminates the flash for the common single-senior case.
+    final List<Map<String, dynamic>> initialSeniorStatuses =
+        initialSeniorUserId.isNotEmpty
+            ? [
+                {
+                  'id': initialSeniorUserId,
+                  'name': initialSeniorName,
+                  'checkedIn': initialSeniorCheckedIn,
+                  'checkinTime': initialSeniorCheckinTime,
+                  'medsTaken': initialSeniorMedsTaken,
+                  'medsTime': initialSeniorMedsTakenTime,
+                }
+              ]
+            : [];
 
     setState(() {
       _isSenior = role == 'senior';
@@ -963,6 +990,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         _seniorCheckinTime = initialSeniorCheckinTime;
         _seniorMedsTakenToday = initialSeniorMedsTaken;
         _seniorMedsTakenTime = initialSeniorMedsTakenTime;
+        _seniorStatuses = initialSeniorStatuses;
+        // Only meaningful if the cached primary senior happens to be me --
+        // true for the common single-senior case, which is the only one
+        // that was ever cached/tested. A genuine multi-senior mismatch
+        // self-corrects once _loadCheckinStatus's real fetch completes,
+        // same as before this field existed.
+        if (initialSeniorUserId == currentUserIdForCache) {
+          _myMedsTakenToday = initialSeniorMedsTaken;
+        }
       }
     });
     // Aug 28 2026: D Von's direct, specific report -- Home was the only
@@ -1138,67 +1174,104 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       final prefs = await SharedPreferences.getInstance();
       final nestId = prefs.getString('nest_id') ?? '';
       if (nestId.isEmpty) return;
+      final myUserId = supabase.auth.currentUser?.id ?? '';
 
-      // Find the senior in this nest
+      // Sep 2 2026: find every senior in this nest, not just the first
+      // one found. A nest can have more than one senior (e.g. both
+      // grandparents) -- each needs their own independently correct
+      // check-in/meds card. See _seniorStatuses below.
       final membersResponse = await supabase
           .from('nest_members')
           .select('user_id, user_profiles(display_name, preferred_name, role)')
           .eq('nest_id', nestId);
       final members = membersResponse as List<dynamic>;
 
-      String seniorId = '';
-      String seniorName = '';
+      final List<Map<String, String>> seniors = [];
       for (final m in members) {
         final profile = m['user_profiles'] as Map<String, dynamic>?;
         if (profile?['role'] == 'senior') {
-          seniorId = m['user_id'] as String? ?? '';
+          final id = m['user_id'] as String? ?? '';
+          if (id.isEmpty) continue;
           final preferred = profile?['preferred_name'] as String? ?? '';
           final first = profile?['display_name'] as String? ?? '';
-          seniorName = preferred.isNotEmpty ? preferred : first;
-          break;
+          final name = preferred.isNotEmpty ? preferred : first;
+          seniors.add({'id': id, 'name': name.isNotEmpty ? name : 'Your senior'});
         }
       }
-      if (seniorId.isEmpty) return;
-      if (seniorName.isEmpty) seniorName = 'Your senior';
+      if (seniors.isEmpty) return;
 
-      // Check if that senior has checked in today, and whether they've
-      // logged their medications today. Two independent queries against
-      // different tables with no data dependency between them, so run
-      // them concurrently rather than one after the other. Meds reuses
-      // the seniorId/seniorName already resolved above rather than a
-      // second nest_members lookup, same table shape and RLS as
-      // daily_checkins (nest members can read, each user can only insert
-      // their own row).
-      final results = await Future.wait([
-        supabase
+      // Check-in + meds status for every senior found, all concurrently --
+      // same daily_checkins/daily_medications tables and RLS as before,
+      // just one query pair per senior instead of one pair total.
+      final futures = <Future<dynamic>>[];
+      for (final s in seniors) {
+        futures.add(supabase
             .from('daily_checkins')
             .select('created_at')
-            .eq('user_id', seniorId)
+            .eq('user_id', s['id']!)
             .eq('checkin_date', _todayDateString())
-            .maybeSingle(),
-        supabase
+            .maybeSingle());
+        futures.add(supabase
             .from('daily_medications')
             .select('created_at')
-            .eq('user_id', seniorId)
+            .eq('user_id', s['id']!)
             .eq('med_date', _todayDateString())
-            .maybeSingle(),
-      ]);
-      final checkinResponse = results[0];
-      final medsResponse = results[1];
+            .maybeSingle());
+      }
+      final results = await Future.wait(futures);
+
+      final List<Map<String, dynamic>> seniorStatuses = [];
+      for (int i = 0; i < seniors.length; i++) {
+        final checkinResponse = results[i * 2];
+        final medsResponse = results[i * 2 + 1];
+        seniorStatuses.add({
+          'id': seniors[i]['id']!,
+          'name': seniors[i]['name']!,
+          'checkedIn': checkinResponse != null,
+          'checkinTime': checkinResponse != null
+              ? DateTime.parse(checkinResponse['created_at'] as String)
+              : null,
+          'medsTaken': medsResponse != null,
+          'medsTime': medsResponse != null
+              ? DateTime.parse(medsResponse['created_at'] as String)
+              : null,
+        });
+      }
+
+      // "Primary" senior -- the first one found -- keeps driving the
+      // existing shared app-wide notifiers untouched, since other
+      // screens/caches still only expect a single senior's name/status.
+      final primary = seniorStatuses.first;
+      final checkinResponse = primary['checkedIn'] as bool;
+      final medsResponse = primary['medsTaken'] as bool;
+      final seniorId = primary['id'] as String;
+      final seniorName = primary['name'] as String;
+
+      // My own status, if I am a senior myself -- matched by my actual
+      // signed-in user id, not "whichever senior was found first". Fixes
+      // a real bug: a second senior's own "I'm Good" button and meds
+      // reminder could previously reflect the OTHER senior's record
+      // instead of their own.
+      Map<String, dynamic>? mine;
+      if (_isSenior && myUserId.isNotEmpty) {
+        for (final s in seniorStatuses) {
+          if (s['id'] == myUserId) {
+            mine = s;
+            break;
+          }
+        }
+      }
 
       if (mounted) {
         setState(() {
+          _seniorStatuses = seniorStatuses;
           _seniorUserId = seniorId;
           appSeniorUserIdNotifier.value = seniorId;
           _seniorName = seniorName;
-          _seniorCheckedInToday = checkinResponse != null;
-          _seniorCheckinTime = checkinResponse != null
-              ? DateTime.parse(checkinResponse['created_at'] as String)
-              : null;
-          _seniorMedsTakenToday = medsResponse != null;
-          _seniorMedsTakenTime = medsResponse != null
-              ? DateTime.parse(medsResponse['created_at'] as String)
-              : null;
+          _seniorCheckedInToday = checkinResponse;
+          _seniorCheckinTime = primary['checkinTime'] as DateTime?;
+          _seniorMedsTakenToday = medsResponse;
+          _seniorMedsTakenTime = primary['medsTime'] as DateTime?;
           _topCardsAnimatedOnceThisSession = true;
           // Reconcile the local-only good_today_* flag (drives the
           // floating "I'm Good" button) against this real database check
@@ -1212,23 +1285,26 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           // the rest of the day, showing "checked in" and the button to
           // check in again at the same time. The server record is
           // authoritative; sync the local flag to match it either way.
-          if (_isSenior) {
-            _isGoodTodaySent = checkinResponse != null;
+          // Sep 2 2026: now matched against MY OWN record (mine), not
+          // whichever senior was found first.
+          if (_isSenior && mine != null) {
+            _isGoodTodaySent = mine['checkedIn'] as bool;
+            _myMedsTakenToday = mine['medsTaken'] as bool;
           }
         });
-        if (_isSenior) {
+        if (_isSenior && mine != null) {
           await prefs.setBool(
             'good_today_${_todayKey()}',
-            checkinResponse != null,
+            mine['checkedIn'] as bool,
           );
-          appIsGoodTodaySentNotifier.value = checkinResponse != null;
+          appIsGoodTodaySentNotifier.value = mine['checkedIn'] as bool;
         }
         // Update the shared notifier so any other screen currently showing
         // this value picks it up immediately. Persistence to
         // cached_checkin_checked_in/nest_id/date already happens a few
         // lines below in the existing try block -- no need to duplicate it.
-        appSeniorCheckedInTodayNotifier.value = checkinResponse != null;
-        appSeniorMedsTakenTodayNotifier.value = medsResponse != null;
+        appSeniorCheckedInTodayNotifier.value = checkinResponse;
+        appSeniorMedsTakenTodayNotifier.value = medsResponse;
       }
 
       try {
@@ -1237,17 +1313,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         await prefs.setString('cached_checkin_senior_id', seniorId);
         await prefs.setString('cached_checkin_senior_name', seniorName);
         appSeniorNameNotifier.value = seniorName;
-        await prefs.setBool('cached_checkin_checked_in', checkinResponse != null);
-        if (checkinResponse != null) {
-          await prefs.setString(
-              'cached_checkin_time', checkinResponse['created_at'] as String);
+        await prefs.setBool('cached_checkin_checked_in', checkinResponse);
+        if (checkinResponse) {
+          await prefs.setString('cached_checkin_time',
+              (primary['checkinTime'] as DateTime).toIso8601String());
         } else {
           await prefs.remove('cached_checkin_time');
         }
-        await prefs.setBool('cached_checkin_meds_taken', medsResponse != null);
-        if (medsResponse != null) {
-          await prefs.setString(
-              'cached_checkin_meds_time', medsResponse['created_at'] as String);
+        await prefs.setBool('cached_checkin_meds_taken', medsResponse);
+        if (medsResponse) {
+          await prefs.setString('cached_checkin_meds_time',
+              (primary['medsTime'] as DateTime).toIso8601String());
         } else {
           await prefs.remove('cached_checkin_meds_time');
         }
@@ -2008,34 +2084,47 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                             const SizedBox(height: 14),
                           ],
                         )
-                      : _seniorUserId.isNotEmpty
+                      : _seniorStatuses.isNotEmpty
                       ? Column(
                           key: const ValueKey('checkinPresent'),
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            DailyCheckinCardWidget(
-                              isDarkMode: _isDarkMode,
-                              isSenior: _isSenior,
-                              seniorName: _seniorName,
-                              checkedIn: _seniorCheckedInToday,
-                              checkinTime: _seniorCheckinTime,
-                            ),
+                            // Sep 2 2026: one card pair per senior in the
+                            // nest, not just one -- each senior's own
+                            // status, matched by their own id (not
+                            // "whichever senior was found first").
+                            for (final status in _seniorStatuses) ...[
+                              DailyCheckinCardWidget(
+                                isDarkMode: _isDarkMode,
+                                isSenior: _isSenior &&
+                                    status['id'] ==
+                                        Supabase.instance.client.auth
+                                            .currentUser?.id,
+                                seniorName: status['name'] as String,
+                                checkedIn: status['checkedIn'] as bool,
+                                checkinTime: status['checkinTime'] as DateTime?,
+                              ),
+                              const SizedBox(height: 10),
+                              DailyMedsCardWidget(
+                                isDarkMode: _isDarkMode,
+                                isSenior: _isSenior &&
+                                    status['id'] ==
+                                        Supabase.instance.client.auth
+                                            .currentUser?.id,
+                                seniorName: status['name'] as String,
+                                takenToday: status['medsTaken'] as bool,
+                                takenTime: status['medsTime'] as DateTime?,
+                              ),
+                              const SizedBox(height: 4),
+                            ],
                             const SizedBox(height: 10),
-                            DailyMedsCardWidget(
-                              isDarkMode: _isDarkMode,
-                              isSenior: _isSenior,
-                              seniorName: _seniorName,
-                              takenToday: _seniorMedsTakenToday,
-                              takenTime: _seniorMedsTakenTime,
-                            ),
-                            const SizedBox(height: 14),
                           ],
                         )
                       : const SizedBox.shrink(key: ValueKey('checkinEmpty')),
                 ),
                 // Meds reminder (senior only). Previously this only
                 // checked _showMedsReminder, never the real
-                // _seniorMedsTakenToday (sourced from Supabase) -- so this
+                // _myMedsTakenToday (sourced from Supabase) -- so this
                 // card's own internal _isTaken flag, which always starts
                 // false on every load/re-sign-in, would show the "have you
                 // taken your medications" prompt again even directly
@@ -2043,7 +2132,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 // today" card above it. Now it hides once the real record
                 // says today's dose is already logged, same as every other
                 // confirmed-state card on this screen.
-                if (!_isNestArchived && _isSenior && _showMedsReminder && !_seniorMedsTakenToday) ...[
+                // Sep 2 2026: now checks MY OWN meds record specifically
+                // (_myMedsTakenToday) instead of the primary/first-found
+                // senior's -- fixes a case where a second senior's own
+                // reminder could reflect the other senior's status.
+                if (!_isNestArchived && _isSenior && _showMedsReminder && !_myMedsTakenToday) ...[
                   MedsReminderCardWidget(
                     isDarkMode: _isDarkMode,
                     onTaken: _handleMedsTaken,

@@ -865,6 +865,13 @@ class _LegacyScreenState extends State<LegacyScreen>
                             SliverToBoxAdapter(
                               child: _buildFamilySuggestButton(isTablet),
                             ),
+                          // Sep 2 2026: family can now write/record their
+                          // own memory directly too, not just suggest a
+                          // question for the senior to answer.
+                          if (!_isSenior)
+                            SliverToBoxAdapter(
+                              child: _buildFamilyWriteMemoryButton(isTablet),
+                            ),
                           SliverToBoxAdapter(
                             child: _buildCategoryChips(isTablet),
                           ),
@@ -1114,6 +1121,62 @@ class _LegacyScreenState extends State<LegacyScreen>
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF5DA399),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Sep 2 2026: family could previously only suggest a question for the
+  // senior to answer -- no way to write, record, or share their own
+  // memory/tribute directly. Reuses the exact same options sheet and save
+  // logic as the senior's "Tell Your Story" hero (legacy_entries.insert
+  // already keys off whoever is signed in, no senior-only restriction at
+  // the data layer -- this was purely a missing UI entry point).
+  Widget _buildFamilyWriteMemoryButton(bool isTablet) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        isTablet ? 28 : 20,
+        0,
+        isTablet ? 28 : 20,
+        4,
+      ),
+      child: Center(
+        child: GestureDetector(
+          onTap: () => _showTellYourStoryOptions(),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
+            decoration: BoxDecoration(
+              color: const Color(0xFF5DA399),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF5DA399).withAlpha(70),
+                  blurRadius: 14,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.edit_note_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Share a Memory',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
                   ),
                 ),
               ],
@@ -2363,7 +2426,8 @@ class _TellYourStoryOptionsSheet extends StatelessWidget {
   }
 }
 
-// ── Write Story Sheet (Senior only) ───────────────────────────────────────────
+// ── Write Story Sheet (senior's own stories, family's own memories, and
+// answers to suggested prompts -- all share this one composer) ──────────
 class _WriteStorySheet extends StatefulWidget {
   const _WriteStorySheet({
     this.prompt,
