@@ -32,6 +32,7 @@ class _LegacyScreenState extends State<LegacyScreen>
     with TickerProviderStateMixin {
   int _currentNavIndex = 2;
   bool _isSenior = appIsSeniorNotifier.value;
+  bool _isNestArchived = appIsNestArchivedNotifier.value; // Sep 2 2026: hides senior-only Legacy posting (Tell Your Story hero, Answer a Prompt) once a nest is a memorial -- family's own posting stays untouched
   // Aug 21 2026: added for the delete-post feature (matching Home's
   // exact pattern) -- Legacy never needed to know nest-owner status
   // before this. Seeded from the same already-resolved app-wide
@@ -836,7 +837,10 @@ class _LegacyScreenState extends State<LegacyScreen>
                       child: CustomScrollView(
                         slivers: [
                           // Senior: big Write Your Story hero button
-                          if (_isSenior)
+                          // Sep 2 2026: hidden once archived -- posting as
+                          // the senior no longer makes sense once the nest
+                          // is a memorial. Family's own posting is untouched.
+                          if (_isSenior && !_isNestArchived)
                             SliverToBoxAdapter(
                               child: _buildSeniorWriteHero(isTablet),
                             ),
@@ -867,7 +871,7 @@ class _LegacyScreenState extends State<LegacyScreen>
                           SliverToBoxAdapter(
                             child: _buildStoriesWantToHear(isTablet),
                           ),
-                          if (_isSenior) ...[
+                          if (_isSenior && !_isNestArchived) ...[
                             SliverToBoxAdapter(
                               child: _buildPromptSection(isTablet),
                             ),
@@ -1333,7 +1337,7 @@ class _LegacyScreenState extends State<LegacyScreen>
                         ),
                       ),
                     ),
-                    if (_isSenior) ...[
+                    if (_isSenior && !_isNestArchived) ...[
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -1361,7 +1365,7 @@ class _LegacyScreenState extends State<LegacyScreen>
                   ],
                 );
 
-                if (_isSenior) {
+                if (_isSenior && !_isNestArchived) {
                   return GestureDetector(
                     onTap: () => _answerPrompt(prompt),
                     child: Container(

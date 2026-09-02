@@ -31,6 +31,7 @@ class _SetupScreenState extends State<SetupScreen>
   bool _isLoading = true;
   bool _isNestOwner = appIsNestOwnerNotifier.value;
   bool _isNestArchived = appIsNestArchivedNotifier.value; // Aug 31 2026: Archive Nest Mode -- owner-only toggle, see _buildNestOwnershipSection
+  bool _nestOwnershipExpanded = false; // Sep 2 2026: Nest Ownership + Archive Mode collapsed by default, D Von: shouldn't sit visible on the main Setup list -- see _buildNestOwnershipSection
   bool _isVipMember = appIsVipMemberNotifier.value;
   String _displayName = appDisplayNameNotifier.value;
   String _preferredName = '';
@@ -515,6 +516,13 @@ class _SetupScreenState extends State<SetupScreen>
           _successionObjections = objections;
           _justBecameOwnerRequestId = justResolvedId;
           _isNestArchived = isArchived;
+          // Sep 2 2026: only auto-open the dropdown when there's something
+          // time-sensitive to see -- a pending request or a fresh
+          // ownership-change banner. Otherwise it stays collapsed, matching
+          // D Von's ask that this not sit visible on the main Setup list.
+          if (pendingWithName != null || justResolvedId != null) {
+            _nestOwnershipExpanded = true;
+          }
         });
         appIsNestArchivedNotifier.value = isArchived;
       }
@@ -919,21 +927,44 @@ class _SetupScreenState extends State<SetupScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('👑', 'Nest Ownership'),
-          const SizedBox(height: 12),
-          if (_justBecameOwnerRequestId != null) _buildNewOwnerBanner(),
-          if (_pendingSuccessionRequest == null)
-            _buildNoPendingSuccessionCard(iAmOwner, ownerName)
-          else
-            _buildPendingSuccessionCard(iAmOwner, myUserId),
-          if (iAmOwner) ...[
-            const SizedBox(height: 16),
-            _buildToggleRow(
-              icon: Icons.nights_stay_rounded,
-              label: 'Memorial Space (Archive Nest)',
-              value: _isNestArchived,
-              onChanged: (v) => _confirmToggleArchiveNest(v),
+          // Sep 2 2026: collapsed by default -- D Von didn't want this
+          // (Archive Mode especially) sitting visible on the main Setup
+          // list. Tapping the header expands it; auto-expands on its own
+          // when there's something actionable (see _loadData above).
+          GestureDetector(
+            onTap: () => setState(() => _nestOwnershipExpanded = !_nestOwnershipExpanded),
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                Expanded(child: _buildSectionHeader('👑', 'Nest Ownership')),
+                AnimatedRotation(
+                  turns: _nestOwnershipExpanded ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: _textSecondary,
+                    size: 24,
+                  ),
+                ),
+              ],
             ),
+          ),
+          if (_nestOwnershipExpanded) ...[
+            const SizedBox(height: 12),
+            if (_justBecameOwnerRequestId != null) _buildNewOwnerBanner(),
+            if (_pendingSuccessionRequest == null)
+              _buildNoPendingSuccessionCard(iAmOwner, ownerName)
+            else
+              _buildPendingSuccessionCard(iAmOwner, myUserId),
+            if (iAmOwner) ...[
+              const SizedBox(height: 16),
+              _buildToggleRow(
+                icon: Icons.nights_stay_rounded,
+                label: 'Memorial Space (Archive Nest)',
+                value: _isNestArchived,
+                onChanged: (v) => _confirmToggleArchiveNest(v),
+              ),
+            ],
           ],
         ],
       ),
