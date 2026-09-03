@@ -219,6 +219,12 @@ class _LegacyScreenState extends State<LegacyScreen>
   String _seniorName = appSeniorNameNotifier.value.isNotEmpty
       ? appSeniorNameNotifier.value
       : 'Your Loved One';
+  // Sep 3 2026: every senior in the nest, for the family read-only
+  // banner -- a nest can have more than one (e.g. both grandparents),
+  // and each gets their own banner card by name. Synchronously seeded
+  // below to avoid a flash of the wrong/single name on load, same
+  // pattern as _seniorStatuses in family_feed_screen.dart.
+  List<String> _seniorNames = [];
 
   @override
   void initState() {
@@ -338,6 +344,16 @@ class _LegacyScreenState extends State<LegacyScreen>
       // full explanation. Now uses the real cached value the shared
       // notifier is already seeded from.
       _seniorName = prefs.getString('cached_checkin_senior_name') ?? 'Your Loved One';
+      final cachedNames = prefs.getString('cached_legacy_senior_names');
+      if (cachedNames != null && cachedNames.isNotEmpty) {
+        try {
+          _seniorNames = (jsonDecode(cachedNames) as List).cast<String>();
+        } catch (e) {
+          _seniorNames = [_seniorName];
+        }
+      } else {
+        _seniorNames = [_seniorName];
+      }
     });
     // See the matching comment in family_feed_screen.dart -- appIsSeniorNotifier
     // only re-resolves at true cold-start, so an in-session account switch
@@ -352,6 +368,7 @@ class _LegacyScreenState extends State<LegacyScreen>
     // entrance animation (same pattern as Home's background refresh).
     List<Map<String, dynamic>> realStories = [];
     String resolvedSeniorName = 'Your Loved One';
+    List<String> resolvedSeniorNames = [];
     try {
       final supabase = Supabase.instance.client;
       String? userId = supabase.auth.currentUser?.id;
@@ -377,16 +394,26 @@ class _LegacyScreenState extends State<LegacyScreen>
                 .map((r) => r['user_id'] as String)
                 .toList();
             if (memberIds.isNotEmpty) {
-              final seniorProfile = await supabase
+              // Sep 3 2026: was .maybeSingle() -- throws if a nest has
+              // more than one senior (e.g. both grandparents), which is
+              // a real, supported case. Now fetches every senior so the
+              // family read-only banner can show one card per senior.
+              final seniorProfiles = await supabase
                   .from('user_profiles')
                   .select('display_name, preferred_name')
                   .inFilter('id', memberIds)
-                  .eq('role', 'senior')
-                  .maybeSingle();
-              final seniorPreferred = seniorProfile?['preferred_name'] as String? ?? '';
-              final seniorDisplay = seniorProfile?['display_name'] as String? ?? '';
-              final name = seniorPreferred.isNotEmpty ? seniorPreferred : seniorDisplay;
-              if (name.isNotEmpty) resolvedSeniorName = name;
+                  .eq('role', 'senior');
+              final names = <String>[];
+              for (final p in (seniorProfiles as List)) {
+                final preferred = p['preferred_name'] as String? ?? '';
+                final display = p['display_name'] as String? ?? '';
+                final n = preferred.isNotEmpty ? preferred : display;
+                if (n.isNotEmpty) names.add(n);
+              }
+              if (names.isNotEmpty) {
+                resolvedSeniorName = names.first;
+                resolvedSeniorNames = names;
+              }
             }
           }
         } catch (e) {
@@ -523,10 +550,14 @@ class _LegacyScreenState extends State<LegacyScreen>
               _stories = realStories;
             }
             _seniorName = resolvedSeniorName;
+            if (resolvedSeniorNames.isNotEmpty) _seniorNames = resolvedSeniorNames;
           });
           if (resolvedSeniorName != 'Your Loved One') {
             appSeniorNameNotifier.value = resolvedSeniorName;
             await prefs.setString('cached_checkin_senior_name', resolvedSeniorName);
+          }
+          if (resolvedSeniorNames.isNotEmpty) {
+            await prefs.setString('cached_legacy_senior_names', jsonEncode(resolvedSeniorNames));
           }
           _setupAnimations();
           await prefs.setString('cached_legacy_stories', jsonEncode(realStories));
@@ -863,9 +894,23 @@ class _LegacyScreenState extends State<LegacyScreen>
                           // tonight, not a change of plan. Family already
                           // has unrestricted posting on the Share tab;
                           // Legacy is specifically the senior's own page.
+                          // Sep 3 2026: one banner card per senior in the
+                          // nest (a nest can have more than one, e.g.
+                          // both grandparents) -- same pattern as the
+                          // per-senior cards on Home/Safety.
                           if (!_isSenior)
-                            SliverToBoxAdapter(
-                              child: _buildFamilyReadOnlyBanner(isTablet),
+                            SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) => _buildFamilyReadOnlyBanner(
+                                  isTablet,
+                                  (_seniorNames.isNotEmpty
+                                      ? _seniorNames
+                                      : [_seniorName])[index],
+                                ),
+                                childCount: _seniorNames.isNotEmpty
+                                    ? _seniorNames.length
+                                    : 1,
+                              ),
                             ),
                           SliverToBoxAdapter(
                             child: _buildCategoryChips(isTablet),
@@ -1013,13 +1058,13 @@ class _LegacyScreenState extends State<LegacyScreen>
   }
 
   // ── Family: read-only banner + suggest question ────────────────────────────
-  Widget _buildFamilyReadOnlyBanner(bool isTablet) {
+  Widget _buildFamilyReadOnlyBanner(bool isTablet, String seniorName) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         isTablet ? 28 : 20,
         16,
         isTablet ? 28 : 20,
-        0,
+        8,
       ),
       child: Container(
         width: double.infinity,
@@ -1041,7 +1086,7 @@ class _LegacyScreenState extends State<LegacyScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '$_seniorName\'s Legacy Stories',
+                    '$seniorName\'s Legacy Stories',
                     style: GoogleFonts.nunitoSans(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -1050,7 +1095,7 @@ class _LegacyScreenState extends State<LegacyScreen>
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    'These are her stories to treasure and share.',
+                    'These are $seniorName\'s stories to treasure and share.',
                     style: GoogleFonts.nunitoSans(
                       fontSize: 12,
                       color: _textSecondary,
