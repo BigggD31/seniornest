@@ -35,6 +35,12 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   bool _isPurchasing = false;
   List<ProductDetails> _products = [];
   StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
+  // Sep 3 2026: the in_app_purchase plugin's purchaseStream can redeliver
+  // the same purchase event more than once in quick succession (confirmed
+  // live -- a real purchase fired twice, 578ms apart, creating two nests
+  // from one purchase). Track purchase IDs already handled so a redelivery
+  // is completed with the store but skipped for everything else below.
+  final Set<String> _processedPurchaseIds = {};
 
   final TextEditingController _vipCodeController = TextEditingController();
   bool _showVipField = false;
@@ -65,6 +71,15 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         if (purchase.status == PurchaseStatus.purchased ||
             purchase.status == PurchaseStatus.restored) {
           _iap.completePurchase(purchase);
+          // Always complete the purchase with the store above (required
+          // regardless of dedup, or StoreKit keeps redelivering it), but
+          // skip everything else if this exact purchase was already
+          // fully processed once.
+          final purchaseId = purchase.purchaseID;
+          if (purchaseId != null) {
+            if (_processedPurchaseIds.contains(purchaseId)) continue;
+            _processedPurchaseIds.add(purchaseId);
+          }
           await _recordSubscription(purchase.productID, purchase.purchaseID);
           if (_isAdditionalNest) await _createAdditionalNest();
           if (mounted) {
