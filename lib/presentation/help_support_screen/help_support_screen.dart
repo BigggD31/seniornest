@@ -433,7 +433,7 @@ class _ArchiveModeCardState extends State<_ArchiveModeCard> {
                 ),
                 Switch(
                   value: _isArchived,
-                  activeColor: const Color(0xFF5DA399),
+                  activeThumbColor: const Color(0xFF5DA399),
                   onChanged: (v) => _confirmToggle(v),
                 ),
               ],
