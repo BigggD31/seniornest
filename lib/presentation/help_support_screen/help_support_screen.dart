@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/app_state.dart';
 
 class HelpSupportScreen extends StatelessWidget {
   const HelpSupportScreen({super.key});
@@ -199,7 +202,242 @@ class HelpSupportScreen extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 24),
+          // Sep 2 2026: D Von wanted Archive Mode (memorial space) off the
+          // main Settings page entirely -- not even a collapsed row there.
+          // Lives here instead, behind Help & Support, still fully
+          // functional (own fetch, toggle, confirmation dialog), just not
+          // something anyone stumbles across casually. Nest Ownership
+          // itself (succession status) stayed on Setup -- D Von's own
+          // words were that only Archive Mode specifically felt out of
+          // place there, not ownership/succession generally.
+          _ArchiveModeCard(
+            cardBg: cardBg,
+            cardBorder: cardBorder,
+            textPrimary: textPrimary,
+            textSecondary: textSecondary,
+            bg: bg,
+          ),
           const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+}
+
+class _ArchiveModeCard extends StatefulWidget {
+  const _ArchiveModeCard({
+    required this.cardBg,
+    required this.cardBorder,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.bg,
+  });
+  final Color cardBg;
+  final Color cardBorder;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color bg;
+
+  @override
+  State<_ArchiveModeCard> createState() => _ArchiveModeCardState();
+}
+
+class _ArchiveModeCardState extends State<_ArchiveModeCard> {
+  bool _loading = true;
+  bool _isOwner = false;
+  bool _isArchived = false;
+  bool _expanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      final myUserId = supabase.auth.currentUser?.id;
+      if (nestId.isEmpty || myUserId == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      // Same ownership check as setup_screen.dart -- created_by is the
+      // live "current owner" field, updated by Nest Succession on
+      // transfer, not a static "who created this" record.
+      final nest = await supabase
+          .from('nests')
+          .select('created_by, is_archived')
+          .eq('id', nestId)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _isOwner = nest?['created_by'] as String? == myUserId;
+          _isArchived = nest?['is_archived'] as bool? ?? false;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('ARCHIVE_MODE_CARD_LOAD_ERROR: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _confirmToggle(bool turningOn) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: widget.bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          turningOn
+              ? 'Turn this Nest into a memorial space?'
+              : 'Turn daily check-ins back on?',
+          style: GoogleFonts.nunitoSans(
+              fontSize: 20, fontWeight: FontWeight.w700, color: widget.textPrimary),
+        ),
+        content: Text(
+          turningOn
+              ? 'Daily check-in, medication, and SOS prompts will be turned off for everyone in this Nest. Legacy stories, photos, and messages stay exactly as they are -- nothing is deleted or locked, and you can turn this back on anytime.'
+              : 'Daily check-in, medication, and SOS prompts will come back for everyone in this Nest.',
+          style: GoogleFonts.nunitoSans(
+              fontSize: 15, color: widget.textSecondary, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel',
+                style:
+                    GoogleFonts.nunitoSans(fontSize: 15, color: widget.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _setArchiveStatus(turningOn);
+            },
+            child: Text(
+              turningOn ? 'Turn On' : 'Turn Back On',
+              style: GoogleFonts.nunitoSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF5DA399)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _setArchiveStatus(bool value) async {
+    final previous = _isArchived;
+    setState(() => _isArchived = value); // optimistic, reverted on failure below
+    appIsNestArchivedNotifier.value = value;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isEmpty) throw Exception('No nest found.');
+      await Supabase.instance.client
+          .from('nests')
+          .update({'is_archived': value}).eq('id', nestId);
+      // Same shared cache key family_feed_screen.dart reads at first
+      // paint -- both need to agree, exactly as before this moved.
+      await prefs.setBool('cached_is_nest_archived', value);
+    } catch (e) {
+      if (mounted) setState(() => _isArchived = previous);
+      appIsNestArchivedNotifier.value = previous;
+      if (mounted) {
+        final message = e.toString().contains('Exception:')
+            ? e.toString().split('Exception:').last.trim()
+            : 'Something went wrong. Please try again.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message,
+                style: GoogleFonts.nunitoSans(fontSize: 14, color: Colors.white)),
+            backgroundColor: const Color(0xFFC97B4A),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Not the owner, still loading, or no nest found -- nothing to show.
+    // Matches the original gating on Setup, which only ever rendered
+    // this for the nest owner.
+    if (_loading || !_isOwner) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: widget.cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: widget.cardBorder, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                const Icon(Icons.nights_stay_rounded,
+                    color: Color(0xFF5DA399), size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Memorial Space (Archive Nest)',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: widget.textPrimary,
+                    ),
+                  ),
+                ),
+                AnimatedRotation(
+                  turns: _expanded ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(Icons.keyboard_arrow_down_rounded,
+                      color: widget.textSecondary, size: 22),
+                ),
+              ],
+            ),
+          ),
+          if (_expanded) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Quiets daily check-in, medication, and SOS prompts for this Nest. Legacy stories, photos, and messages stay exactly as they are.',
+              style: GoogleFonts.nunitoSans(
+                  fontSize: 13, color: widget.textSecondary, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _isArchived ? 'Currently on' : 'Currently off',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: widget.textPrimary,
+                    ),
+                  ),
+                ),
+                Switch(
+                  value: _isArchived,
+                  activeColor: const Color(0xFF5DA399),
+                  onChanged: (v) => _confirmToggle(v),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

@@ -30,8 +30,7 @@ class _SetupScreenState extends State<SetupScreen>
   bool _isDarkMode = appDarkModeNotifier.value;
   bool _isLoading = true;
   bool _isNestOwner = appIsNestOwnerNotifier.value;
-  bool _isNestArchived = appIsNestArchivedNotifier.value; // Aug 31 2026: Archive Nest Mode -- owner-only toggle, see _buildNestOwnershipSection
-  bool _nestOwnershipExpanded = false; // Sep 2 2026: Nest Ownership + Archive Mode collapsed by default, D Von: shouldn't sit visible on the main Setup list -- see _buildNestOwnershipSection
+  bool _nestOwnershipExpanded = false; // Sep 2 2026: Nest Ownership collapsed by default, D Von: shouldn't sit visible on the main Setup list -- see _buildNestOwnershipSection
   bool _isVipMember = appIsVipMemberNotifier.value;
   String _displayName = appDisplayNameNotifier.value;
   String _preferredName = '';
@@ -431,11 +430,10 @@ class _SetupScreenState extends State<SetupScreen>
 
       final nest = await supabase
           .from('nests')
-          .select('created_by, is_archived')
+          .select('created_by')
           .eq('id', nestId)
           .maybeSingle();
       final ownerId = nest?['created_by'] as String?;
-      final isArchived = nest?['is_archived'] as bool? ?? false;
 
       Map<String, dynamic>? ownerProfile;
       if (ownerId != null) {
@@ -515,7 +513,6 @@ class _SetupScreenState extends State<SetupScreen>
           _pendingSuccessionRequest = pendingWithName;
           _successionObjections = objections;
           _justBecameOwnerRequestId = justResolvedId;
-          _isNestArchived = isArchived;
           // Sep 2 2026: only auto-open the dropdown when there's something
           // time-sensitive to see -- a pending request or a fresh
           // ownership-change banner. Otherwise it stays collapsed, matching
@@ -524,7 +521,6 @@ class _SetupScreenState extends State<SetupScreen>
             _nestOwnershipExpanded = true;
           }
         });
-        appIsNestArchivedNotifier.value = isArchived;
       }
     } catch (e) {
       debugPrint('SUCCESSION_LOAD_ERROR: $e');
@@ -928,9 +924,9 @@ class _SetupScreenState extends State<SetupScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Sep 2 2026: collapsed by default -- D Von didn't want this
-          // (Archive Mode especially) sitting visible on the main Setup
-          // list. Tapping the header expands it; auto-expands on its own
-          // when there's something actionable (see _loadData above).
+          // sitting visible on the main Setup list. Tapping the header
+          // expands it; auto-expands on its own when there's something
+          // actionable (see _loadData above).
           GestureDetector(
             onTap: () => setState(() => _nestOwnershipExpanded = !_nestOwnershipExpanded),
             behavior: HitTestBehavior.opaque,
@@ -956,81 +952,10 @@ class _SetupScreenState extends State<SetupScreen>
               _buildNoPendingSuccessionCard(iAmOwner, ownerName)
             else
               _buildPendingSuccessionCard(iAmOwner, myUserId),
-            if (iAmOwner) ...[
-              const SizedBox(height: 16),
-              _buildToggleRow(
-                icon: Icons.nights_stay_rounded,
-                label: 'Memorial Space (Archive Nest)',
-                value: _isNestArchived,
-                onChanged: (v) => _confirmToggleArchiveNest(v),
-              ),
-            ],
           ],
         ],
       ),
     );
-  }
-  // ── Archive Nest Mode ──────────────────────────────────────────────
-  // Owner-only. Quiets the daily-use prompts (check-in, meds, SOS) on
-  // Home and Safety, replacing them with a memorial-space banner --
-  // Legacy, photos, and messages are untouched, see family_feed_screen.dart
-  // and safety_screen.dart for where the banner actually shows.
-  void _confirmToggleArchiveNest(bool turningOn) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _bg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          turningOn ? 'Turn this Nest into a memorial space?' : 'Turn daily check-ins back on?',
-          style: GoogleFonts.nunitoSans(fontSize: 20, fontWeight: FontWeight.w700, color: _textPrimary),
-        ),
-        content: Text(
-          turningOn
-              ? 'Daily check-in, medication, and SOS prompts will be turned off for everyone in this Nest. Legacy stories, photos, and messages stay exactly as they are -- nothing is deleted or locked, and you can turn this back on anytime.'
-              : 'Daily check-in, medication, and SOS prompts will come back for everyone in this Nest.',
-          style: GoogleFonts.nunitoSans(fontSize: 15, color: _textSecondary, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: GoogleFonts.nunitoSans(fontSize: 15, color: _textSecondary)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _setArchiveNestStatus(turningOn);
-            },
-            child: Text(
-              turningOn ? 'Turn On' : 'Turn Back On',
-              style: GoogleFonts.nunitoSans(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF5DA399)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _setArchiveNestStatus(bool value) async {
-    final previous = _isNestArchived;
-    setState(() => _isNestArchived = value); // optimistic, reverted on failure below
-    appIsNestArchivedNotifier.value = value;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final nestId = prefs.getString('nest_id') ?? '';
-      if (nestId.isEmpty) throw Exception('No nest found.');
-      await Supabase.instance.client
-          .from('nests')
-          .update({'is_archived': value}).eq('id', nestId);
-      // Keep the freshly-fetched cache in sync too -- family_feed_screen.dart
-      // reads cached_is_nest_archived at first paint, same shared source of
-      // truth as this notifier, so both need to agree.
-      await prefs.setBool('cached_is_nest_archived', value);
-    } catch (e) {
-      if (mounted) setState(() => _isNestArchived = previous);
-      appIsNestArchivedNotifier.value = previous;
-      _showSuccessionError(e);
-    }
   }
   // ── End Nest Succession ─────────────────────────────────────────
 
