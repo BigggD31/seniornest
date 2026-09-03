@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../routes/app_routes.dart';
 import '../../core/app_state.dart';
+import '../../services/auth_service.dart';
 
 const String _monthlyProductId = 'com.devonmurphy.seniornest.monthly';
 const String _yearlyProductId = 'com.devonmurphy.seniornest.yearly';
@@ -174,6 +175,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         .isFilter('nest_id', null);
 
     final prefs = await SharedPreferences.getInstance();
+    await AuthService.clearStaleNestDataIfNestChanged(nestId);
     await prefs.setString('nest_id', nestId);
     await prefs.setString('nest_name', nestName);
     appNestNameNotifier.value = nestName;

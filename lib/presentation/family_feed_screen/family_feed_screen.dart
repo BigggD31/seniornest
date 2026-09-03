@@ -22,6 +22,7 @@ import './widgets/celebrations_card_widget.dart';
 import './widgets/nest_avatar_row_widget.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../core/app_state.dart';
+import '../../services/auth_service.dart';
 
 // ── Data Models ────────────────────────────────────────────────
 
@@ -2734,6 +2735,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                                   onTap: () async {
                                     Navigator.pop(ctx);
                                     if (isActive || nestId == null) return;
+                                    await AuthService.clearStaleNestDataIfNestChanged(nestId);
                                     await prefs.setString('nest_id', nestId);
                                     await prefs.setString('nest_name', nestNameVal);
                                     appNestNameNotifier.value = nestNameVal;

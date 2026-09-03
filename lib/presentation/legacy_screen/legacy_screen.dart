@@ -421,10 +421,16 @@ class _LegacyScreenState extends State<LegacyScreen>
         }
         // Load every story in this nest, not just the current user's.
         // Own entries are always included as a fallback so that any story
-        // saved without a nest_id can never disappear from its author's view.
+        // saved without a nest_id can never disappear from its author's
+        // view -- but that fallback must only match rows that actually
+        // HAVE no nest_id. Previously it was an unconditional
+        // user_id.eq.$userId, which matched every story this person has
+        // ever authored in ANY nest, not just orphaned ones -- confirmed
+        // as the cause of a real story bleed into a brand-new second nest
+        // (Sep 3 2026, via screenshots).
         final nestId = prefs.getString('nest_id') ?? '';
         final storyFilter = nestId.isNotEmpty
-            ? 'nest_id.eq.$nestId,user_id.eq.$userId'
+            ? 'nest_id.eq.$nestId,and(nest_id.is.null,user_id.eq.$userId)'
             : 'user_id.eq.$userId';
         final response = await supabase
             .from('legacy_entries')

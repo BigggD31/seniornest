@@ -367,6 +367,88 @@ class AuthService {
     'vip_code',
   ];
 
+  // Sep 3 2026: a subset of the account-scoped list above, for a
+  // different but closely related bug -- the SAME account creating or
+  // switching to an ADDITIONAL nest. A genuine account switch (different
+  // login) already gets the full wipe above; this same-account,
+  // different-nest case never triggered any wipe at all, so a brand new,
+  // genuinely empty nest kept showing the previous nest's senior name,
+  // story cache, member cache, archive status, etc. -- confirmed via
+  // screenshots (Safety showed "This is what Popy sees" and Legacy
+  // showed Popy's real stories, both on a nest with no senior member).
+  //
+  // Deliberately NOT the full account-scoped list -- has_onboarded,
+  // dark_mode, bookmarks, notification toggles, display_name,
+  // preferred_name, relationship, birthday, anniversary, etc. all belong
+  // to the signed-in PERSON, not the nest, and stay exactly as they are
+  // across every nest that person is a member of. nest_id and nest_name
+  // are also deliberately excluded here -- the caller sets those to the
+  // NEW nest's values immediately after this wipe runs, so clearing them
+  // here would just be self-defeating.
+  static const List<String> _nestScopedPrefsKeys = [
+    'cached_nest_members', 'cached_nest_members_nest_id', 'cached_nest_members_user_id',
+    'cached_real_messages', 'cached_real_messages_nest_id',
+    'cached_checkin_senior_name', 'cached_checkin_senior_id', 'cached_checkin_nest_id',
+    'cached_legacy_senior_names',
+    'invite_code_shared',
+    'cached_is_nest_archived',
+    'has_real_post', 'has_sent_messages', 'has_sent_stories',
+    'removed_member_ids', 'story_prompts',
+    // Ownership and VIP status are both genuinely per-nest, not per-person
+    // -- multi-nest support means the same account can own one nest and
+    // just be a member of another, and VIP redemption is per-nest too
+    // (redeem_vip_code() grants entitlement to a specific nest).
+    'cached_is_nest_owner', 'cached_is_vip_member',
+  ];
+
+  /// Detects a genuine nest switch (or a brand-new additional nest just
+  /// created) for the SAME signed-in account, and wipes every locally
+  /// cached piece of nest-specific data before anything can read a stale
+  /// value left over from whichever nest was active before. Sibling
+  /// function to [clearStaleAccountDataIfUserChanged] above -- same
+  /// shape, narrower scope. Call this right after a new nest_id is
+  /// decided, before writing nest_id/nest_name themselves.
+  static Future<void> clearStaleNestDataIfNestChanged(String newNestId) async {
+    if (newNestId.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final lastKnownNestId = prefs.getString('last_known_nest_id');
+    if (lastKnownNestId == newNestId) return;
+
+    for (final key in _nestScopedPrefsKeys) {
+      await prefs.remove(key);
+    }
+    // Same date-suffixed reasoning as the account-switch wipe above --
+    // "did today's check-in happen" is meaningless carried over from a
+    // different nest's senior.
+    final allKeys = prefs.getKeys().toList();
+    for (final key in allKeys) {
+      if (key.startsWith('good_today_') || key.startsWith('meds_reminder_')) {
+        await prefs.remove(key);
+      }
+    }
+    await prefs.setString('last_known_nest_id', newNestId);
+
+    // Reset in-memory notifiers too, not just the prefs they're seeded
+    // from -- several screens (e.g. legacy_screen.dart's
+    // `_seniorName = appSeniorNameNotifier.value.isNotEmpty ? ... `)
+    // read the notifier synchronously at widget construction, before
+    // their own prefs-based re-seed even runs. Without this, the very
+    // first frame after switching nests could still paint the previous
+    // nest's identity for one frame. Status flags (checked-in-today,
+    // meds-taken-today) are deliberately left alone -- they self-correct
+    // via each screen's own live fetch, same reasoning as the
+    // account-switch function above.
+    appIsNestOwnerNotifier.value = false;
+    appIsVipMemberNotifier.value = false;
+    appSeniorNameNotifier.value = '';
+    appSeniorUserIdNotifier.value = '';
+    appIsNestArchivedNotifier.value = false;
+    appInviteCodeSharedNotifier.value = true;
+    appHasSentMessagesNotifier.value = false;
+    appHasRealPostNotifier.value = false;
+    appHasSentStoriesNotifier.value = false;
+  }
+
   /// Detects a genuine account switch on this device and wipes every
   /// locally cached piece of account-specific data before anything can
   /// read a stale value left over from the previous person. This is the
