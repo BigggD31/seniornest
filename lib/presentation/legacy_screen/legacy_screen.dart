@@ -1141,7 +1141,7 @@ class _LegacyScreenState extends State<LegacyScreen>
     return Padding(
       padding: EdgeInsets.fromLTRB(
         isTablet ? 28 : 20,
-        0,
+        12,
         isTablet ? 28 : 20,
         4,
       ),
