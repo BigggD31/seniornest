@@ -275,7 +275,8 @@ class _ArchiveModeCardState extends State<_ArchiveModeCard> {
           .maybeSingle();
       if (mounted) {
         setState(() {
-          _isOwner = nest?['created_by'] as String? == myUserId;
+          final ownerId = nest?['created_by'] as String?;
+          _isOwner = ownerId == myUserId;
           _isArchived = nest?['is_archived'] as bool? ?? false;
           _loading = false;
         });
