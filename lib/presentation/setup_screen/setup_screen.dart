@@ -1046,6 +1046,24 @@ class _SetupScreenState extends State<SetupScreen>
           break;
       }
     });
+    // Sep 3 2026: notify_messages/notify_check_in specifically also need
+    // to reach the server, not just this device -- a Supabase Edge
+    // Function deciding whether to push someone has no way to read this
+    // person's own SharedPreferences. meds_reminders/daily_check_in stay
+    // local-only; they gate in-app UI on THIS device, nothing server-side
+    // needs to know about them.
+    if (key == 'notify_messages' || key == 'notify_check_in') {
+      try {
+        final userId = Supabase.instance.client.auth.currentUser?.id;
+        if (userId != null) {
+          await Supabase.instance.client
+              .from('user_profiles')
+              .update({key: value}).eq('id', userId);
+        }
+      } catch (e) {
+        debugPrint('SETUP: failed to sync $key to server: $e');
+      }
+    }
   }
 
   void _onNavTap(int index) {

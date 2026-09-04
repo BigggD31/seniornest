@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
 import '../../services/auth_service.dart';
+import '../../services/push_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'widgets/private_inbox_list_widget.dart';
 import '../../core/app_state.dart';
@@ -3667,6 +3668,39 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         'visible_to_ids':
             _selectedRecipients.isEmpty ? null : _selectedRecipients,
       });
+
+      // Sep 3 2026: real push for a new message. Empty _selectedRecipients
+      // means "Everyone" (the existing visible_to_ids convention already
+      // used above), so that case needs every other nest member looked
+      // up fresh; a non-empty list already IS the exact recipient set.
+      // Fire-and-forget -- must never block the send completing.
+      () async {
+        List<String> pushRecipientIds = _selectedRecipients;
+        if (pushRecipientIds.isEmpty && userId != null && nestId.isNotEmpty) {
+          final memberRows = await supabase
+              .from('nest_members')
+              .select('user_id')
+              .eq('nest_id', nestId);
+          pushRecipientIds = (memberRows as List<dynamic>)
+              .map((m) => m['user_id'] as String?)
+              .whereType<String>()
+              .where((id) => id != userId)
+              .toList();
+        }
+        final preview = (overrideContent ?? _messageController.text.trim());
+        PushService.notify(
+          userIds: pushRecipientIds,
+          title: 'New message from $_displayName',
+          body: preview.isNotEmpty
+              ? (preview.length > 80 ? '${preview.substring(0, 80)}...' : preview)
+              : (effectiveType == 'photo'
+                  ? 'Sent a photo'
+                  : effectiveType == 'voice'
+                      ? 'Sent a voice message'
+                      : 'Sent a video'),
+          category: 'message',
+        );
+      }();
 
       // Mark has_sent_messages
       await prefs.setBool('has_sent_messages', true);

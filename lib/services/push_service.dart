@@ -98,4 +98,41 @@ class PushService {
       debugPrint('PUSH_SERVICE unregisterDeviceToken error: $e');
     }
   }
+
+  /// Sends a real push to every device belonging to the given users.
+  /// Category matters: 'sos' always sends regardless of preference
+  /// (same principle as the existing emergency SMS fallback -- a real
+  /// emergency is never silently gated by a toggle); 'message' and
+  /// 'check_in' respect each recipient's own notify_messages/
+  /// notify_check_in preference, checked server-side in the Edge
+  /// Function itself (not here -- this device has no way to know
+  /// another person's preference, only their own).
+  ///
+  /// Fire-and-forget by design at every call site -- a push failing to
+  /// send must never block or fail the action that triggered it (SOS
+  /// alert, sending a message). The Edge Function itself also fails
+  /// soft internally for the same reason.
+  static Future<void> notify({
+    required List<String> userIds,
+    required String title,
+    required String body,
+    required String category,
+    Map<String, String>? data,
+  }) async {
+    if (userIds.isEmpty) return;
+    try {
+      await Supabase.instance.client.functions.invoke(
+        'send-push',
+        body: {
+          'user_ids': userIds,
+          'title': title,
+          'body': body,
+          'category': category,
+          if (data != null) 'data': data,
+        },
+      );
+    } catch (e) {
+      debugPrint('PUSH_SERVICE notify error: $e');
+    }
+  }
 }

@@ -10,6 +10,7 @@ import '../../widgets/app_navigation.dart';
 import '../../widgets/keyboard_done_bar.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../core/app_state.dart';
+import '../../services/push_service.dart';
 import '../family_feed_screen/widgets/daily_checkin_card_widget.dart';
 import '../family_feed_screen/widgets/daily_meds_card_widget.dart';
 
@@ -589,6 +590,17 @@ class _SafetyScreenState extends State<SafetyScreen>
             'content': message,
           });
         }
+
+        // Sep 3 2026: real push alongside the in-app DM above. isEmergency
+        // maps to 'sos' (always sends, ignores notify preferences -- same
+        // principle as the SMS fallback below); otherwise 'check_in'
+        // (respects each recipient's own notify_check_in toggle).
+        PushService.notify(
+          userIds: recipientIds.toList(),
+          title: isEmergency ? '🚨 Emergency Alert' : "$_seniorName checked in",
+          body: message,
+          category: isEmergency ? 'sos' : 'check_in',
+        );
       }
 
       // Aug 27 2026: D Von's direct ask, confirmed via earlier audit --
