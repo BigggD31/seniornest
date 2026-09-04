@@ -173,6 +173,46 @@ class _SafetyScreenState extends State<SafetyScreen>
       debugPrint('Load nest archive status error: $e');
     }
 
+    // Sep 3 2026: this section had no synchronous cache-seed at all --
+    // _seniorStatuses always started genuinely empty, so the generic
+    // "Let your family know you're okay" / "Waiting for today's
+    // check-in" fallback (see the `else` branch of _buildCheckInSection
+    // below) showed on literally every single visit to this screen,
+    // every time, until the live nest_members fetch further down
+    // resolved -- not an occasional flash, a guaranteed one. Confirmed
+    // via D Von's screenshots (Sep 3): captured the fallback card, then
+    // the real one, same visit. Home's equivalent already had this exact
+    // seed (initialSeniorStatuses, built the same day as the multi-senior
+    // work itself) -- this screen's new multi-senior section just never
+    // got the same treatment. Reuses the same shared cache keys Home's
+    // live fetch already writes, with the same nest_id + today's-date
+    // validation before trusting them.
+    final cachedCheckinNestId = prefs.getString('cached_checkin_nest_id') ?? '';
+    final cachedCheckinDate = prefs.getString('cached_checkin_date') ?? '';
+    List<Map<String, dynamic>> initialSeniorStatuses = [];
+    if (cachedCheckinNestId.isNotEmpty &&
+        cachedCheckinNestId == (prefs.getString('nest_id') ?? '') &&
+        cachedCheckinDate == _todayDateString()) {
+      final cachedSeniorId = prefs.getString('cached_checkin_senior_id') ?? '';
+      if (cachedSeniorId.isNotEmpty) {
+        final cachedTimeStr = prefs.getString('cached_checkin_time');
+        final cachedMedsTimeStr = prefs.getString('cached_checkin_meds_time');
+        initialSeniorStatuses = [
+          {
+            'id': cachedSeniorId,
+            'name': prefs.getString('cached_checkin_senior_name') ?? '',
+            'checkedIn': prefs.getBool('cached_checkin_checked_in') ?? false,
+            'checkinTime':
+                cachedTimeStr != null ? DateTime.tryParse(cachedTimeStr) : null,
+            'medsTaken': prefs.getBool('cached_checkin_meds_taken') ?? false,
+            'medsTime': cachedMedsTimeStr != null
+                ? DateTime.tryParse(cachedMedsTimeStr)
+                : null,
+          },
+        ];
+      }
+    }
+
     setState(() {
       if (initialContacts.isNotEmpty) {
         _mockContacts = initialContacts;
@@ -181,6 +221,9 @@ class _SafetyScreenState extends State<SafetyScreen>
       _isSenior = isSeniorRole;
       _isDarkMode = prefs.getBool('dark_mode') ?? systemDark;
       _seniorName = initialSeniorName;
+      if (initialSeniorStatuses.isNotEmpty) {
+        _seniorStatuses = initialSeniorStatuses;
+      }
       _isLoading = false;
       _profileData = profileData;
       _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
