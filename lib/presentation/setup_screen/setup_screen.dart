@@ -503,7 +503,33 @@ class _SetupScreenState extends State<SetupScreen>
         if (resolved != null) {
           final ackKey = 'succession_ack_${resolved['id']}';
           final alreadyAcked = prefs.getBool(ackKey) ?? false;
-          if (!alreadyAcked) justResolvedId = resolved['id'] as String;
+          if (!alreadyAcked) {
+            // Sep 3 2026: the banner's own "Subscribe Now" button never
+            // acknowledged anything -- it just navigated to the subscribe
+            // screen and left it at that, so successfully subscribing
+            // through this exact button (rather than tapping "Later")
+            // never dismissed the banner at all. Confirmed via a real
+            // active subscription still sitting behind a banner that
+            // still said "Subscribe Now" (D Von, Sep 3). Rather than
+            // patch the button's onPressed (which can't tell a completed
+            // purchase from a cancelled one), check the actual
+            // subscription state here -- if this nest already has a
+            // live subscription, the banner's entire purpose is already
+            // satisfied, so auto-ack it the same way "Later" does.
+            final activeSub = await supabase
+                .from('subscriptions')
+                .select('id')
+                .eq('nest_id', nestId)
+                .eq('status', 'active')
+                .gt('expires_at', DateTime.now().toIso8601String())
+                .limit(1)
+                .maybeSingle();
+            if (activeSub != null) {
+              await prefs.setBool(ackKey, true);
+            } else {
+              justResolvedId = resolved['id'] as String;
+            }
+          }
         }
       }
 
