@@ -333,6 +333,38 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen>
                               ],
                             ),
                     ),
+                    // Sep 3 2026: the only real path into the invite-code
+                    // sheet below (_showInviteCodeSheet) has never had a
+                    // button anywhere calling it, since build 33 -- the
+                    // very first commit. The sheet itself and the code
+                    // verification behind it are real and correctly wired
+                    // to nest_role_after_invite_screen; manually typing an
+                    // invite code has simply never been reachable in the
+                    // UI. Deep links (splash_screen.dart) were the only
+                    // working path. Confirmed via git history and a live
+                    // test (D Von, Sep 3) before adding this.
+                    SizedBox(height: isTablet ? 20 : 16),
+                    AnimatedBuilder(
+                      animation: _buttonsFade,
+                      builder: (context, child) => Opacity(
+                        opacity: _buttonsFade.value,
+                        child: child,
+                      ),
+                      child: Center(
+                        child: TextButton(
+                          onPressed: () => _showInviteCodeSheet(context),
+                          child: Text(
+                            'I have an invite code',
+                            style: GoogleFonts.nunitoSans(
+                              color: const Color(0xFF5DA399),
+                              fontSize: isTablet ? 15 : 14,
+                              fontWeight: FontWeight.w700,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                     // Footer
                     AnimatedBuilder(
                       animation: _buttonsFade,
