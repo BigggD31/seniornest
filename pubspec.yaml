@@ -17,6 +17,14 @@ dependencies:
   google_fonts: ^6.1.0       # Required for typography (replaces local fonts)
   shared_preferences: ^2.2.2 # Required for local data storage
   web: ^1.1.1
+  # Push notifications (Sep 3 2026 build): Firebase Cloud Messaging chosen
+  # over talking to Apple's APNs directly -- mature, actively maintained
+  # Flutter package, handles token refresh/retries/background delivery
+  # edge cases that would otherwise need to be hand-built. Same setup
+  # carries over directly to Android for future apps (Bestie Crew,
+  # Family Crew) without redoing this work.
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.1.6
   
   # Feature dependencies - safe to modify
   cached_network_image: ^3.3.1

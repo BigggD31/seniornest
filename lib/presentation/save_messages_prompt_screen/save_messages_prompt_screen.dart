@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../routes/app_routes.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart' show kProfilePhotoKey, kProfilePhotoOwnerKey;
 import '../../services/auth_service.dart';
+import '../../services/push_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'dart:math';
@@ -448,6 +449,14 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     print('NEST_DEBUG: _navigateToHome effectiveUserId = $effectiveUserId');
 
     if (effectiveUserId != null) {
+      // Push notifications: fire-and-forget here covers every fresh
+      // sign-in through any of the four onboarding flows -- this is the
+      // one place all of them funnel through once a real session
+      // exists. The cold-start return-visit case is covered separately
+      // in main.dart. Deliberately not awaited -- permission prompts
+      // and token registration must never hold up onboarding completion.
+      PushService.registerDeviceToken();
+
       // Deferred VIP redemption -- the code was only validated (not
       // consumed) back at splash/role-choice, before this account existed.
       // This is the ONLY place in the entire app where a first-time signup

@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_state.dart';
+import 'push_service.dart';
 
 class AuthService {
   static SupabaseClient get _client => Supabase.instance.client;
@@ -176,6 +177,16 @@ class AuthService {
   // ── Sign Out ──────────────────────────────────────────────────────────────
   static Future<void> signOut() async {
     try {
+      // Must run BEFORE auth.signOut() below -- this device's token
+      // delete is RLS-gated on auth.uid() = user_id, so it needs the
+      // still-valid session to succeed. Without this, a signed-out
+      // phone would keep receiving pushes meant for whoever signs in
+      // next on the same device, until that new person's own token
+      // upsert happens to overwrite the same row (same device, so same
+      // token value) -- which usually happens fast, but there's no
+      // reason to leave that gap at all when this is one extra await.
+      await PushService.unregisterDeviceToken();
+
       // Sign out from Google if signed in natively
       if (!kIsWeb) {
         try {

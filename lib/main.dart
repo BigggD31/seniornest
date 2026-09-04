@@ -15,7 +15,9 @@ import './presentation/safety_screen/safety_screen.dart';
 import './presentation/setup_screen/setup_screen.dart';
 import './services/auth_service.dart';
 import './services/supabase_service.dart';
+import './services/push_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
 import './widgets/custom_error_widget.dart';
 import './widgets/branded_transition_screen.dart';
 import './presentation/splash_screen/splash_screen.dart';
@@ -29,6 +31,17 @@ void main() async {
     await SupabaseService.initialize();
   } catch (e) {
     debugPrint('Failed to initialize Supabase: $e');
+  }
+
+  // Push notifications: Firebase must be initialized before anything
+  // calls FirebaseMessaging.instance (PushService does, later, once a
+  // signed-in session is confirmed). Non-fatal if this fails or if the
+  // native config file isn't in place yet -- the rest of the app must
+  // never be blocked by push setup being incomplete.
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Failed to initialize Firebase: $e');
   }
 
   // Load persisted text size before first frame
@@ -338,6 +351,14 @@ class _MyAppState extends State<MyApp> {
       } else {
         // Not signed in → start at splash screen (original first screen)
         _initialRoute = AppRoutes.splashScreen;
+      }
+      // Fire-and-forget -- covers a returning, already-signed-in launch.
+      // A brand new sign-in (any of the four onboarding flows) is
+      // covered separately, at the point onboarding actually completes
+      // (save_messages_prompt_screen.dart), since this function only
+      // ever runs once, at cold start.
+      if (isSignedIn) {
+        PushService.registerDeviceToken();
       }
     } catch (_) {
       _initialRoute = AppRoutes.splashScreen;
