@@ -48,6 +48,7 @@ class MessageModel {
     this.isSample = false,
     this.isRecordedVideo = false,
     this.recipientLabel = 'Everyone in the Nest',
+    this.taggedNamesLabel,
     this.pinnedPosition,
   });
 
@@ -81,6 +82,12 @@ class MessageModel {
   // Supabase but never read back anywhere, so every card showed the same
   // generic default no matter who was actually selected.
   final String recipientLabel;
+  // Sep 3 2026: comma-joined names of anyone specifically tagged in this
+  // post (resolved from tagged_ids the same way recipientLabel resolves
+  // visible_to_ids), null if nobody was tagged. The visual highlight half
+  // of the tagging feature -- message_card_widget.dart renders this as a
+  // small pill when present.
+  final String? taggedNamesLabel;
   // Which pin slot (1, 2, or 3) this post occupies, or null if not pinned.
   // Owner-chosen per post -- see the pin picker in message_card_widget.dart.
   // Mutable (not final) so the feed can update it in place after a pin/
@@ -106,6 +113,7 @@ class MessageModel {
       isSample: map['isSample'] as bool? ?? false,
       isRecordedVideo: map['isRecordedVideo'] as bool? ?? false,
       recipientLabel: map['recipientLabel'] as String? ?? 'Everyone in the Nest',
+      taggedNamesLabel: map['taggedNamesLabel'] as String?,
       pinnedPosition: map['pinnedPosition'] as int?,
     );
   }
@@ -141,6 +149,7 @@ class MessageModel {
     'isSample': isSample,
     'isRecordedVideo': isRecordedVideo,
     'recipientLabel': recipientLabel,
+    'taggedNamesLabel': taggedNamesLabel,
     'pinnedPosition': pinnedPosition,
   };
 }
@@ -1757,6 +1766,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             recipientLabel = names.join(', ');
           }
         }
+        final rawTaggedIds = post['tagged_ids'];
+        String? taggedNamesLabel;
+        if (rawTaggedIds is List && rawTaggedIds.isNotEmpty) {
+          final taggedNames = rawTaggedIds
+              .map((id) => memberNameById[id as String] ?? '')
+              .where((n) => n.isNotEmpty)
+              .toList();
+          if (taggedNames.isNotEmpty) {
+            taggedNamesLabel = taggedNames.join(', ');
+          }
+        }
         return MessageModel(
           id: post['id'] as String,
           authorId: authorId,
@@ -1775,6 +1795,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           isHearted: heartedByMe.contains(post['id'] as String),
           isRecordedVideo: post['is_recorded_video'] as bool? ?? false,
           recipientLabel: recipientLabel,
+          taggedNamesLabel: taggedNamesLabel,
           pinnedPosition: post['pinned_position'] as int?,
         );
       }).toList();

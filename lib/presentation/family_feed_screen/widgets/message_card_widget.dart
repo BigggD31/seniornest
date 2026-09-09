@@ -498,6 +498,33 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                           fontStyle: FontStyle.italic,
                         ),
                       ),
+                      // Sep 3 2026: visual highlight half of the tagging
+                      // feature -- a small distinct pill, separate from
+                      // the plain italic "To:" line above, since being
+                      // tagged is a different, more pointed thing than
+                      // just being in the general visibility list.
+                      if (msg.taggedNamesLabel != null &&
+                          msg.taggedNamesLabel!.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF5DA399).withAlpha(28),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '🏷️ Tagged: ${msg.taggedNamesLabel}',
+                            style: GoogleFonts.nunitoSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF5DA399),
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 2),
                       Text(
                         _formatTimestamp(msg.timestamp),

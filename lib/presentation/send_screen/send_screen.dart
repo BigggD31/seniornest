@@ -67,6 +67,12 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   Uint8List? _lastDecodedPhotoBytes;
   final List<String> _selectedRecipients = [];
   List<Map<String, dynamic>> _nestRecipients = []; // real nest members (excludes current user)
+  // Sep 3 2026: distinct from _selectedRecipients (who can SEE this post,
+  // the existing visible_to_ids convention) -- this is who's specifically
+  // TAGGED in it, gets a visual highlight on the feed card and their own
+  // targeted "you were tagged" push, separate from the general new-message
+  // notification everyone with visibility already gets.
+  final List<String> _taggedRecipients = [];
 
   late AnimationController _entranceController;
   late Animation<double> _fadeAnim;
@@ -2436,7 +2442,111 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
             },
           ),
         ),
+        // Sep 3 2026: tag someone specifically -- separate from the
+        // Everyone/individual visibility picker above. Opens a small
+        // sheet reusing the same _nestRecipients data.
+        if (_nestRecipients.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: _showTagPickerSheet,
+            child: Row(
+              children: [
+                Icon(Icons.sell_outlined, size: 16, color: const Color(0xFF5DA399)),
+                const SizedBox(width: 6),
+                Text(
+                  _taggedRecipients.isEmpty
+                      ? 'Tag someone'
+                      : 'Tagged: ${_taggedRecipients.map((id) => _nestRecipients.firstWhere(
+                            (r) => r['id'] == id,
+                            orElse: () => {'name': 'Someone'},
+                          )['name'] as String? ?? 'Someone').join(', ')}',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF5DA399),
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
+    );
+  }
+
+  void _showTagPickerSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, sheetSetState) {
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tag someone',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: _textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "They'll get a notification and their name will be highlighted on this post.",
+                    style: GoogleFonts.nunitoSans(fontSize: 12, color: _textSecondary),
+                  ),
+                  const SizedBox(height: 14),
+                  ..._nestRecipients.map((r) {
+                    final id = r['id'] as String;
+                    final isTagged = _taggedRecipients.contains(id);
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: ProfileAvatarWidget(
+                        avatarUrl: r['avatarUrl'] as String?,
+                        displayName: r['name'] as String? ?? '',
+                        size: 36,
+                      ),
+                      title: Text(
+                        (r['name'] as String? ?? '').isNotEmpty
+                            ? r['name'] as String
+                            : 'Family Member',
+                        style: GoogleFonts.nunitoSans(
+                          fontWeight: FontWeight.w600,
+                          color: _textPrimary,
+                        ),
+                      ),
+                      trailing: Icon(
+                        isTagged ? Icons.check_circle : Icons.circle_outlined,
+                        color: isTagged ? const Color(0xFF5DA399) : _textSecondary,
+                      ),
+                      onTap: () {
+                        sheetSetState(() {
+                          if (isTagged) {
+                            _taggedRecipients.remove(id);
+                          } else {
+                            _taggedRecipients.add(id);
+                          }
+                        });
+                        setState(() {});
+                      },
+                    );
+                  }),
+                  const SizedBox(height: 10),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -3667,6 +3777,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         'is_recorded_video': effectiveType == 'video' ? _videoIsFromRecording : false,
         'visible_to_ids':
             _selectedRecipients.isEmpty ? null : _selectedRecipients,
+        'tagged_ids':
+            _taggedRecipients.isEmpty ? null : _taggedRecipients,
       });
 
       // Sep 3 2026: real push for a new message. Empty _selectedRecipients
@@ -3700,6 +3812,19 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                       : 'Sent a video'),
           category: 'message',
         );
+        // Distinct, more prominent push specifically for tagged people
+        // -- separate from the general new-message notification above
+        // (which they'd also get via visibility, if visible to them).
+        if (_taggedRecipients.isNotEmpty) {
+          PushService.notify(
+            userIds: _taggedRecipients,
+            title: '$_displayName tagged you',
+            body: preview.isNotEmpty
+                ? (preview.length > 80 ? '${preview.substring(0, 80)}...' : preview)
+                : 'Tagged you in a post',
+            category: 'message',
+          );
+        }
       }();
 
       // Mark has_sent_messages
@@ -3711,6 +3836,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         _hasSentMessages = true;
         appHasSentMessagesNotifier.value = true;
         _selectedRecipients.clear();
+        _taggedRecipients.clear();
         _messageController.clear();
         _voiceCaptionController.clear();
         _videoCaptionController.clear();
