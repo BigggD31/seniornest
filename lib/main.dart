@@ -278,7 +278,7 @@ class _MyAppState extends State<MyApp> {
           .order('joined_at', ascending: true)
           .limit(1);
       if (rows.isEmpty) return false;
-      final row = rows.first as Map<String, dynamic>;
+      final row = rows.first;
       final nestId = row['nest_id'] as String?;
       final nest = row['nests'] as Map<String, dynamic>?;
       if (nestId == null || nest == null) return false;
