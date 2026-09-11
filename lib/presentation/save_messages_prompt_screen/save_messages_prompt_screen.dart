@@ -383,13 +383,25 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     // If user already has a valid nest, skip nest creation and go straight to Home Feed
     if (checkUserId != null) {
       try {
-        final existingMembership = await supabaseClient
+        // Sep 11 2026: was .maybeSingle(), which THROWS if more than one
+        // row matches -- and once an account ever ended up with 2+
+        // nest_members rows (from the exact gap this whole fix closes),
+        // every future sign-in hit that throw, landed in the catch(_)
+        // below, and silently fell through to creating yet ANOTHER nest.
+        // Confirmed directly: two real accounts got caught in exactly
+        // this self-perpetuating loop today. Ordering by joined_at and
+        // taking the oldest tolerates any number of existing rows and
+        // deterministically picks the same one every time -- the
+        // earliest membership is the one most likely to be the person's
+        // real, original nest rather than an accidental duplicate.
+        final existingMemberships = await supabaseClient
             .from('nest_members')
-            .select('nest_id')
+            .select('nest_id, joined_at')
             .eq('user_id', checkUserId)
-            .maybeSingle();
-        if (existingMembership != null) {
-          final existingNestId = existingMembership['nest_id'] as String;
+            .order('joined_at', ascending: true)
+            .limit(1);
+        if (existingMemberships.isNotEmpty) {
+          final existingNestId = existingMemberships.first['nest_id'] as String;
           await prefs.setString('nest_id', existingNestId);
           if (mounted) {
             Navigator.pushNamedAndRemoveUntil(

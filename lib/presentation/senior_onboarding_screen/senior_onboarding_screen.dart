@@ -401,6 +401,35 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
           await prefs.remove('nest_id');
         }
 
+        // Sep 11 2026: the check above only trusts a nest_id already
+        // cached locally -- if local storage is empty (a fresh device, a
+        // reinstall, or prefs cleared by signing out) it fell straight
+        // through to creating a brand-new nest below, even for someone
+        // who already has a real one. This is the only nest-creation
+        // call site with zero server-side "do they already have one"
+        // check at all, and is very likely the original trigger behind
+        // the very first accidental duplicate nest weeks ago. Queries
+        // for ANY existing membership (not just the one locally cached),
+        // oldest first -- same reasoning as every other fix today.
+        if (nestId.isEmpty) {
+          try {
+            final anyExistingMembership = await supabase
+                .from('nest_members')
+                .select('nest_id, joined_at')
+                .eq('user_id', userId)
+                .order('joined_at', ascending: true)
+                .limit(1);
+            if (anyExistingMembership.isNotEmpty) {
+              nestId = anyExistingMembership.first['nest_id'] as String;
+              await prefs.setString('nest_id', nestId);
+            }
+          } catch (_) {
+            // Fall through to the normal join/create flow below on
+            // error -- matches the fail-open behavior of the local-cache
+            // check just above.
+          }
+        }
+
         if (nestId.isEmpty) {
           if (_joinedViaInvite && _inviteCode.isNotEmpty) {
             // Senior joining an existing nest via invite code
