@@ -174,13 +174,24 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
         // -- for a brand-new signup, the final display_name/preferred_name
         // keys aren't populated yet at this point, only the onboarding
         // draft keys are.
-        String name = (prefs.getString('onboarding_draft_display_name') ?? '').isNotEmpty
-            ? prefs.getString('onboarding_draft_display_name')!
-            : (prefs.getString('display_name') ?? '');
-        String preferredName = (prefs.getString('onboarding_draft_preferred_name') ?? '').isNotEmpty
-            ? prefs.getString('onboarding_draft_preferred_name')!
-            : (prefs.getString('preferred_name') ?? '');
+        // Sep 11 2026: read role first so the correct role-scoped draft key
+        // is used -- family_onboarding_screen.dart and
+        // senior_onboarding_screen.dart no longer share a single draft-name
+        // key (see their comments for the leak that caused), so this read
+        // must match whichever one this person actually went through.
         String role = prefs.getString('user_role') ?? 'senior';
+        final draftNameKey = role == 'family'
+            ? 'onboarding_draft_display_name_family'
+            : 'onboarding_draft_display_name_senior';
+        final draftPreferredNameKey = role == 'family'
+            ? 'onboarding_draft_preferred_name_family'
+            : 'onboarding_draft_preferred_name_senior';
+        String name = (prefs.getString(draftNameKey) ?? '').isNotEmpty
+            ? prefs.getString(draftNameKey)!
+            : (prefs.getString('display_name') ?? '');
+        String preferredName = (prefs.getString(draftPreferredNameKey) ?? '').isNotEmpty
+            ? prefs.getString(draftPreferredNameKey)!
+            : (prefs.getString('preferred_name') ?? '');
         print('ROLE_DEBUG: (top of _navigateToHome) prefs.getString(user_role) = ${prefs.getString('user_role')}, checkUserId=$checkUserId');
         try {
           await supabaseClient.from('temp_debug_logs').insert({
@@ -517,11 +528,22 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           // the person having typed a real name. Now checks the draft key
           // first (the actual source for this flow), falling back to the
           // final key for any other path that might already have it.
-          final name = (prefs.getString('onboarding_draft_display_name') ?? '').isNotEmpty
-              ? prefs.getString('onboarding_draft_display_name')!
+          // Sep 11 2026: role must be read before name now, so the correct
+          // role-scoped draft key is used -- see the Sep 11 comment at the
+          // top of _navigateToHome for the full reasoning (the two
+          // onboarding screens no longer share one draft-name key).
+          final rawUserRoleForName = prefs.getString('user_role');
+          final draftNameKey = rawUserRoleForName == 'family'
+              ? 'onboarding_draft_display_name_family'
+              : 'onboarding_draft_display_name_senior';
+          final draftPreferredNameKey = rawUserRoleForName == 'family'
+              ? 'onboarding_draft_preferred_name_family'
+              : 'onboarding_draft_preferred_name_senior';
+          final name = (prefs.getString(draftNameKey) ?? '').isNotEmpty
+              ? prefs.getString(draftNameKey)!
               : (prefs.getString('display_name') ?? '');
-          final preferredNestName = (prefs.getString('onboarding_draft_preferred_name') ?? '').isNotEmpty
-              ? prefs.getString('onboarding_draft_preferred_name')!
+          final preferredNestName = (prefs.getString(draftPreferredNameKey) ?? '').isNotEmpty
+              ? prefs.getString(draftPreferredNameKey)!
               : (prefs.getString('preferred_name') ?? '');
           // Aug 26 2026: D Von reported a Family Nest Owner signup (fresh
           // Google account, confirmed via auth.users timestamps 143ms

@@ -204,10 +204,22 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       // Aug 21 2026: renamed to onboarding-scoped draft keys -- see
       // _savePreferences' comment below for the full reasoning.
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('onboarding_draft_display_name', _nameController.text.trim());
-      await prefs.setString('onboarding_draft_preferred_name', _preferredNameController.text.trim());
+      // Sep 11 2026: split from the shared 'onboarding_draft_display_name'
+      // key into a role-scoped '_family' key. That shared key was also
+      // written by senior_onboarding_screen.dart for the SENIOR's name --
+      // semantically a different person's name entirely. If this family
+      // member's own real display_name write ever got skipped (e.g. an
+      // already-onboarded account getting routed back through this screen
+      // by a bug elsewhere), the fallback chain in _finishOnboarding below
+      // could silently pull a leftover senior's name from this key and
+      // overwrite the family member's own real name with it -- confirmed
+      // via direct DB check, both D Von's and Penny's real names got
+      // overwritten with a cached senior name this way. Each flow now only
+      // ever reads back what it itself wrote.
+      await prefs.setString('onboarding_draft_display_name_family', _nameController.text.trim());
+      await prefs.setString('onboarding_draft_preferred_name_family', _preferredNameController.text.trim());
       await prefs.setString(
-        'onboarding_draft_owner_id',
+        'onboarding_draft_owner_id_family',
         Supabase.instance.client.auth.currentUser?.id ?? '',
       );
       setState(() => _savedName = _nameController.text.trim());
@@ -285,21 +297,21 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     // signed in and showing elsewhere on the same device -- exactly what
     // D Von hit. These draft keys are onboarding's own private in-progress
     // state now; nothing else in the app reads them.
-    final nameFromPrefs = prefs.getString('onboarding_draft_display_name') ?? '';
+    final nameFromPrefs = prefs.getString('onboarding_draft_display_name_family') ?? '';
     final name = _nameController.text.trim().isNotEmpty
         ? _nameController.text.trim()
         : _savedName.isNotEmpty
         ? _savedName
         : nameFromPrefs;
-    await prefs.setString('onboarding_draft_display_name', name);
-    await prefs.setString('onboarding_draft_preferred_name', _preferredNameController.text.trim());
+    await prefs.setString('onboarding_draft_display_name_family', name);
+    await prefs.setString('onboarding_draft_preferred_name_family', _preferredNameController.text.trim());
     // Aug 29 2026: tag these drafts with whoever is actually signed in
     // right now, so _finishOnboarding's fallback read below can tell a
     // real in-progress draft apart from a leftover from a previous
     // account on this device -- same fix as senior_onboarding_screen.dart
     // (see its _loadSavedName comment for the full story).
     await prefs.setString(
-      'onboarding_draft_owner_id',
+      'onboarding_draft_owner_id_family',
       Supabase.instance.client.auth.currentUser?.id ?? '',
     );
     // Guarded by the required-selection check in _nextStep, so this
@@ -534,13 +546,13 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       // otherwise a leftover draft from a previous account on this
       // device could silently become this brand-new profile's saved
       // name. See the owner-id tagging added in _savePreferences above.
-      final draftOwnerId = prefs.getString('onboarding_draft_owner_id') ?? '';
+      final draftOwnerId = prefs.getString('onboarding_draft_owner_id_family') ?? '';
       final currentUidForDraft = supabase.auth.currentUser?.id ?? '';
       final draftBelongsToCurrentUser = draftOwnerId.isNotEmpty &&
           currentUidForDraft.isNotEmpty &&
           draftOwnerId == currentUidForDraft;
       final nameFromDraftKey = draftBelongsToCurrentUser
-          ? (prefs.getString('onboarding_draft_display_name') ?? '')
+          ? (prefs.getString('onboarding_draft_display_name_family') ?? '')
           : '';
       final name = _nameController.text.trim().isNotEmpty
           ? _nameController.text.trim()
@@ -548,7 +560,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
               ? _savedName
               : nameFromDraftKey;
       final preferredName = draftBelongsToCurrentUser
-          ? (prefs.getString('onboarding_draft_preferred_name') ?? '')
+          ? (prefs.getString('onboarding_draft_preferred_name_family') ?? '')
           : '';
       final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
       final inviteCode = prefs.getString('invite_code') ?? '';

@@ -122,21 +122,30 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
     // saved before this fix existed, with no tag at all) means it's not
     // safe to trust -- clear it instead of risking it showing up a third
     // time for someone else.
-    final draftOwnerId = prefs.getString('onboarding_draft_owner_id') ?? '';
+    // Sep 11 2026: split from the shared 'onboarding_draft_display_name'
+    // key into a role-scoped '_senior' key. That shared key was also
+    // written by family_onboarding_screen.dart for a FAMILY member's own
+    // name -- a different person entirely from the senior being set up
+    // here. Owner-id tagging alone wasn't enough to stop the leak, since
+    // the same signed-in user can legitimately pass through both screens
+    // (e.g. testing, or being routed back into onboarding by a bug
+    // elsewhere) -- each flow now only ever reads back what it itself
+    // wrote.
+    final draftOwnerId = prefs.getString('onboarding_draft_owner_id_senior') ?? '';
     final currentUid = Supabase.instance.client.auth.currentUser?.id ?? '';
     final draftBelongsToCurrentUser =
         draftOwnerId.isNotEmpty && currentUid.isNotEmpty && draftOwnerId == currentUid;
     if (!draftBelongsToCurrentUser) {
-      await prefs.remove('onboarding_draft_display_name');
-      await prefs.remove('onboarding_draft_preferred_name');
+      await prefs.remove('onboarding_draft_display_name_senior');
+      await prefs.remove('onboarding_draft_preferred_name_senior');
       await prefs.remove('onboarding_draft_nest_name');
-      await prefs.remove('onboarding_draft_owner_id');
+      await prefs.remove('onboarding_draft_owner_id_senior');
     }
     final name = draftBelongsToCurrentUser
-        ? (prefs.getString('onboarding_draft_display_name') ?? '')
+        ? (prefs.getString('onboarding_draft_display_name_senior') ?? '')
         : '';
     final preferredName = draftBelongsToCurrentUser
-        ? (prefs.getString('onboarding_draft_preferred_name') ?? '')
+        ? (prefs.getString('onboarding_draft_preferred_name_senior') ?? '')
         : '';
     final savedNestName = draftBelongsToCurrentUser
         ? (prefs.getString('onboarding_draft_nest_name') ?? '')
@@ -200,8 +209,8 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
       // _loadSavedName's comment for why these are draft-scoped, not the
       // real shared keys.
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('onboarding_draft_display_name', _nameController.text.trim());
-      await prefs.setString('onboarding_draft_preferred_name', _preferredNameController.text.trim());
+      await prefs.setString('onboarding_draft_display_name_senior', _nameController.text.trim());
+      await prefs.setString('onboarding_draft_preferred_name_senior', _preferredNameController.text.trim());
       await prefs.setString('onboarding_draft_nest_name', _nestNameController.text.trim());
       // Tag this draft with whoever is actually signed in right now, so
       // _loadSavedName can tell "my own in-progress draft, safe to
@@ -209,7 +218,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
       // this device, must not be shown." Without this tag these drafts
       // have no connection to who wrote them at all.
       final draftOwnerId = Supabase.instance.client.auth.currentUser?.id ?? '';
-      await prefs.setString('onboarding_draft_owner_id', draftOwnerId);
+      await prefs.setString('onboarding_draft_owner_id_senior', draftOwnerId);
       // Save birthday/anniversary now so they survive the pushReplacementNamed detour
       if (_birthday != null) {
         await prefs.setString('birthday', _birthday!.toIso8601String());
