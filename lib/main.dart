@@ -257,6 +257,56 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  // Sep 11 2026: added alongside the _resolveInitialRoute fix above --
+  // looks up whether the signed-in user already has a real nest
+  // membership on the server, for the case where local cache (a fresh
+  // install or a new device) has none at all. Picks the OLDEST
+  // membership on purpose: the exact bug this closes had already left
+  // some real accounts with several nests -- the earliest one is the
+  // one most likely to be the person's real, original nest rather than
+  // one of the accidental duplicates. Restores just enough local state
+  // for the rest of the app to treat this as an ordinary returning user.
+  Future<bool> _tryRestoreServerMembership(
+    SharedPreferences prefs,
+    String userId,
+  ) async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('nest_members')
+          .select('nest_id, joined_at, nests(name, invite_code, created_by)')
+          .eq('user_id', userId)
+          .order('joined_at', ascending: true)
+          .limit(1);
+      if (rows.isEmpty) return false;
+      final row = rows.first as Map<String, dynamic>;
+      final nestId = row['nest_id'] as String?;
+      final nest = row['nests'] as Map<String, dynamic>?;
+      if (nestId == null || nest == null) return false;
+
+      await prefs.setString('nest_id', nestId);
+      final nestName = nest['name'] as String?;
+      if (nestName != null && nestName.isNotEmpty) {
+        await prefs.setString('nest_name', nestName);
+      }
+      final inviteCode = nest['invite_code'] as String?;
+      if (inviteCode != null && inviteCode.isNotEmpty) {
+        await prefs.setString('invite_code', inviteCode);
+      }
+      final createdBy = nest['created_by'] as String?;
+      await prefs.setBool('joined_via_invite', createdBy != userId);
+      await prefs.setBool('has_onboarded', true);
+      await prefs.setBool('onboarding_complete', true);
+      return true;
+    } catch (e) {
+      debugPrint('SERVER_MEMBERSHIP_RESTORE_ERROR: $e');
+      // Fail CLOSED here, unlike the entitlement/membership checks above
+      // -- if a real membership can't be confirmed, falling through to
+      // the existing roleChoiceScreen path is the safe default, not
+      // silently trusting an unconfirmed restore.
+      return false;
+    }
+  }
+
   Future<void> _resolveInitialRoute() async {
     try {
       // Must run before anything else in this function, including the
@@ -294,22 +344,40 @@ class _MyAppState extends State<MyApp> {
       // HERE, at the actual point of origin, means this branch is decided
       // correctly the first time and splash_screen's competing path (fixed
       // separately) never has a real session left to find.
-      final isSignedIn = hasOnboarded
-          ? await _waitForRestoredUserId() != null
-          // Aug 21 2026: D Von's wife saw a 5-6s black screen before the
-          // grandmother photo on her first-ever launch. Root cause: this
-          // wait polls for up to 2.5s waiting for a session to restore --
-          // legitimately needed for a RETURNING user whose session might
-          // still be loading, but on a device that has never onboarded at
-          // all, there is definitively no session that could ever be
-          // found, so the full 2.5s always ran to completion for nothing.
-          // hasOnboarded is already read locally and instantly just above
-          // -- skipping the wait when it's false only affects devices
-          // that have never signed in before, exactly the population
-          // about to see the intro sequence anyway. Anyone who HAS
-          // onboarded before still gets the full wait, completely
-          // unchanged, so the original fix this protects stays intact.
-          : false;
+      // Sep 11 2026: check the real session instantly, first, regardless
+      // of hasOnboarded. Supabase's own session (iOS Keychain) can
+      // survive a fresh app install/reinstall while SharedPreferences
+      // (where has_onboarded lives) cannot -- so a real, already-
+      // onboarded returning user on a new device, or after a reinstall/
+      // TestFlight update, was previously assumed to have "definitely
+      // never signed in" purely because hasOnboarded was false locally,
+      // and got routed to the brand-new-user splash/intro sequence
+      // instead. Confirmed directly: two real accounts hit exactly this
+      // path today. This instant check costs nothing (currentUser is a
+      // synchronous read) and resolves that case correctly without
+      // touching the polling wait below at all.
+      final instantUserId = Supabase.instance.client.auth.currentUser?.id;
+      final isSignedIn = instantUserId != null
+          ? true
+          : hasOnboarded
+              ? await _waitForRestoredUserId() != null
+              // Aug 21 2026: D Von's wife saw a 5-6s black screen before the
+              // grandmother photo on her first-ever launch. Root cause: this
+              // wait polls for up to 2.5s waiting for a session to restore --
+              // legitimately needed for a RETURNING user whose session might
+              // still be loading, but on a device that has never onboarded at
+              // all, there is definitively no session that could ever be
+              // found, so the full 2.5s always ran to completion for nothing.
+              // hasOnboarded is already read locally and instantly just above
+              // -- skipping the wait when it's false only affects devices
+              // that have never signed in before, exactly the population
+              // about to see the intro sequence anyway. Anyone who HAS
+              // onboarded before still gets the full wait, completely
+              // unchanged, so the original fix this protects stays intact.
+              // The instant check above now catches the one real gap this
+              // left (a Keychain-restored session with no local flag) before
+              // ever reaching this fallback.
+              : false;
 
       if (isSignedIn && hasOnboarded) {
         // Signed in and onboarded -- but only let them straight into the
@@ -346,8 +414,32 @@ class _MyAppState extends State<MyApp> {
           }
         }
       } else if (isSignedIn && !hasOnboarded) {
-        // Signed in but not yet onboarded → resume onboarding from role choice
-        _initialRoute = AppRoutes.roleChoiceScreen;
+        // Sep 11 2026: previously assumed "signed in, but no
+        // has_onboarded flag locally" always meant a genuinely brand-new
+        // user, and sent them straight into onboarding. Paired with the
+        // instant-session-check fix above, this is the other half of the
+        // same real gap: a real, already-onboarded returning user on a
+        // new device or after a reinstall has no local cache to prove
+        // it, and got routed into onboarding -- where completing it (even
+        // by quickly tapping through screens that look like ordinary
+        // loading) creates a brand-new duplicate nest and overwrites
+        // their real profile name. Confirmed via direct DB query: two
+        // real accounts had exactly this happen today. Now checks the
+        // server directly for an actual existing nest_members row before
+        // ever assuming "new" -- a real membership found there is
+        // restored locally and sent straight to their feed, skipping
+        // onboarding entirely. Only someone with no server-side
+        // membership either still goes to roleChoiceScreen.
+        final restoredUserId = instantUserId ?? await _waitForRestoredUserId();
+        final restored = restoredUserId != null
+            ? await _tryRestoreServerMembership(prefs, restoredUserId)
+            : false;
+        if (restored) {
+          await resolveAppNotifiersFromPrefs(prefs);
+          _initialRoute = AppRoutes.familyFeedScreen;
+        } else {
+          _initialRoute = AppRoutes.roleChoiceScreen;
+        }
       } else {
         // Not signed in → start at splash screen (original first screen)
         _initialRoute = AppRoutes.splashScreen;
