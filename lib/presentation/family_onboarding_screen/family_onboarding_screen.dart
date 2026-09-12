@@ -583,6 +583,20 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           'relation_type': (_selectedRelationship ?? 'Other').toLowerCase(),
           if (localBirthday != null) 'birthday': localBirthday,
           if (localAnniversary != null) 'anniversary': localAnniversary,
+          // Sep 12 2026: this family member's own notification choices
+          // from this same onboarding flow (_notifyOnCheckIn/
+          // _notifyOnMessages, set a couple steps back and saved to local
+          // prefs by _savePreferences above) now actually reach their
+          // account. Previously they only ever hit SharedPreferences on
+          // this device -- the send-push Edge Function checks
+          // notify_check_in/notify_messages straight from user_profiles
+          // before pushing anyone, so a brand-new family member who
+          // declined notifications during signup was still getting
+          // pushed anyway, since their real column just sat at its
+          // database default (true) the whole time, completely
+          // disconnected from what they'd actually chosen on screen.
+          'notify_check_in': _notifyOnCheckIn,
+          'notify_messages': _notifyOnMessages,
         };
         if (preferredName.isNotEmpty) {
           updateData['preferred_name'] = preferredName;
