@@ -36,12 +36,26 @@ class PushService {
         badge: true,
         sound: true,
       );
+      // Sep 12 2026: this whole function used to fail completely
+      // silently at every possible step (permission denied, no token,
+      // any exception) -- debugPrint only, nothing ever visible outside
+      // a live Xcode console. That's how zero device tokens ever got
+      // registered, on any account, on any build, without a single
+      // trace anywhere. Logging every real outcome here (fire-and-forget,
+      // same pattern as the existing ROLE_DEBUG entries in
+      // save_messages_prompt_screen.dart) so the next test tells us
+      // definitively which step is actually breaking, instead of
+      // guessing from the outside again.
+      await _logPushDebug(
+          'permission_status=${settings.authorizationStatus} userId=$userId');
       if (settings.authorizationStatus != AuthorizationStatus.authorized &&
           settings.authorizationStatus != AuthorizationStatus.provisional) {
         return;
       }
 
       final token = await messaging.getToken();
+      await _logPushDebug(
+          'getToken() returned: ${token == null ? 'null' : 'a token (len ${token.length})'}');
       if (token == null || token.isEmpty) return;
 
       await _saveToken(userId, token);
@@ -57,7 +71,17 @@ class PushService {
       });
     } catch (e) {
       debugPrint('PUSH_SERVICE registerDeviceToken error: $e');
+      await _logPushDebug('registerDeviceToken() threw: $e');
     }
+  }
+
+  static Future<void> _logPushDebug(String message) async {
+    try {
+      await Supabase.instance.client.from('temp_debug_logs').insert({
+        'tag': 'PUSH_DEBUG',
+        'message': message,
+      });
+    } catch (_) {}
   }
 
   static Future<void> _saveToken(String userId, String token) async {
@@ -77,8 +101,10 @@ class PushService {
         },
         onConflict: 'device_token',
       );
+      await _logPushDebug('device_tokens upsert OK for userId=$userId');
     } catch (e) {
       debugPrint('PUSH_SERVICE saveToken error: $e');
+      await _logPushDebug('device_tokens upsert FAILED for userId=$userId: $e');
     }
   }
 

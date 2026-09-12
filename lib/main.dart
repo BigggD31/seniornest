@@ -42,6 +42,24 @@ void main() async {
     await Firebase.initializeApp();
   } catch (e) {
     debugPrint('Failed to initialize Firebase: $e');
+    // Sep 12 2026: this catch was completely silent -- if Firebase init
+    // ever fails, every later call to FirebaseMessaging.instance
+    // (PushService.registerDeviceToken) fails right along with it,
+    // before ever reaching iOS's actual permission API. That's
+    // consistent with what D Von found: zero device tokens ever
+    // registered, on any account, on any build, and no "Notifications"
+    // row ever appearing in iOS Settings for this app at all -- which
+    // only happens if the permission request never actually fires.
+    // Logging this (fire-and-forget, matches the existing ROLE_DEBUG
+    // pattern in save_messages_prompt_screen.dart) so the next real
+    // device test tells us definitively whether this is where it's
+    // breaking, instead of guessing again.
+    try {
+      await Supabase.instance.client.from('temp_debug_logs').insert({
+        'tag': 'PUSH_DEBUG_FIREBASE_INIT',
+        'message': 'Firebase.initializeApp() threw: $e',
+      });
+    } catch (_) {}
   }
 
   // Load persisted text size before first frame
