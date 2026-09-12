@@ -200,6 +200,14 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // meds-reminder below, which is about whether I took my own meds
   // today, not whichever senior happened to be found first in the nest.
   bool _myMedsTakenToday = false;
+  // Sep 12 2026: this senior's own real preference (from user_profiles,
+  // set via the Setup screen toggle) -- gates the big actionable
+  // "Daily Medications" prompt card below, same as it gates the smaller
+  // status card in the per-senior loop. Defaults true so a brand-new
+  // profile row (before this column existed) behaves exactly as before.
+  bool _myMedsRemindersEnabled = true;
+  // Same idea, for the floating "I'm Good" check-in button.
+  bool _myCheckinEnabled = true;
   // Sep 2 2026: every senior in the nest, each with their own check-in/meds
   // status -- drives one small card pair per senior. The five fields above
   // stay as "the primary/first senior" for other screens and the shared
@@ -1192,11 +1200,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       // check-in/meds card. See _seniorStatuses below.
       final membersResponse = await supabase
           .from('nest_members')
-          .select('user_id, user_profiles(display_name, preferred_name, role)')
+          .select('user_id, user_profiles(display_name, preferred_name, role, daily_checkin_enabled, meds_reminders_enabled)')
           .eq('nest_id', nestId);
       final members = membersResponse as List<dynamic>;
 
-      final List<Map<String, String>> seniors = [];
+      final List<Map<String, dynamic>> seniors = [];
       for (final m in members) {
         final profile = m['user_profiles'] as Map<String, dynamic>?;
         if (profile?['role'] == 'senior') {
@@ -1205,7 +1213,18 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           final preferred = profile?['preferred_name'] as String? ?? '';
           final first = profile?['display_name'] as String? ?? '';
           final name = preferred.isNotEmpty ? preferred : first;
-          seniors.add({'id': id, 'name': name.isNotEmpty ? name : 'Your senior'});
+          seniors.add({
+            'id': id,
+            'name': name.isNotEmpty ? name : 'Your senior',
+            // Sep 12 2026: this senior's own choice, from user_profiles --
+            // not the local device toggle in setup_screen.dart, which
+            // never reached the database at all and so could never affect
+            // anyone else's screen (or even survive an account switch on
+            // the same device). Defaults true for any row from before
+            // this column existed.
+            'checkinEnabled': profile?['daily_checkin_enabled'] as bool? ?? true,
+            'medsRemindersEnabled': profile?['meds_reminders_enabled'] as bool? ?? true,
+          });
         }
       }
       if (seniors.isEmpty) return;
@@ -1245,6 +1264,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           'medsTime': medsResponse != null
               ? DateTime.parse(medsResponse['created_at'] as String)
               : null,
+          'checkinEnabled': seniors[i]['checkinEnabled'] as bool? ?? true,
+          'medsRemindersEnabled': seniors[i]['medsRemindersEnabled'] as bool? ?? true,
         });
       }
 
@@ -1300,6 +1321,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           if (_isSenior && mine != null) {
             _isGoodTodaySent = mine['checkedIn'] as bool;
             _myMedsTakenToday = mine['medsTaken'] as bool;
+            _myMedsRemindersEnabled = mine['medsRemindersEnabled'] as bool? ?? true;
+            _myCheckinEnabled = mine['checkinEnabled'] as bool? ?? true;
           }
         });
         if (_isSenior && mine != null) {
@@ -2002,7 +2025,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           const KeyboardDoneBarOverlay(),
         ],
       ),
-      floatingActionButton: (!_isNestArchived && _isSenior && (!_isGoodTodaySent || _justCheckedIn))
+      floatingActionButton: (!_isNestArchived && _isSenior && _myCheckinEnabled && (!_isGoodTodaySent || _justCheckedIn))
           ? ImGoodTodayOrbWidget(
               isSent: _isGoodTodaySent,
               onTap: _handleGoodToday,
@@ -2116,27 +2139,31 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                             // status, matched by their own id (not
                             // "whichever senior was found first").
                             for (final status in _seniorStatuses) ...[
-                              DailyCheckinCardWidget(
-                                isDarkMode: _isDarkMode,
-                                isSenior: _isSenior &&
-                                    status['id'] ==
-                                        Supabase.instance.client.auth
-                                            .currentUser?.id,
-                                seniorName: status['name'] as String,
-                                checkedIn: status['checkedIn'] as bool,
-                                checkinTime: status['checkinTime'] as DateTime?,
-                              ),
-                              const SizedBox(height: 10),
-                              DailyMedsCardWidget(
-                                isDarkMode: _isDarkMode,
-                                isSenior: _isSenior &&
-                                    status['id'] ==
-                                        Supabase.instance.client.auth
-                                            .currentUser?.id,
-                                seniorName: status['name'] as String,
-                                takenToday: status['medsTaken'] as bool,
-                                takenTime: status['medsTime'] as DateTime?,
-                              ),
+                              if (status['checkinEnabled'] as bool? ?? true) ...[
+                                DailyCheckinCardWidget(
+                                  isDarkMode: _isDarkMode,
+                                  isSenior: _isSenior &&
+                                      status['id'] ==
+                                          Supabase.instance.client.auth
+                                              .currentUser?.id,
+                                  seniorName: status['name'] as String,
+                                  checkedIn: status['checkedIn'] as bool,
+                                  checkinTime: status['checkinTime'] as DateTime?,
+                                ),
+                                const SizedBox(height: 10),
+                              ],
+                              if (status['medsRemindersEnabled'] as bool? ?? true) ...[
+                                DailyMedsCardWidget(
+                                  isDarkMode: _isDarkMode,
+                                  isSenior: _isSenior &&
+                                      status['id'] ==
+                                          Supabase.instance.client.auth
+                                              .currentUser?.id,
+                                  seniorName: status['name'] as String,
+                                  takenToday: status['medsTaken'] as bool,
+                                  takenTime: status['medsTime'] as DateTime?,
+                                ),
+                              ],
                               const SizedBox(height: 4),
                             ],
                             const SizedBox(height: 10),
@@ -2158,7 +2185,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 // (_myMedsTakenToday) instead of the primary/first-found
                 // senior's -- fixes a case where a second senior's own
                 // reminder could reflect the other senior's status.
-                if (!_isNestArchived && _isSenior && _showMedsReminder && !_myMedsTakenToday) ...[
+                if (!_isNestArchived && _isSenior && _showMedsReminder && !_myMedsTakenToday && _myMedsRemindersEnabled) ...[
                   MedsReminderCardWidget(
                     isDarkMode: _isDarkMode,
                     onTaken: _handleMedsTaken,

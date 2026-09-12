@@ -287,11 +287,11 @@ class _SafetyScreenState extends State<SafetyScreen>
       if (nestId.isNotEmpty) {
         final memberRows = await supabase
             .from('nest_members')
-            .select('user_id, user_profiles(display_name, preferred_name, role)')
+            .select('user_id, user_profiles(display_name, preferred_name, role, daily_checkin_enabled, meds_reminders_enabled)')
             .eq('nest_id', nestId);
         final members = memberRows as List<dynamic>;
 
-        final List<Map<String, String>> seniors = [];
+        final List<Map<String, dynamic>> seniors = [];
         for (final m in members) {
           final profile = m['user_profiles'] as Map<String, dynamic>?;
           if (profile?['role'] == 'senior') {
@@ -300,7 +300,15 @@ class _SafetyScreenState extends State<SafetyScreen>
             final preferred = profile?['preferred_name'] as String? ?? '';
             final first = profile?['display_name'] as String? ?? '';
             final name = preferred.isNotEmpty ? preferred : first;
-            seniors.add({'id': id, 'name': name.isNotEmpty ? name : 'Your senior'});
+            seniors.add({
+              'id': id,
+              'name': name.isNotEmpty ? name : 'Your senior',
+              // Sep 12 2026: same fix as family_feed_screen.dart -- this
+              // senior's own real, database-backed choice, not the local
+              // device toggle that never reached anyone else's screen.
+              'checkinEnabled': profile?['daily_checkin_enabled'] as bool? ?? true,
+              'medsRemindersEnabled': profile?['meds_reminders_enabled'] as bool? ?? true,
+            });
           }
         }
 
@@ -338,6 +346,8 @@ class _SafetyScreenState extends State<SafetyScreen>
               'medsTime': medsResponse != null
                   ? DateTime.parse(medsResponse['created_at'] as String)
                   : null,
+              'checkinEnabled': seniors[i]['checkinEnabled'] as bool? ?? true,
+              'medsRemindersEnabled': seniors[i]['medsRemindersEnabled'] as bool? ?? true,
             });
           }
 
@@ -950,25 +960,29 @@ class _SafetyScreenState extends State<SafetyScreen>
             Column(
               children: [
                 for (final status in _seniorStatuses) ...[
-                  DailyCheckinCardWidget(
-                    isDarkMode: _isDarkMode,
-                    isSenior: _isSenior &&
-                        status['id'] ==
-                            Supabase.instance.client.auth.currentUser?.id,
-                    seniorName: status['name'] as String,
-                    checkedIn: status['checkedIn'] as bool,
-                    checkinTime: status['checkinTime'] as DateTime?,
-                  ),
-                  const SizedBox(height: 10),
-                  DailyMedsCardWidget(
-                    isDarkMode: _isDarkMode,
-                    isSenior: _isSenior &&
-                        status['id'] ==
-                            Supabase.instance.client.auth.currentUser?.id,
-                    seniorName: status['name'] as String,
-                    takenToday: status['medsTaken'] as bool,
-                    takenTime: status['medsTime'] as DateTime?,
-                  ),
+                  if (status['checkinEnabled'] as bool? ?? true) ...[
+                    DailyCheckinCardWidget(
+                      isDarkMode: _isDarkMode,
+                      isSenior: _isSenior &&
+                          status['id'] ==
+                              Supabase.instance.client.auth.currentUser?.id,
+                      seniorName: status['name'] as String,
+                      checkedIn: status['checkedIn'] as bool,
+                      checkinTime: status['checkinTime'] as DateTime?,
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  if (status['medsRemindersEnabled'] as bool? ?? true) ...[
+                    DailyMedsCardWidget(
+                      isDarkMode: _isDarkMode,
+                      isSenior: _isSenior &&
+                          status['id'] ==
+                              Supabase.instance.client.auth.currentUser?.id,
+                      seniorName: status['name'] as String,
+                      takenToday: status['medsTaken'] as bool,
+                      takenTime: status['medsTime'] as DateTime?,
+                    ),
+                  ],
                   const SizedBox(height: 4),
                 ],
               ],

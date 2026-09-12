@@ -361,6 +361,14 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
           'role': 'senior',
           'birthday': _birthday?.toIso8601String(),
           'anniversary': _anniversary?.toIso8601String(),
+          // Sep 12 2026: this senior's own Medication Reminders/Daily
+          // Check-In choice from this same onboarding step now reaches
+          // the database at account-creation time, same as everything
+          // else here -- previously only saved to this device's local
+          // prefs (see the Sep 12 fix in setup_screen.dart for the full
+          // story on why that meant it could never actually do anything).
+          'daily_checkin_enabled': _dailyCheckIn,
+          'meds_reminders_enabled': _medsReminders,
         };
         if (name.isNotEmpty) {
           profileData['display_name'] = name;

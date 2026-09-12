@@ -302,6 +302,28 @@ class _SetupScreenState extends State<SetupScreen>
           });
         }
       }
+      // Sep 12 2026: this senior's own real Medication Reminders/Daily
+      // Check-In choice, straight from user_profiles -- the local prefs
+      // read at the top of this function is only a fast, possibly-stale
+      // first paint (and one that a same-device account switch can wipe
+      // back to its default, per the audit comment on
+      // _accountScopedPrefsKeys in auth_service.dart). This is the real
+      // answer, and it's what actually reaches everyone else's screen.
+      bool? fetchedMedsRemindersEnabled;
+      bool? fetchedDailyCheckinEnabled;
+      if (isSenior && currentUserId != null) {
+        try {
+          final myProfile = await supabase
+              .from('user_profiles')
+              .select('meds_reminders_enabled, daily_checkin_enabled')
+              .eq('id', currentUserId)
+              .maybeSingle();
+          fetchedMedsRemindersEnabled = myProfile?['meds_reminders_enabled'] as bool?;
+          fetchedDailyCheckinEnabled = myProfile?['daily_checkin_enabled'] as bool?;
+        } catch (e) {
+          debugPrint('SETUP: failed to load reminder prefs from server: $e');
+        }
+      }
       if (removedIds.isNotEmpty) {
         realFamilyMembers = realFamilyMembers
             .where((m) => !removedIds.contains(m['id'] as String))
@@ -313,7 +335,19 @@ class _SetupScreenState extends State<SetupScreen>
           if (fetchedInviteCode != null) _inviteCode = fetchedInviteCode;
           _isNestOwner = isNestOwner;
           _familyMembers = realFamilyMembers;
+          if (fetchedMedsRemindersEnabled != null) {
+            _medsReminders = fetchedMedsRemindersEnabled;
+          }
+          if (fetchedDailyCheckinEnabled != null) {
+            _dailyCheckIn = fetchedDailyCheckinEnabled;
+          }
         });
+        if (fetchedMedsRemindersEnabled != null) {
+          await prefs.setBool('meds_reminders', fetchedMedsRemindersEnabled);
+        }
+        if (fetchedDailyCheckinEnabled != null) {
+          await prefs.setBool('daily_check_in', fetchedDailyCheckinEnabled);
+        }
         // Update the shared notifier too, so any other screen currently
         // showing this value (e.g. family_feed_screen's own role-gated UI)
         // picks up the confirmed answer immediately, and persist it so the
@@ -1049,16 +1083,35 @@ class _SetupScreenState extends State<SetupScreen>
     // Sep 3 2026: notify_messages/notify_check_in specifically also need
     // to reach the server, not just this device -- a Supabase Edge
     // Function deciding whether to push someone has no way to read this
-    // person's own SharedPreferences. meds_reminders/daily_check_in stay
-    // local-only; they gate in-app UI on THIS device, nothing server-side
-    // needs to know about them.
+    // person's own SharedPreferences.
+    // Sep 12 2026: meds_reminders/daily_check_in now sync to the server
+    // too. These used to be treated as purely local, device-only display
+    // toggles -- but the actual feature request was always "the SENIOR
+    // decides whether the check-in/meds prompts exist at all," which has
+    // to be a real, shared setting every family member's screen (and the
+    // Safety screen) can see, not something that only ever affected this
+    // one device. Confirmed via code read: the "hasn't checked in yet" /
+    // "hasn't logged medications" banners never once consulted these
+    // toggles anywhere, on any screen, for anyone -- turning them off did
+    // literally nothing except set a local flag nothing else read. Column
+    // names differ from the local pref keys (daily_checkin_enabled /
+    // meds_reminders_enabled) since user_profiles already used those
+    // names for the two we're now joining.
+    String? profileColumn;
     if (key == 'notify_messages' || key == 'notify_check_in') {
+      profileColumn = key;
+    } else if (key == 'meds_reminders') {
+      profileColumn = 'meds_reminders_enabled';
+    } else if (key == 'daily_check_in') {
+      profileColumn = 'daily_checkin_enabled';
+    }
+    if (profileColumn != null) {
       try {
         final userId = Supabase.instance.client.auth.currentUser?.id;
         if (userId != null) {
           await Supabase.instance.client
               .from('user_profiles')
-              .update({key: value}).eq('id', userId);
+              .update({profileColumn: value}).eq('id', userId);
         }
       } catch (e) {
         debugPrint('SETUP: failed to sync $key to server: $e');
