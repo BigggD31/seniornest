@@ -53,22 +53,56 @@ class PushService {
         return;
       }
 
-      final token = await messaging.getToken();
-      await _logPushDebug(
-          'getToken() returned: ${token == null ? 'null' : 'a token (len ${token.length})'}');
-      if (token == null || token.isEmpty) return;
-
-      await _saveToken(userId, token);
-
-      // FCM tokens can rotate (app reinstall, OS-level refresh, etc.) --
-      // this keeps the saved token current for as long as the app
-      // process is alive, without needing another cold start.
+      // Registered here, before the APNs wait below, rather than only
+      // after a successful getToken() -- if APNs registration is slow
+      // enough that the retry loop below gives up, this listener is
+      // still the one thing that can pick up a token that arrives later
+      // in this same app session. Also handles ordinary token rotation
+      // (reinstall, OS-level refresh) for as long as the app stays open.
       FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
         final currentUserId = Supabase.instance.client.auth.currentUser?.id;
         if (currentUserId != null) {
           _saveToken(currentUserId, newToken);
         }
       });
+
+      // Sep 14 2026: confirmed via the debug log this same instrumentation
+      // caught -- both test devices got AuthorizationStatus.authorized
+      // (the permission fix worked), but getToken() immediately threw
+      // '[firebase_messaging/apns-token-not-set]'. This is a well-known
+      // race on iOS: requestPermission() returning "authorized" only
+      // means iOS has decided to allow it -- actually registering the
+      // device with Apple's push service and handing this app a raw
+      // APNs token happens asynchronously afterward, on iOS's own
+      // schedule (usually under a second, but not guaranteed), and FCM's
+      // getToken() needs that raw APNs token to exist first. Calling
+      // getToken() in the very next line, with no wait, was a race we
+      // were always going to lose most of the time. Poll for the APNs
+      // token directly (not a fixed sleep) so this resolves as fast as
+      // the OS actually allows, with a generous ceiling for a slow
+      // network or first-launch registration.
+      String? apnsToken = await messaging.getAPNSToken();
+      var apnsAttempts = 0;
+      while (apnsToken == null && apnsAttempts < 10) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        apnsToken = await messaging.getAPNSToken();
+        apnsAttempts++;
+      }
+      await _logPushDebug(
+          'APNS token after $apnsAttempts retries: ${apnsToken == null ? 'still null' : 'present'}');
+      if (apnsToken == null) {
+        // Give up on this attempt -- the onTokenRefresh listener
+        // registered above is still active and will catch it if APNs
+        // registration completes later in this same app session.
+        return;
+      }
+
+      final token = await messaging.getToken();
+      await _logPushDebug(
+          'getToken() returned: ${token == null ? 'null' : 'a token (len ${token.length})'}');
+      if (token == null || token.isEmpty) return;
+
+      await _saveToken(userId, token);
     } catch (e) {
       debugPrint('PUSH_SERVICE registerDeviceToken error: $e');
       await _logPushDebug('registerDeviceToken() threw: $e');
