@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -38,6 +39,12 @@ class _SafetyScreenState extends State<SafetyScreen>
   // "This is what ___ sees" banner's name (single, joined, or generic
   // plural depending on how many). See _loadData's tail for the fetch.
   List<Map<String, dynamic>> _seniorStatuses = [];
+  // Sep 15 2026: watches for check-in/medication changes made from
+  // elsewhere (another family member's phone, or this same senior on a
+  // different screen) so this screen's status cards don't require a
+  // manual refresh or reopen to catch up -- see _subscribeToStatusRealtime.
+  RealtimeChannel? _statusChannel;
+  Timer? _statusRefreshDebounce;
   // Was reading its own local prefs copy separately -- now points at the
   // same already-resolved notifier every other screen uses, closing the
   // last gap in the app-wide nest-name flash fix (build 173).
@@ -95,6 +102,48 @@ class _SafetyScreenState extends State<SafetyScreen>
     );
     _itemAnimations = [];
     _loadData();
+    _subscribeToStatusRealtime();
+  }
+
+  // Sep 15 2026: D Von reported "I'm Good"/medication status only ever
+  // updated instantly for whoever tapped the button -- everyone else had
+  // to manually refresh or reopen the screen. This screen had no
+  // realtime subscription at all before this. Neither daily_checkins
+  // nor daily_medications has a nest_id column to filter on (both are
+  // queried by user_id only), so this listens unfiltered and lets
+  // _loadData()'s own per-nest filtering sort it out -- fine at this
+  // app's scale. Debounced the same way family_feed_screen.dart's
+  // realtime listener is, so a burst of changes triggers one refresh.
+  Future<void> _subscribeToStatusRealtime() async {
+    try {
+      _statusChannel = Supabase.instance.client
+          .channel('safety_status_realtime')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'daily_checkins',
+            callback: (payload) {
+              _statusRefreshDebounce?.cancel();
+              _statusRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
+                if (mounted) _loadData();
+              });
+            },
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'daily_medications',
+            callback: (payload) {
+              _statusRefreshDebounce?.cancel();
+              _statusRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
+                if (mounted) _loadData();
+              });
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('SAFETY_REALTIME: subscribe failed, status still works via manual refresh: $e');
+    }
   }
 
   Future<void> _loadData() async {
@@ -413,6 +462,10 @@ class _SafetyScreenState extends State<SafetyScreen>
   void dispose() {
     _entranceController.dispose();
     _pulseController.dispose();
+    _statusRefreshDebounce?.cancel();
+    if (_statusChannel != null) {
+      Supabase.instance.client.removeChannel(_statusChannel!);
+    }
     super.dispose();
   }
 

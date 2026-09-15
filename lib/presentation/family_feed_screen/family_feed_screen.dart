@@ -497,6 +497,41 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               });
             },
           )
+          // Sep 15 2026: D Von reported "I'm Good" and medication status
+          // only ever updated instantly for the person who tapped the
+          // button -- everyone else in the nest had to manually refresh
+          // or reopen the screen to see it. Root cause: this channel only
+          // ever watched feed_posts. daily_checkins/daily_medications
+          // writes were never watched by anything, realtime or otherwise,
+          // so nobody else's screen had any way to know a change had
+          // happened. Neither table has a nest_id column to filter on
+          // (confirmed -- both are queried by user_id only), so this
+          // listens unfiltered and lets _loadCheckinStatus() do its usual
+          // per-nest filtering; fine at this app's scale, same debounce
+          // as the feed_posts listener above so a burst of changes only
+          // triggers one refresh.
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'daily_checkins',
+            callback: (payload) {
+              _realtimeRefreshDebounce?.cancel();
+              _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
+                if (mounted) _loadCheckinStatus();
+              });
+            },
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'daily_medications',
+            callback: (payload) {
+              _realtimeRefreshDebounce?.cancel();
+              _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
+                if (mounted) _loadCheckinStatus();
+              });
+            },
+          )
           .subscribe();
     } catch (e) {
       debugPrint('FEED_REALTIME: subscribe failed, feed still works via manual refresh: $e');
