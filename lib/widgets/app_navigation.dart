@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/activity_badge_service.dart';
 
 class AppNavigation extends StatefulWidget {
   const AppNavigation({
@@ -41,6 +42,11 @@ class _AppNavigationState extends State<AppNavigation>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     )..forward();
+    // Sep 16 2026: resilience fallback -- see refreshCounts()'s own doc
+    // comment in activity_badge_service.dart. Fire-and-forget: this just
+    // updates the same static ValueNotifiers the badges already listen
+    // to, no local state to wait on here.
+    ActivityBadgeService.refreshCounts();
   }
 
   @override

@@ -103,6 +103,17 @@ class ActivityBadgeService {
     }
   }
 
+  /// Sep 16 2026: resilience fallback -- called from AppNavigation's own
+  /// initState (every one of the 6 screens creates a fresh AppNavigation
+  /// instance on arrival, since there's no shared IndexedStack shell), so
+  /// counts get a real re-check on every tab visit, not solely whenever
+  /// the realtime channel happens to deliver an insert event. Safe to
+  /// call before initialize() has finished (or if it never runs, e.g.
+  /// signed-out) -- _refreshCounts's own _initialized guard makes this a
+  /// harmless no-op in that case, and initialize()'s own later call will
+  /// pick it up once ready.
+  static Future<void> refreshCounts() => _refreshCounts();
+
   static Future<void> _refreshCounts() async {
     if (!_initialized) return;
     if (!(await badgesEnabled())) {
