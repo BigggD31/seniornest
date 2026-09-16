@@ -360,10 +360,32 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     _loadRemovedMemberIds();
     _subscribeToFeedRealtime();
     _checkPendingSuccessionForOwner();
-    // Sep 16 2026: "Show What's New" -- arriving on Home clears its badge
-    // immediately, matching D Von's call that no per-item read tracking
-    // is needed on this app.
-    ActivityBadgeService.markHomeSeen();
+    // Sep 16 2026: "Show What's New" -- previously cleared its badge
+    // immediately on arrival, which meant landing directly on Home (e.g.
+    // a fresh sign-in) never showed the count at all -- it was zeroed
+    // before the first frame ever painted. D Von confirmed this live.
+    // Now: show whatever count is already there, then clear it after a
+    // few seconds so it's been visible, not to require leaving and
+    // re-entering the tab to reset it. _onHomeCountChanged re-arms the
+    // same delay any time new content arrives while already sitting on
+    // Home, so a message received mid-session behaves the same way.
+    _scheduleHomeSeenClear();
+    ActivityBadgeService.homeCount.addListener(_onHomeCountChanged);
+  }
+
+  Timer? _homeSeenDelayTimer;
+
+  void _scheduleHomeSeenClear() {
+    _homeSeenDelayTimer?.cancel();
+    _homeSeenDelayTimer = Timer(const Duration(seconds: 3), () {
+      ActivityBadgeService.markHomeSeen();
+    });
+  }
+
+  void _onHomeCountChanged() {
+    if (ActivityBadgeService.homeCount.value > 0) {
+      _scheduleHomeSeenClear();
+    }
   }
 
   // Aug 28 2026: D Von's direct ask -- the Nest Ownership section in
@@ -2025,6 +2047,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
   @override
   void dispose() {
+    _homeSeenDelayTimer?.cancel();
+    ActivityBadgeService.homeCount.removeListener(_onHomeCountChanged);
     _realtimeRefreshDebounce?.cancel();
     _feedChannel?.unsubscribe();
     _listEntranceController.dispose();

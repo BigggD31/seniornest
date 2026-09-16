@@ -237,9 +237,28 @@ class _LegacyScreenState extends State<LegacyScreen>
     _itemAnimations = [];
     _loadData();
     _loadRemovedMemberIds();
-    // Sep 16 2026: "Show What's New" -- arriving on Legacy clears its
-    // badge immediately, mirroring family_feed_screen.dart's Home badge.
-    ActivityBadgeService.markLegacySeen();
+    // Sep 16 2026: "Show What's New" -- same fix as Home's badge (see
+    // family_feed_screen.dart's matching comment): show the count for a
+    // few seconds on arrival instead of clearing it before it's ever
+    // seen, and re-arm the same delay if new content arrives while
+    // already on this tab.
+    _scheduleLegacySeenClear();
+    ActivityBadgeService.legacyCount.addListener(_onLegacyCountChanged);
+  }
+
+  Timer? _legacySeenDelayTimer;
+
+  void _scheduleLegacySeenClear() {
+    _legacySeenDelayTimer?.cancel();
+    _legacySeenDelayTimer = Timer(const Duration(seconds: 3), () {
+      ActivityBadgeService.markLegacySeen();
+    });
+  }
+
+  void _onLegacyCountChanged() {
+    if (ActivityBadgeService.legacyCount.value > 0) {
+      _scheduleLegacySeenClear();
+    }
   }
 
   // Aug 21 2026: added for the delete-post feature, mirroring Home's
@@ -622,6 +641,8 @@ class _LegacyScreenState extends State<LegacyScreen>
 
   @override
   void dispose() {
+    _legacySeenDelayTimer?.cancel();
+    ActivityBadgeService.legacyCount.removeListener(_onLegacyCountChanged);
     _entranceController.dispose();
     super.dispose();
   }

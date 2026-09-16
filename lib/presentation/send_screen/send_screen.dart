@@ -245,7 +245,16 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       _isNestOwner = !joinedViaInvite;
       _displayName = (prefs.getString('preferred_name') ?? '').isNotEmpty
           ? prefs.getString('preferred_name')!
-          : (prefs.getString('display_name') ?? 'You');
+          // Sep 16 2026: was defaulting to the literal string 'You' here
+          // -- meant for a totally different, legitimate context ("You"
+          // labeling the current viewer's own row/message elsewhere in
+          // the app), but this same fallback also fed the push
+          // notification title text below, so a recipient could see
+          // "New message from You" -- confirmed live. Empty string is
+          // correct here: the loading-state check just above (line
+          // ~1953, "_displayName.isEmpty && _profileData == null") was
+          // already written expecting that, not 'You'.
+          : (prefs.getString('display_name') ?? '');
       _isDarkMode = prefs.getBool('dark_mode') ?? false;
       _hasSentMessages = prefs.getBool('has_sent_messages') ?? false;
       appHasSentMessagesNotifier.value = _hasSentMessages;
@@ -258,7 +267,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     appIsSeniorNotifier.value = (prefs.getString('user_role') ?? 'senior') == 'senior';
     appDisplayNameNotifier.value = (prefs.getString('preferred_name') ?? '').isNotEmpty
         ? prefs.getString('preferred_name')!
-        : (prefs.getString('display_name') ?? 'You');
+        : (prefs.getString('display_name') ?? '');
     _entranceController.forward();
   }
 
@@ -3816,10 +3825,25 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
               .where((id) => id != userId)
               .toList();
         }
+        // Sep 16 2026: _displayName can legitimately still be empty here
+        // (see the loading-state comment near the avatar above) -- for
+        // the push title specifically, that's worth one fresh prefs
+        // read rather than risking blank/wrong text in front of the
+        // recipient, since this is the one moment it actually matters.
+        // 'Someone' (never 'You') is the last-resort floor if even that
+        // comes back empty.
+        var pushSenderName = _displayName;
+        if (pushSenderName.trim().isEmpty) {
+          final freshPrefs = await SharedPreferences.getInstance();
+          pushSenderName = (freshPrefs.getString('preferred_name') ?? '').isNotEmpty
+              ? freshPrefs.getString('preferred_name')!
+              : (freshPrefs.getString('display_name') ?? '');
+        }
+        if (pushSenderName.trim().isEmpty) pushSenderName = 'Someone';
         final preview = capturedPreview;
         PushService.notify(
           userIds: pushRecipientIds,
-          title: 'New message from $_displayName',
+          title: 'New message from $pushSenderName',
           body: preview.isNotEmpty
               ? (preview.length > 80 ? '${preview.substring(0, 80)}...' : preview)
               : (effectiveType == 'photo'
@@ -3835,7 +3859,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         if (_taggedRecipients.isNotEmpty) {
           PushService.notify(
             userIds: _taggedRecipients,
-            title: '$_displayName tagged you',
+            title: '$pushSenderName tagged you',
             body: preview.isNotEmpty
                 ? (preview.length > 80 ? '${preview.substring(0, 80)}...' : preview)
                 : 'Tagged you in a post',
