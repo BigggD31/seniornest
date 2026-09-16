@@ -731,8 +731,25 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             // silently discarding whatever real name (e.g. "Grandmas
             // Nest") the person actually typed during onboarding.
             // Confirmed via D Von's real Aug 26 test.
-            final nestName = (prefs.getString('onboarding_draft_nest_name') ?? '').isNotEmpty
-                ? prefs.getString('onboarding_draft_nest_name')!
+            // Sep 16 2026: audit finding -- this read the one shared,
+            // unscoped 'onboarding_draft_nest_name' key with no owner-id
+            // check at all, same leak class just fixed in both
+            // senior_onboarding_screen.dart and family_onboarding_screen.dart
+            // (that shared key could carry a leftover draft from a
+            // completely different account's earlier attempt straight into
+            // this brand-new nest's real, permanent name). This screen is
+            // reachable from either role's flow, so it picks the matching
+            // role-scoped key using 'role' above, gated the same
+            // owner-id way as the other two files.
+            final nestDraftOwnerId = prefs.getString('onboarding_draft_owner_id_$role') ?? '';
+            final nestDraftBelongsToCurrentUser =
+                nestDraftOwnerId.isNotEmpty && nestDraftOwnerId == effectiveUserId;
+            final roleScopedNestNameKey = 'onboarding_draft_nest_name_$role';
+            final nestName = (nestDraftBelongsToCurrentUser
+                    ? (prefs.getString(roleScopedNestNameKey) ?? '')
+                    : '')
+                .isNotEmpty
+                ? prefs.getString(roleScopedNestNameKey)!
                 : (prefs.getString('nest_name') ?? 'My Family');
             final cachedCode = prefs.getString('invite_code') ?? '';
             final reusableCachedCode =

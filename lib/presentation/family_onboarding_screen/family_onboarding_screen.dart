@@ -324,7 +324,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     await prefs.setBool('notify_messages', _notifyOnMessages);
     await prefs.setBool('onboarding_complete', true);
     await prefs.setBool('first_load', true);
-    await prefs.setString('onboarding_draft_nest_name', _nestNameController.text.trim());
+    await prefs.setString('onboarding_draft_nest_name_family', _nestNameController.text.trim());
     await prefs.setBool('has_onboarded', true);
     if (_birthday != null) {
       await prefs.setString('birthday', _birthday!.toIso8601String());
@@ -747,7 +747,18 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
               // save_messages_prompt_screen.dart, rather than relying on
               // the _savePreferences() cached code, which was never
               // actually wired to this insert in the first place.
-              final nestName = prefs.getString('onboarding_draft_nest_name') ?? 'Our Nest';
+              // Sep 16 2026: audit finding -- this line previously read the
+              // one shared, unscoped 'onboarding_draft_nest_name' key with
+              // NO owner-id check at all, unlike the name fields just above
+              // (draftBelongsToCurrentUser). That meant a leftover draft
+              // from a completely different account's earlier onboarding
+              // attempt on this device -- senior or family -- could become
+              // the actual, permanent name of this brand-new nest in the
+              // database. Now role-scoped to this file's own key and
+              // gated the same way as everything else here.
+              final nestName = draftBelongsToCurrentUser
+                  ? (prefs.getString('onboarding_draft_nest_name_family') ?? 'Our Nest')
+                  : 'Our Nest';
               String? nestId;
               for (int attempt = 0; attempt < 5 && nestId == null; attempt++) {
                 final digits = (100000 + Random().nextInt(900000)).toString();

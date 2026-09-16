@@ -138,7 +138,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
     if (!draftBelongsToCurrentUser) {
       await prefs.remove('onboarding_draft_display_name_senior');
       await prefs.remove('onboarding_draft_preferred_name_senior');
-      await prefs.remove('onboarding_draft_nest_name');
+      await prefs.remove('onboarding_draft_nest_name_senior');
       await prefs.remove('onboarding_draft_owner_id_senior');
     }
     final name = draftBelongsToCurrentUser
@@ -148,7 +148,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         ? (prefs.getString('onboarding_draft_preferred_name_senior') ?? '')
         : '';
     final savedNestName = draftBelongsToCurrentUser
-        ? (prefs.getString('onboarding_draft_nest_name') ?? '')
+        ? (prefs.getString('onboarding_draft_nest_name_senior') ?? '')
         : '';
     final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
     final profileJson = prefs.getString(kProfilePhotoKey);
@@ -211,7 +211,15 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('onboarding_draft_display_name_senior', _nameController.text.trim());
       await prefs.setString('onboarding_draft_preferred_name_senior', _preferredNameController.text.trim());
-      await prefs.setString('onboarding_draft_nest_name', _nestNameController.text.trim());
+      await prefs.setString('onboarding_draft_nest_name_senior', _nestNameController.text.trim());
+      // Sep 16 2026: audit finding -- this nest-name draft was still the
+      // one shared, unscoped key ('onboarding_draft_nest_name') between
+      // this file and family_onboarding_screen.dart, missed when the
+      // Aug 29/Sep 11 fixes above split display_name/preferred_name into
+      // role-scoped, owner-id-tagged keys. Same leak class, just for a
+      // field that (on the family side) feeds directly into a real
+      // nest's name in the database, not just a display string -- see
+      // that file's matching fix for the full story.
       // Tag this draft with whoever is actually signed in right now, so
       // _loadSavedName can tell "my own in-progress draft, safe to
       // restore" apart from "a leftover draft from a previous account on
