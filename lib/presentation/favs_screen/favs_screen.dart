@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
+import '../../services/activity_badge_service.dart';
 import '../../widgets/linkified_text.dart';
 import '../../widgets/collapsible_date_group_header.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
@@ -249,6 +250,8 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
         ),
       ),
       bottomNavigationBar: AppNavigation(
+        homeBadgeCount: ActivityBadgeService.homeCount,
+        legacyBadgeCount: ActivityBadgeService.legacyCount,
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
       ),

@@ -7,6 +7,7 @@ import '../../routes/app_routes.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart' show kProfilePhotoKey, kProfilePhotoOwnerKey;
 import '../../services/auth_service.dart';
 import '../../services/push_service.dart';
+import '../../services/activity_badge_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'dart:math';
@@ -479,6 +480,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
       // in main.dart. Deliberately not awaited -- permission prompts
       // and token registration must never hold up onboarding completion.
       PushService.registerDeviceToken();
+      ActivityBadgeService.initialize();
 
       // Deferred VIP redemption -- the code was only validated (not
       // consumed) back at splash/role-choice, before this account existed.

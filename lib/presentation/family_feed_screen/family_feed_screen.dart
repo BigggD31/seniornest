@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
+import '../../services/activity_badge_service.dart';
 import '../../widgets/keyboard_done_bar.dart';
 import '../../widgets/collapsible_date_group_header.dart';
 import '../../routes/app_routes.dart';
@@ -359,6 +360,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     _loadRemovedMemberIds();
     _subscribeToFeedRealtime();
     _checkPendingSuccessionForOwner();
+    // Sep 16 2026: "Show What's New" -- arriving on Home clears its badge
+    // immediately, matching D Von's call that no per-item read tracking
+    // is needed on this app.
+    ActivityBadgeService.markHomeSeen();
   }
 
   // Aug 28 2026: D Von's direct ask -- the Nest Ownership section in
@@ -2067,6 +2072,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             )
           : null,
       bottomNavigationBar: AppNavigation(
+        homeBadgeCount: ActivityBadgeService.homeCount,
+        legacyBadgeCount: ActivityBadgeService.legacyCount,
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
       ),

@@ -16,6 +16,7 @@ import './presentation/setup_screen/setup_screen.dart';
 import './services/auth_service.dart';
 import './services/supabase_service.dart';
 import './services/push_service.dart';
+import './services/activity_badge_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import './widgets/custom_error_widget.dart';
@@ -469,6 +470,7 @@ class _MyAppState extends State<MyApp> {
       // ever runs once, at cold start.
       if (isSignedIn) {
         PushService.registerDeviceToken();
+        ActivityBadgeService.initialize();
       }
     } catch (_) {
       _initialRoute = AppRoutes.splashScreen;

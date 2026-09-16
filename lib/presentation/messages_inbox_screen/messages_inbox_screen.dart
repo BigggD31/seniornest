@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/custom_image_widget.dart';
 import '../../widgets/linkified_text.dart';
 import '../../widgets/app_navigation.dart';
+import '../../services/activity_badge_service.dart';
 import '../message_thread_screen/message_thread_screen.dart';
 import '../../routes/app_routes.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
@@ -179,6 +180,8 @@ class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
                   itemBuilder: (context, index) => _buildThreadRow(_threads[index]),
                 ),
       bottomNavigationBar: AppNavigation(
+        homeBadgeCount: ActivityBadgeService.homeCount,
+        legacyBadgeCount: ActivityBadgeService.legacyCount,
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
       ),

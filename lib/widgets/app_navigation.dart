@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -6,10 +7,24 @@ class AppNavigation extends StatefulWidget {
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.homeBadgeCount,
+    this.legacyBadgeCount,
   });
 
   final int currentIndex;
   final ValueChanged<int> onTap;
+
+  // Sep 16 2026: "Show What's New" feature. Every screen's nav bar passes
+  // ActivityBadgeService.homeCount/legacyCount -- badges need to be
+  // visible from anywhere in the app, not just while sitting on Home or
+  // Legacy (those two screens clear their own count to 0 on arrival, so
+  // passing it there too is harmless). Optional/nullable only so this
+  // doesn't become a required, silently-breaking param if some future
+  // call site is added without them. ValueListenable rather than a plain
+  // int so the badge updates in place without AppNavigation itself
+  // needing to rebuild from a parent setState on every realtime event.
+  final ValueListenable<int>? homeBadgeCount;
+  final ValueListenable<int>? legacyBadgeCount;
 
   @override
   State<AppNavigation> createState() => _AppNavigationState();
@@ -92,10 +107,17 @@ class _AppNavigationState extends State<AppNavigation>
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: List.generate(_items.length, (index) {
                 final isActive = index == widget.currentIndex;
+                // index 0 = Home, index 2 = Legacy -- see _NavItem list below.
+                final badgeCount = index == 0
+                    ? widget.homeBadgeCount
+                    : index == 2
+                        ? widget.legacyBadgeCount
+                        : null;
                 return _NavItemWidget(
                   item: _items[index],
                   isActive: isActive,
                   onTap: () => widget.onTap(index),
+                  badgeCount: badgeCount,
                 );
               }),
             ),
@@ -111,11 +133,13 @@ class _NavItemWidget extends StatefulWidget {
     required this.item,
     required this.isActive,
     required this.onTap,
+    this.badgeCount,
   });
 
   final _NavItem item;
   final bool isActive;
   final VoidCallback onTap;
+  final ValueListenable<int>? badgeCount;
 
   @override
   State<_NavItemWidget> createState() => _NavItemWidgetState();
@@ -165,9 +189,13 @@ class _NavItemWidgetState extends State<_NavItemWidget>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final activeColor = const Color(0xFF5DA399);
-    final inactiveColor = theme.brightness == Brightness.dark
-        ? const Color(0xFFE0E0E0)
-        : theme.colorScheme.onSurfaceVariant;
+    final isDark = theme.brightness == Brightness.dark;
+    final inactiveColor =
+        isDark ? const Color(0xFFE0E0E0) : theme.colorScheme.onSurfaceVariant;
+    // Matches _AppNavigationState's own bgColor -- the badge's border
+    // needs to match the nav bar background so it reads as a notch cut
+    // out of the icon rather than a solid ring on top of it.
+    final bgColor = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFDFDFD);
 
     return GestureDetector(
       onTap: widget.onTap,
@@ -183,14 +211,57 @@ class _NavItemWidgetState extends State<_NavItemWidget>
                 SizedBox(
                   width: 28,
                   height: 28,
-                  child: Center(
-                    child: Icon(
-                      widget.isActive
-                          ? widget.item.activeIcon
-                          : widget.item.icon,
-                      size: 24,
-                      color: widget.isActive ? activeColor : inactiveColor,
-                    ),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Center(
+                        child: Icon(
+                          widget.isActive
+                              ? widget.item.activeIcon
+                              : widget.item.icon,
+                          size: 24,
+                          color: widget.isActive ? activeColor : inactiveColor,
+                        ),
+                      ),
+                      if (widget.badgeCount != null)
+                        Positioned(
+                          top: -4,
+                          right: -6,
+                          child: ValueListenableBuilder<int>(
+                            valueListenable: widget.badgeCount!,
+                            builder: (context, count, _) {
+                              if (count <= 0) return const SizedBox.shrink();
+                              final label = count > 99 ? '99+' : '$count';
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 1.5,
+                                ),
+                                constraints:
+                                    const BoxConstraints(minWidth: 17),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFC0693E),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: bgColor,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Text(
+                                  label,
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.nunitoSans(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 9),

@@ -11,6 +11,7 @@ import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../services/share_service.dart';
 import '../../widgets/app_navigation.dart';
+import '../../services/activity_badge_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -46,6 +47,8 @@ class _SetupScreenState extends State<SetupScreen>
   bool _dailyCheckIn = true;
   bool _notifyMessages = true;
   bool _notifyCheckIn = true;
+  // Sep 16 2026: "Show What's New" badge toggle -- see activity_badge_service.dart.
+  bool _showActivityBadges = true;
   String _textSize = 'Large';
   bool _isGuest = appIsGuestNotifier.value;
   String _inviteCode = '';
@@ -172,6 +175,7 @@ class _SetupScreenState extends State<SetupScreen>
       _dailyCheckIn = prefs.getBool('daily_check_in') ?? true;
       _notifyMessages = prefs.getBool('notify_messages') ?? true;
       _notifyCheckIn = prefs.getBool('notify_check_in') ?? true;
+      _showActivityBadges = prefs.getBool('show_activity_badges') ?? true;
       _textSize = prefs.getString('text_size') ?? defaultSize;
       _isGuest = prefs.getBool('is_guest') ?? false;
       _isLoading = false;
@@ -1200,6 +1204,8 @@ class _SetupScreenState extends State<SetupScreen>
         ],
       ),
       bottomNavigationBar: AppNavigation(
+        homeBadgeCount: ActivityBadgeService.homeCount,
+        legacyBadgeCount: ActivityBadgeService.legacyCount,
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
       ),
@@ -1995,6 +2001,22 @@ class _SetupScreenState extends State<SetupScreen>
               label: '"I\'m Good Today" Check-ins',
               value: _notifyCheckIn,
               onChanged: (v) => _togglePref('notify_check_in', v),
+            ),
+            _buildToggleRow(
+              icon: Icons.notifications_active_rounded,
+              label: "Show What's New",
+              value: _showActivityBadges,
+              onChanged: (v) async {
+                setState(() => _showActivityBadges = v);
+                // Not routed through _togglePref -- that helper's
+                // profileColumn mapping is specific to notify_messages/
+                // notify_check_in/meds_reminders/daily_check_in.
+                // ActivityBadgeService.setBadgesEnabled already handles
+                // the same local-then-server sync pattern itself, plus
+                // zeroing the live counts the instant this is switched
+                // off (or repopulating them if switched back on).
+                await ActivityBadgeService.setBadgesEnabled(v);
+              },
             ),
           ],
         ),

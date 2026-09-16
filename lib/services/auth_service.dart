@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_state.dart';
 import 'push_service.dart';
+import 'activity_badge_service.dart';
 
 class AuthService {
   static SupabaseClient get _client => Supabase.instance.client;
@@ -186,6 +187,12 @@ class AuthService {
       // token value) -- which usually happens fast, but there's no
       // reason to leave that gap at all when this is one extra await.
       await PushService.unregisterDeviceToken();
+
+      // Sep 16 2026: same reasoning -- a signed-out session shouldn't
+      // leave a live realtime channel open, or hand the next person who
+      // signs in on this device a stale prior-user's badge counts. Local
+      // reset only (no network call), so this is safe to run unconditionally.
+      ActivityBadgeService.reset();
 
       // Sign out from Google if signed in natively
       if (!kIsWeb) {

@@ -14,6 +14,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
+import '../../services/activity_badge_service.dart';
 import '../../widgets/linkified_text.dart';
 import '../../widgets/share_preview_widget.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
@@ -236,6 +237,9 @@ class _LegacyScreenState extends State<LegacyScreen>
     _itemAnimations = [];
     _loadData();
     _loadRemovedMemberIds();
+    // Sep 16 2026: "Show What's New" -- arriving on Legacy clears its
+    // badge immediately, mirroring family_feed_screen.dart's Home badge.
+    ActivityBadgeService.markLegacySeen();
   }
 
   // Aug 21 2026: added for the delete-post feature, mirroring Home's
@@ -943,6 +947,8 @@ class _LegacyScreenState extends State<LegacyScreen>
         ],
         ),
       bottomNavigationBar: AppNavigation(
+        homeBadgeCount: ActivityBadgeService.homeCount,
+        legacyBadgeCount: ActivityBadgeService.legacyCount,
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
       ),

@@ -17,6 +17,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
+import '../../services/activity_badge_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/push_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
@@ -1730,6 +1731,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     return Scaffold(
       backgroundColor: _bg,
       bottomNavigationBar: AppNavigation(
+        homeBadgeCount: ActivityBadgeService.homeCount,
+        legacyBadgeCount: ActivityBadgeService.legacyCount,
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
       ),
