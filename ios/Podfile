@@ -39,5 +39,18 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    # Sep 15 2026: Xcode 27's build system now hard-fails (not just warns)
+    # on any deployment target below 15.0. Several third-party pods still
+    # ship with old per-target minimums baked in from whenever they were
+    # last published (9.0, 10.0, 12.0, 13.0 all showed up in one build) --
+    # flutter_additional_ios_build_settings alone doesn't touch this.
+    # Force every pod target up to the app's own minimum so none of them
+    # can sit below what Xcode 27 will actually accept.
+    target.build_configurations.each do |config|
+      deployment_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
+      if deployment_target && Gem::Version.new(deployment_target) < Gem::Version.new('15.0')
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+      end
+    end
   end
 end
