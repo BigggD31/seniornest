@@ -3786,6 +3786,20 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       // used above), so that case needs every other nest member looked
       // up fresh; a non-empty list already IS the exact recipient set.
       // Fire-and-forget -- must never block the send completing.
+      //
+      // Sep 16 2026: capture the message text HERE, synchronously, before
+      // anything async runs -- _messageController.clear() (below, right
+      // after this closure is kicked off) was racing the "Everyone"
+      // recipient lookup's await. Reading _messageController.text.trim()
+      // from inside the closure meant that whenever the lookup actually
+      // had to await (any "Everyone" send), the text box was already
+      // cleared by the time the code got around to reading it, so it
+      // always fell through to the generic "Sent a video" placeholder --
+      // confirmed by D Von receiving that exact text for a message that
+      // had no photo/video at all. A direct, specific recipient send
+      // never hit the await, so this bug depended entirely on which send
+      // path was taken -- not the actual message content.
+      final capturedPreview = (overrideContent ?? _messageController.text.trim());
       () async {
         List<String> pushRecipientIds = _selectedRecipients;
         if (pushRecipientIds.isEmpty && userId != null && nestId.isNotEmpty) {
@@ -3799,7 +3813,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
               .where((id) => id != userId)
               .toList();
         }
-        final preview = (overrideContent ?? _messageController.text.trim());
+        final preview = capturedPreview;
         PushService.notify(
           userIds: pushRecipientIds,
           title: 'New message from $_displayName',
