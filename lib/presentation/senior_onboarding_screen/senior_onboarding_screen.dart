@@ -258,6 +258,21 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         } else {
           if (mounted) setState(() => _inviteCode = existingCode);
         }
+        // Sep 16 2026: fetch and show the REAL nest name before the step 3
+        // summary screen ever renders -- previously this lookup only ran
+        // inside _finishOnboarding(), triggered by the final button ON
+        // step 3, which meant step 3 had already rendered and shown its
+        // "$name's Nest" fallback by the time the real name came back
+        // (confirmed live: a senior named Nana joining Popy's real nest
+        // via invite code saw "Nana's Nest" on this screen). Matches the
+        // pattern family_onboarding_screen.dart already uses correctly
+        // (_joinNestEarlyIfNeeded, called at its equivalent step
+        // transition). Read-only here -- the actual nest_members join
+        // still happens in _finishOnboarding() as before; this call can
+        // safely run again there without side effects.
+        if (_joinedViaInvite && _inviteCode.isNotEmpty) {
+          await _fetchAndDisplayRealNestNameForInvite(_inviteCode);
+        }
       }
       setState(() => _currentStep++);
       _entranceController
@@ -294,6 +309,31 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         margin: const EdgeInsets.all(16),
       ),
     );
+  }
+
+  // Read-only counterpart to the join logic inside _finishOnboarding --
+  // looks up the real nest name by invite code and shows it immediately,
+  // without touching nest_members. Safe to call before the account/join
+  // itself is finalized, since the invite code alone identifies the
+  // nest regardless of who's asking.
+  Future<void> _fetchAndDisplayRealNestNameForInvite(String inviteCode) async {
+    try {
+      final lookupResult = await Supabase.instance.client.rpc(
+        'lookup_nest_by_invite_code',
+        params: {'p_code': inviteCode.toUpperCase()},
+      );
+      final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
+          ? lookupResult.first as Map<String, dynamic>
+          : null;
+      final realNestName = nestResponse?['name'] as String?;
+      if (realNestName != null && realNestName.isNotEmpty && mounted) {
+        setState(() => _nestNameController.text = realNestName);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('nest_name', realNestName);
+      }
+    } catch (e) {
+      print('NEST_DEBUG: early nest name display lookup failed: $e');
+    }
   }
 
   Future<void> _finishOnboarding() async {
