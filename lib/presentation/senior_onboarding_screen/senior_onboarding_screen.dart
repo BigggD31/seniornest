@@ -502,11 +502,60 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
 
               if (joinNest != null) {
                 nestId = joinNest['id'] as String;
+
+                // Sep 16 2026: audit finding -- family_onboarding_screen.dart
+                // has always checked this before letting someone into a
+                // nest via invite code; this senior path never did, meaning
+                // a senior previously banned from a nest could still get
+                // back in with the old code while a banned family member
+                // correctly could not. Same real check, same behavior:
+                // block, clear the cached invite state, and let the outer
+                // catch below surface a real error instead of silently
+                // finishing onboarding into a nest they're banned from.
+                bool isBanned = false;
+                try {
+                  final banCheck = await supabase.rpc(
+                    'is_user_banned_from_nest',
+                    params: {'p_nest_id': nestId, 'p_user_id': userId},
+                  );
+                  isBanned = banCheck == true;
+                } catch (e) {
+                  print('NEST_DEBUG: senior ban check error: $e');
+                }
+                if (isBanned) {
+                  await prefs.remove('nest_id');
+                  await prefs.remove('invite_code');
+                  await prefs.setBool('joined_via_invite', false);
+                  throw Exception(
+                      'This account can\'t rejoin that nest.');
+                }
+
                 await prefs.setString('nest_id', nestId);
-                await supabase.from('nest_members').upsert({
-                  'nest_id': nestId,
-                  'user_id': userId,
-                });
+                // Sep 16 2026: audit finding -- also matching family's
+                // retry-on-transient-failure for the actual join insert
+                // (a network blip previously meant zero attempts here vs.
+                // family's 3). onConflict targets the real unique
+                // constraint, same reasoning as family's version.
+                Object? lastJoinError;
+                for (var attempt = 1; attempt <= 3; attempt++) {
+                  try {
+                    await supabase.from('nest_members').upsert(
+                      {
+                        'nest_id': nestId,
+                        'user_id': userId,
+                      },
+                      onConflict: 'nest_id,user_id',
+                    );
+                    lastJoinError = null;
+                    break;
+                  } catch (e) {
+                    lastJoinError = e;
+                    if (attempt < 3) {
+                      await Future.delayed(Duration(milliseconds: 400 * attempt));
+                    }
+                  }
+                }
+                if (lastJoinError != null) throw lastJoinError;
                 // The RPC already returns the real name alongside the id --
                 // this path was only ever using the id, never the name,
                 // meaning a senior joining an existing nest via invite
