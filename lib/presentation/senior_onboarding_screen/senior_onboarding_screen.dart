@@ -829,37 +829,30 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-        // Aug 27 2026: D Von's direct ask -- match the icon/title/subtitle
-        // treatment already used on the family onboarding flow's first
-        // screen (gold-teal gradient circle, bold two-line title, warm
-        // subtitle), instead of the plain logo + generic "Welcome!" that
-        // was here before. Uses the same _joinedViaInvite branching family
-        // already has, with elderly_rounded (the same icon role_choice_
-        // screen.dart already uses for "I'm the Senior") instead of
-        // family's family_restroom_rounded.
-        Center(
-          child: Container(
-            width: 90,
-            height: 90,
-            decoration: BoxDecoration(
-              gradient: const RadialGradient(
-                colors: [Color(0xFFD4AA00), Color(0xFF5DA399)],
-                center: Alignment.topLeft,
-                radius: 1.5,
+        // Sep 17 2026: D Von's direct ask -- replace the icon-in-circle
+        // here with a real landscape photo of a senior couple, matching
+        // the warm, human tone he wants onboarding to open with instead
+        // of an abstract icon. Same rounded-corner + soft-shadow
+        // treatment as other photo surfaces in the app.
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Container(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFD4AA00).withAlpha(50),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFD4AA00).withAlpha(50),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.elderly_rounded,
-              color: Colors.white,
-              size: 44,
+              child: Image.asset(
+                'assets/images/onboarding_photo_kitchen.jpg',
+                fit: BoxFit.cover,
+                width: double.infinity,
+              ),
             ),
           ),
         ),
@@ -1171,17 +1164,18 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            color: const Color(0xFF5DA399).withAlpha(26),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Icon(
-            Icons.notifications_active_rounded,
-            color: Color(0xFF5DA399),
-            size: 32,
+        // Sep 17 2026: D Von's direct ask -- same photo treatment as
+        // step 0, a landscape photo of a senior couple on their porch,
+        // in place of the small icon-in-square that was here before.
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Image.asset(
+              'assets/images/onboarding_photo_porch.jpg',
+              fit: BoxFit.cover,
+              width: double.infinity,
+            ),
           ),
         ),
         const SizedBox(height: 20),
