@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 
 /// Global notifier — setup_screen writes here; MyApp rebuilds immediately.
@@ -327,5 +328,47 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
 
   appHasSentMessagesNotifier.value =
       prefs.getBool('has_sent_messages') ?? false;
+
+  // Sep 17 2026: root-level fix. Every screen ultimately seeds its own
+  // display name from appDisplayNameNotifier's value here, which until
+  // now was set purely from local cache above (cachedPreferredName /
+  // 'display_name'), never checked against the real database record
+  // anywhere in the shared path. Confirmed live: a real, long-standing
+  // senior account ("Popy," database totally correct and untouched)
+  // displayed as a completely different, previously-tested account's
+  // name ("Uncle Bob") on a device that still had that other account's
+  // name cached locally. setup_screen.dart got a direct fix for this
+  // first; this is the actual shared root, covering every other screen
+  // (Home, Safety, Legacy, Favs, Send) that reads from the same cache
+  // this function fills, without needing five more individual patches.
+  //
+  // Only acts when a real profile row genuinely comes back -- a null
+  // result (no row at all) means this account is still mid-onboarding,
+  // not yet fully created, and touching local cache in that state is
+  // exactly the "wiped a fresh signup's own just-entered values" bug
+  // documented on _accountScopedPrefsKeys in auth_service.dart. Fails
+  // open on any error, same reasoning -- never block app startup on it.
+  try {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser != null) {
+      final realProfile = await Supabase.instance.client
+          .from('user_profiles')
+          .select('display_name, preferred_name')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+      if (realProfile != null) {
+        final realName = (realProfile['display_name'] as String? ?? '').trim();
+        final realPreferredName =
+            (realProfile['preferred_name'] as String? ?? '').trim();
+        final effectiveRealName =
+            realPreferredName.isNotEmpty ? realPreferredName : realName;
+        if (effectiveRealName.isNotEmpty) {
+          appDisplayNameNotifier.value = effectiveRealName;
+        }
+        await prefs.setString('display_name', realName);
+        await prefs.setString('preferred_name', realPreferredName);
+      }
+    }
+  } catch (_) {}
 }
 
