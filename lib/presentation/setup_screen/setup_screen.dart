@@ -2550,6 +2550,32 @@ class _SetupScreenState extends State<SetupScreen>
                     'user_id': memberId,
                     'removed_by': ownerUserId,
                   });
+                  // Sep 17 2026: D Von's direct finding -- a DB trigger
+                  // now rotates this nest's invite_code the moment that
+                  // row lands (closes the "banned person just signs in
+                  // with a new email" loophole he found live). But this
+                  // screen may still be holding the OLD code in
+                  // _inviteCode/prefs from before the removal -- refetch
+                  // it now so the owner immediately sees the real,
+                  // currently-valid code instead of one that's already
+                  // dead the moment they'd go to share it.
+                  try {
+                    final refreshedNest = await supabase
+                        .from('nests')
+                        .select('invite_code')
+                        .eq('id', resolvedNestId)
+                        .maybeSingle();
+                    final refreshedCode =
+                        refreshedNest?['invite_code'] as String?;
+                    if (refreshedCode != null && refreshedCode.isNotEmpty) {
+                      await prefs.setString('invite_code', refreshedCode);
+                      if (mounted) {
+                        setState(() => _inviteCode = refreshedCode);
+                      }
+                    }
+                  } catch (e) {
+                    debugPrint('REMOVE_MEMBER_INVITE_REFRESH_ERROR: $e');
+                  }
                 }
               } catch (e) {
                 debugPrint('REMOVE_MEMBER_BAN_RECORD_ERROR: $e');
