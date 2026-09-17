@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/app_state.dart';
+
 /// Sep 17 2026: D Von's request -- wraps the check-in/meds status cards
 /// (whichever ones the caller passes in as [child]) under a single
 /// collapsible "Daily Updates" header. Collapsible, not dismissible --
@@ -18,6 +20,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Manually reopening it the same day it was collapsed clears the saved
 /// state entirely, so it won't silently re-collapse on the next screen
 /// load that same day.
+///
+/// Sep 17 2026, caught same session: this originally seeded _isCollapsed
+/// via its own async SharedPreferences read in initState(), gated behind
+/// a "_loaded" flag that rendered nothing until it resolved -- the exact
+/// flash-of-wrong-state anti-pattern the Aug 31 whole-app audit (see
+/// app_state.dart) exists to prevent everywhere else on this screen. Now
+/// seeded synchronously from appDailyUpdatesCollapsedNotifier, resolved
+/// at cold start before any screen builds, same as every other field on
+/// Home -- no loading gate, no pop-in a beat after everything around it.
 class DailyUpdatesSectionWidget extends StatefulWidget {
   final bool isDarkMode;
   final Widget child;
@@ -36,38 +47,17 @@ class DailyUpdatesSectionWidget extends StatefulWidget {
 class _DailyUpdatesSectionWidgetState
     extends State<DailyUpdatesSectionWidget> {
   static const _prefsKey = 'daily_updates_collapsed_date';
-  bool _isCollapsed = false;
-  bool _loaded = false;
+  bool _isCollapsed = appDailyUpdatesCollapsedNotifier.value;
 
   String get _todayKey {
     final now = DateTime.now();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadState();
-  }
-
-  Future<void> _loadState() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedDate = prefs.getString(_prefsKey);
-      if (mounted) {
-        setState(() {
-          _isCollapsed = savedDate == _todayKey;
-          _loaded = true;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loaded = true);
-    }
-  }
-
   Future<void> _toggle() async {
     final newCollapsed = !_isCollapsed;
     setState(() => _isCollapsed = newCollapsed);
+    appDailyUpdatesCollapsedNotifier.value = newCollapsed;
     try {
       final prefs = await SharedPreferences.getInstance();
       if (newCollapsed) {
@@ -80,7 +70,6 @@ class _DailyUpdatesSectionWidgetState
 
   @override
   Widget build(BuildContext context) {
-    if (!_loaded) return const SizedBox.shrink();
     final textColor =
         widget.isDarkMode ? Colors.white70 : const Color(0xFF544C42);
     return Column(

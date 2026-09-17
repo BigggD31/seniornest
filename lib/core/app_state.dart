@@ -190,6 +190,18 @@ final ValueNotifier<bool> appShowMedsReminderNotifier = ValueNotifier<bool>(true
 /// flashed on every single first-ever load, not just returning users.
 final ValueNotifier<bool> appInviteCodeSharedNotifier = ValueNotifier<bool>(true);
 
+/// Whether the Daily Updates section (check-in/meds cards on Home) is
+/// collapsed today. Sep 17 2026: caught this same session, on the same
+/// project, right after the Aug 31 whole-app flash audit above -- the
+/// widget that wraps this was built with its own local async
+/// SharedPreferences read in initState() and a "_loaded" gate that
+/// rendered nothing until it resolved, the exact anti-pattern every
+/// notifier in this file exists to prevent. Brought into the same
+/// system so it's resolved before first paint like everything else,
+/// instead of popping in a beat after the rest of Home already has.
+final ValueNotifier<bool> appDailyUpdatesCollapsedNotifier =
+    ValueNotifier<bool>(false);
+
 /// Whether this account has sent its first real message yet (gates
 /// Messages' sample banner and placeholder card, same shape as
 /// appHasRealPostNotifier/appHasSentStoriesNotifier above -- Messages just
@@ -325,6 +337,10 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
 
   appInviteCodeSharedNotifier.value =
       prefs.getBool('invite_code_shared') ?? false;
+
+  // Same reasoning as the Aug 31 batch above, caught same session.
+  appDailyUpdatesCollapsedNotifier.value =
+      prefs.getString('daily_updates_collapsed_date') == todayDateString;
 
   appHasSentMessagesNotifier.value =
       prefs.getBool('has_sent_messages') ?? false;
