@@ -1092,6 +1092,15 @@ class _SetupScreenState extends State<SetupScreen>
   Future<void> _togglePref(String key, bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(key, value);
+    // Sep 17 2026: these two also gate real functional UI on Home (the
+    // "I'm Good" button, the meds prompt card) via shared notifiers --
+    // sync them the instant the toggle changes, not just whenever Home
+    // next happens to fetch fresh from the server.
+    if (key == 'meds_reminders') {
+      appMyMedsRemindersEnabledNotifier.value = value;
+    } else if (key == 'daily_check_in') {
+      appMyCheckinEnabledNotifier.value = value;
+    }
     setState(() {
       switch (key) {
         case 'meds_reminders':

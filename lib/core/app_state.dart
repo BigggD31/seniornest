@@ -202,6 +202,22 @@ final ValueNotifier<bool> appInviteCodeSharedNotifier = ValueNotifier<bool>(true
 final ValueNotifier<bool> appDailyUpdatesCollapsedNotifier =
     ValueNotifier<bool>(false);
 
+/// Sep 17 2026, same audit sweep: this senior's own real
+/// check-in/meds-reminder preferences (set via the Setup screen toggle)
+/// gate two pieces of real, functional UI on Home -- the floating "I'm
+/// Good" button (appMyCheckinEnabledNotifier) and the actionable
+/// "Daily Medications" prompt card (appMyMedsRemindersEnabledNotifier).
+/// Both fields on Home defaulted to true at declaration, corrected only
+/// after Home's own async Supabase fetch resolved -- so a senior who'd
+/// actually turned either off would still see it flash on, then
+/// disappear, every single load. Setup screen already caches both
+/// under 'meds_reminders'/'daily_check_in' the moment they're toggled
+/// (used to seed Setup's own fields instantly) -- Home just never read
+/// that same cache. Seeded from it here instead of a hardcoded true.
+final ValueNotifier<bool> appMyCheckinEnabledNotifier = ValueNotifier<bool>(true);
+final ValueNotifier<bool> appMyMedsRemindersEnabledNotifier =
+    ValueNotifier<bool>(true);
+
 /// Whether this account has sent its first real message yet (gates
 /// Messages' sample banner and placeholder card, same shape as
 /// appHasRealPostNotifier/appHasSentStoriesNotifier above -- Messages just
@@ -341,6 +357,10 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
   // Same reasoning as the Aug 31 batch above, caught same session.
   appDailyUpdatesCollapsedNotifier.value =
       prefs.getString('daily_updates_collapsed_date') == todayDateString;
+
+  appMyCheckinEnabledNotifier.value = prefs.getBool('daily_check_in') ?? true;
+  appMyMedsRemindersEnabledNotifier.value =
+      prefs.getBool('meds_reminders') ?? true;
 
   appHasSentMessagesNotifier.value =
       prefs.getBool('has_sent_messages') ?? false;

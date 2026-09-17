@@ -207,9 +207,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // "Daily Medications" prompt card below, same as it gates the smaller
   // status card in the per-senior loop. Defaults true so a brand-new
   // profile row (before this column existed) behaves exactly as before.
-  bool _myMedsRemindersEnabled = true;
+  bool _myMedsRemindersEnabled = appMyMedsRemindersEnabledNotifier.value;
   // Same idea, for the floating "I'm Good" check-in button.
-  bool _myCheckinEnabled = true;
+  bool _myCheckinEnabled = appMyCheckinEnabledNotifier.value;
   // Sep 2 2026: every senior in the nest, each with their own check-in/meds
   // status -- drives one small card pair per senior. The five fields above
   // stay as "the primary/first senior" for other screens and the shared
@@ -1394,6 +1394,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             mine['checkedIn'] as bool,
           );
           appIsGoodTodaySentNotifier.value = mine['checkedIn'] as bool;
+          // Sep 17 2026: same reasoning as good_today_ above -- these two
+          // gate real functional UI (the "I'm Good" button, the meds
+          // prompt card), so keep the cache Setup already writes fresh
+          // here too, and sync the shared notifiers immediately.
+          final medsRemindersEnabled =
+              mine['medsRemindersEnabled'] as bool? ?? true;
+          final checkinEnabled = mine['checkinEnabled'] as bool? ?? true;
+          await prefs.setBool('meds_reminders', medsRemindersEnabled);
+          await prefs.setBool('daily_check_in', checkinEnabled);
+          appMyMedsRemindersEnabledNotifier.value = medsRemindersEnabled;
+          appMyCheckinEnabledNotifier.value = checkinEnabled;
         }
         // Update the shared notifier so any other screen currently showing
         // this value picks it up immediately. Persistence to
