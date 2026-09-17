@@ -16,6 +16,7 @@ import './widgets/feed_top_bar_widget.dart';
 import './widgets/im_good_today_orb_widget.dart';
 import './widgets/daily_checkin_card_widget.dart';
 import './widgets/daily_meds_card_widget.dart';
+import './widgets/daily_updates_section_widget.dart';
 import './widgets/legacy_prompt_card_widget.dart';
 import './widgets/meds_reminder_card_widget.dart';
 import './widgets/message_card_widget.dart';
@@ -2196,8 +2197,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                           ],
                         )
                       : _seniorStatuses.isNotEmpty
-                      ? Column(
+                      ? DailyUpdatesSectionWidget(
                           key: const ValueKey('checkinPresent'),
+                          isDarkMode: _isDarkMode,
+                          child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Sep 2 2026: one card pair per senior in the
@@ -2234,6 +2237,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                             ],
                             const SizedBox(height: 10),
                           ],
+                          ),
                         )
                       : const SizedBox.shrink(key: ValueKey('checkinEmpty')),
                 ),
