@@ -199,24 +199,48 @@ class _SetupScreenState extends State<SetupScreen>
     // setState as it completes instead of all accumulating into local
     // variables for one big setState at the very end.
 
-    if (savedName.isEmpty) {
-      try {
-        final user = Supabase.instance.client.auth.currentUser;
-        final metaName =
-            user?.userMetadata?['display_name'] as String? ??
-            user?.userMetadata?['full_name'] as String? ??
-            user?.userMetadata?['name'] as String? ??
-            '';
-        if (metaName.isNotEmpty) {
-          savedName = metaName;
+    // Sep 17 2026: this used to only fire when local cache was EMPTY, and
+    // even then pulled from the wrong source -- the raw Google/Apple
+    // account name (user.userMetadata), never this app's own customized
+    // display_name in user_profiles. Those are genuinely different values
+    // (a real Google account named "Devon" can have customized their
+    // in-app name to "Popy") and this never actually verified local cache
+    // against the database at all, regardless of whether cache happened
+    // to have something in it. Confirmed live: on a device that had
+    // recently tested a different account, Setup kept showing that other
+    // account's cached name ("Uncle Bob") for a real, long-standing senior
+    // ("Popy") whose database record was completely correct the whole
+    // time -- this screen simply never checked it. Now always fetches the
+    // real user_profiles row and treats it as the source of truth,
+    // matching the pattern save_messages_prompt_screen.dart's sign-in flow
+    // already uses correctly for the exact same reason.
+    try {
+      final currentUser = Supabase.instance.client.auth.currentUser;
+      if (currentUser != null) {
+        final realProfile = await Supabase.instance.client
+            .from('user_profiles')
+            .select('display_name, preferred_name')
+            .eq('id', currentUser.id)
+            .maybeSingle();
+        final realName = (realProfile?['display_name'] as String? ?? '').trim();
+        final realPreferredName = (realProfile?['preferred_name'] as String? ?? '').trim();
+        if (realName.isNotEmpty && realName != savedName) {
+          savedName = realName;
           await prefs.setString('display_name', savedName);
           if (mounted) {
             setState(() => _displayName = savedName);
-            appDisplayNameNotifier.value = savedName;
+          }
+          appDisplayNameNotifier.value = savedName;
+        }
+        if (realPreferredName != savedPreferredName) {
+          savedPreferredName = realPreferredName;
+          await prefs.setString('preferred_name', savedPreferredName);
+          if (mounted) {
+            setState(() => _preferredName = savedPreferredName);
           }
         }
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
 
     // Family Members was previously always an empty list -- nothing ever
     // populated it from real data, so it silently showed "0 members" no
