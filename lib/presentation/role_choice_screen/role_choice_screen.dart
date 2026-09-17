@@ -504,6 +504,44 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
       final bool nestFound = result is List && result.isNotEmpty;
 
       if (nestFound) {
+        // Sep 17 2026: D Von's direct finding -- the ban check added
+        // earlier today only lived inside senior_onboarding_screen.dart's
+        // _finishOnboarding(), which correctly blocked a banned senior
+        // from rejoining (confirmed working), but only after they'd
+        // already gone through role choice, typed their name, and
+        // finished the whole flow -- surfacing as a raw
+        // "DEBUG: Exception:" string instead of the same clean message
+        // the sign-in-level ban check already shows. Checking here
+        // instead, the moment the invite code itself is confirmed valid
+        // and before any of that, using this sheet's own existing inline
+        // error pattern (same as the "couldn't find a nest" case just
+        // below) rather than a debug string. Only runs when a session
+        // already exists (Devon's real test case, and the common one --
+        // re-entering a code while still signed in); the check inside
+        // _finishOnboarding() stays in place as the guaranteed backstop
+        // for a truly fresh device where sign-in hasn't happened yet at
+        // this point in the flow.
+        final nestId = (result.first as Map<String, dynamic>)['id'] as String?;
+        final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+        if (nestId != null && currentUserId != null) {
+          try {
+            final isBanned = await supabase.rpc(
+              'is_user_banned_from_nest',
+              params: {'p_nest_id': nestId, 'p_user_id': currentUserId},
+            );
+            if (isBanned == true) {
+              setState(() {
+                _isLoading = false;
+                _errorText =
+                    "You've been removed from that nest. Please ask the nest owner for a new invite if you'd like to rejoin.";
+              });
+              return;
+            }
+          } catch (_) {
+            // Fail open here -- _finishOnboarding()'s check is the real
+            // backstop; this early check is purely a UX improvement.
+          }
+        }
         Navigator.pop(context);
         Navigator.pushNamed(
           context,
