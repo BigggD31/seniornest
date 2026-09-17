@@ -232,16 +232,37 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           // and lock the corresponding field out of the write-back below,
           // since it's already correct and does not need this sign-in to
           // touch it at all.
+          // Sep 17 2026: writeName/writePreferredName made unconditionally
+          // false once a real profile row exists, matching writeRole's
+          // reasoning exactly above. Confirmed via direct DB query that
+          // the previous "only skip if Supabase already has one" logic let
+          // a stale local 'preferred_name' cache value ("Uncle Bob," left
+          // over from testing a different account on this device) get
+          // pushed onto THREE separate real, established accounts (Popy,
+          // Devon, Penny) that had simply never set one before -- at three
+          // different sign-in times, not one accidental edit. "Supabase
+          // has nothing yet" is the normal, permanent state for an
+          // optional field nobody's touched -- it was never a safe signal
+          // that local cache is trustworthy enough to fill it. Only a
+          // genuinely brand-new profile (existingProfile == null, the
+          // other branch entirely) should ever push local onboarding
+          // values up for the first time.
           if (supabaseName.isNotEmpty) {
             name = supabaseName;
             await prefs.setString('display_name', name);
-            writeName = false;
           }
+          writeName = false;
           if (supabasePreferredName.isNotEmpty) {
             preferredName = supabasePreferredName;
             await prefs.setString('preferred_name', preferredName);
-            writePreferredName = false;
+          } else {
+            // Real, established account genuinely has no preferred name --
+            // reflect that in local cache too, instead of leaving a stale
+            // value sitting there for the next screen or sign-in to trust.
+            preferredName = '';
+            await prefs.setString('preferred_name', '');
           }
+          writePreferredName = false;
           if (supabaseRole.isNotEmpty) {
             // Aug 25 2026: role is now unconditional read-only sync from
             // the server whenever Supabase already has one -- no
