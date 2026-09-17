@@ -1049,29 +1049,28 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-        Center(
-          child: Container(
-            width: 90,
-            height: 90,
-            decoration: BoxDecoration(
-              gradient: const RadialGradient(
-                colors: [Color(0xFFD4AA00), Color(0xFF5DA399)],
-                center: Alignment.topLeft,
-                radius: 1.5,
+        // Sep 17 2026: D Von's direct ask -- same photo treatment as the
+        // senior onboarding flow's step 0, a real landscape photo in
+        // place of the icon-in-circle.
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Container(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFD4AA00).withAlpha(50),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFD4AA00).withAlpha(50),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.family_restroom_rounded,
-              color: Colors.white,
-              size: 44,
+              child: Image.asset(
+                'assets/images/onboarding_photo_kitchen.jpg',
+                fit: BoxFit.cover,
+                width: double.infinity,
+              ),
             ),
           ),
         ),
@@ -1538,6 +1537,22 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const SizedBox(height: 16),
+        // Sep 17 2026: D Von's direct ask -- add the porch photo here
+        // too, as a banner above the checkmark rather than replacing it,
+        // since the checkmark is doing real work confirming success and
+        // shouldn't disappear.
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Image.asset(
+              'assets/images/onboarding_photo_porch.jpg',
+              fit: BoxFit.cover,
+              width: double.infinity,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
         // Checkmark circle
         Container(
           width: 80,
