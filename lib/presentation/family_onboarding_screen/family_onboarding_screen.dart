@@ -378,7 +378,15 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
 
     // Step 1: show the real name immediately -- needs only the invite
     // code, nothing about the user's identity.
-    await _fetchAndDisplayRealNestName(inviteCode);
+    // Sep 17 2026: this was still awaited here, meaning the step
+    // transition itself (and the Continue button on this step) blocked
+    // on the full round-trip -- the same slow-3rd-screen symptom D Von
+    // reported on the senior flow, just here too. _fetchAndDisplayRealNestName
+    // already self-corrects the displayed name via setState once it
+    // resolves (mounted-guarded), so firing it without awaiting is safe:
+    // the next screen shows whatever fallback name it already has, then
+    // corrects a moment later, same as the join below already does.
+    unawaited(_fetchAndDisplayRealNestName(inviteCode));
 
     // Step 2: actually join as this specific person, genuinely in the
     // background this time -- previously this was still awaited despite

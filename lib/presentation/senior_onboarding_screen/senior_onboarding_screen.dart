@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math';
@@ -278,8 +279,18 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         // transition). Read-only here -- the actual nest_members join
         // still happens in _finishOnboarding() as before; this call can
         // safely run again there without side effects.
+        // Sep 17 2026: D Von's direct report -- this step consistently
+        // felt slow transitioning to step 3. Root cause: this network
+        // lookup was awaited here, blocking the Continue button/step
+        // advance on a full round-trip before anything moved. The
+        // function itself already self-corrects step 3's displayed name
+        // via setState once it resolves (with a mounted guard), so it's
+        // safe to fire-and-forget -- step 3 shows whatever fallback name
+        // it already has instantly, then corrects a moment later. Same
+        // cache-first principle as today's Home flash-audit fixes,
+        // applied to a slow transition instead of a flash.
         if (_joinedViaInvite && _inviteCode.isNotEmpty) {
-          await _fetchAndDisplayRealNestNameForInvite(_inviteCode);
+          unawaited(_fetchAndDisplayRealNestNameForInvite(_inviteCode));
         }
       }
       setState(() => _currentStep++);
