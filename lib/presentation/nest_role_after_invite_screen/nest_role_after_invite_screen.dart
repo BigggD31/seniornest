@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../routes/app_routes.dart';
+import '../../services/auth_service.dart';
 import '../splash_screen/widgets/nest_logo_widget.dart';
 
 class NestRoleAfterInviteScreen extends StatefulWidget {
@@ -74,6 +75,10 @@ class _NestRoleAfterInviteScreenState extends State<NestRoleAfterInviteScreen>
     await prefs.setString('user_role', role);
     await prefs.setString('invite_code', widget.inviteCode);
     await prefs.setBool('joined_via_invite', true);
+    AuthService.debugTrace(
+      'invite_trace_01_role_chosen',
+      'role=$role wrote invite_code=${widget.inviteCode} joined_via_invite=true',
+    );
 
     await Future.delayed(const Duration(milliseconds: 300));
 

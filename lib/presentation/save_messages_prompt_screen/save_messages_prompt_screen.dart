@@ -125,6 +125,10 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     final preWipeNestId = preWipePrefs.getString('nest_id');
     final preWipeInviteCode = preWipePrefs.getString('invite_code');
     final preWipeJoinedViaInvite = preWipePrefs.getBool('joined_via_invite');
+    AuthService.debugTrace(
+      'invite_trace_09_prewipe_snapshot',
+      'userId=${userId ?? "NULL"} nest_id=${preWipeNestId ?? "NULL"} invite_code=${preWipeInviteCode ?? "NULL"} joined_via_invite=${preWipeJoinedViaInvite ?? "NULL"}',
+    );
     // Aug 29 2026: birthday/anniversary joined the account-scoped wipe
     // list today (auth_service.dart), for the same reason nest_name etc.
     // did back on Aug 21 -- but this function reads them from prefs
@@ -150,6 +154,10 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     if (preWipeJoinedViaInvite != null) await prefs.setBool('joined_via_invite', preWipeJoinedViaInvite);
     if (preWipeBirthday != null) await prefs.setString('birthday', preWipeBirthday);
     if (preWipeAnniversary != null) await prefs.setString('anniversary', preWipeAnniversary);
+    AuthService.debugTrace(
+      'invite_trace_10_postwipe_restored',
+      'nest_id=${prefs.getString("nest_id") ?? "NULL"} invite_code=${prefs.getString("invite_code") ?? "NULL"} joined_via_invite=${prefs.getBool("joined_via_invite")}',
+    );
 
     await prefs.setBool('onboarding_complete', true);
     await prefs.setBool('first_load', true);
@@ -641,6 +649,10 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           // already belongs to the nest they're trying to join.
           final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
           final typedInviteCode = prefs.getString('invite_code') ?? '';
+          AuthService.debugTrace(
+            'invite_trace_11_navigatetohome_branch',
+            'joinedViaInvite=$joinedViaInvite typedInviteCode=${typedInviteCode.isEmpty ? "EMPTY" : typedInviteCode}',
+          );
 
           if (joinedViaInvite && typedInviteCode.isNotEmpty) {
             final lookupResult = await supabase.rpc(
@@ -650,6 +662,10 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
                 ? lookupResult.first as Map<String, dynamic>
                 : null;
+            AuthService.debugTrace(
+              'invite_trace_12_navigatetohome_lookup',
+              'typedInviteCode=$typedInviteCode found=${nestResponse != null}',
+            );
 
             if (nestResponse != null) {
               final nestId = nestResponse['id'] as String;

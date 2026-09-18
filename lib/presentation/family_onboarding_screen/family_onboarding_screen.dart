@@ -451,6 +451,10 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     try {
       final supabase = Supabase.instance.client;
       final userId = await AuthService.getReliableUserId();
+      AuthService.debugTrace(
+        'invite_trace_02_attempt_join',
+        'inviteCode=$inviteCode userId=${userId ?? "NULL"}',
+      );
       if (userId == null) return false;
 
       final prefs = await SharedPreferences.getInstance();
@@ -465,6 +469,10 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
             .maybeSingle();
         alreadyMember = membershipCheck != null;
       }
+      AuthService.debugTrace(
+        'invite_trace_03_membership_check',
+        'cached nest_id=${nestId ?? "NULL"} alreadyMember=$alreadyMember',
+      );
 
       if (!alreadyMember) {
         final lookupResult = await supabase.rpc(
@@ -474,6 +482,10 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
             ? lookupResult.first as Map<String, dynamic>
             : null;
+        AuthService.debugTrace(
+          'invite_trace_04_lookup_result',
+          'inviteCode=$inviteCode found=${nestResponse != null} nestId=${nestResponse?['id'] ?? "NONE"}',
+        );
         if (nestResponse == null) return false;
         nestId = nestResponse['id'] as String;
 
@@ -490,6 +502,10 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         } catch (e) {
           debugPrint('BAN_CHECK_ERROR: $e');
         }
+        AuthService.debugTrace(
+          'invite_trace_05_ban_check',
+          'nestId=$nestId isBanned=$isBanned',
+        );
         if (isBanned) {
           await prefs.remove('nest_id');
           await prefs.remove('invite_code');
@@ -511,9 +527,14 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           },
           onConflict: 'nest_id,user_id',
         );
+        AuthService.debugTrace(
+          'invite_trace_06_join_succeeded',
+          'nestId=$nestId user_id=$userId',
+        );
       }
       return true;
     } catch (e) {
+      AuthService.debugTrace('invite_trace_07_join_exception', 'error=$e');
       debugPrint('JOIN_NEST_ERROR: $e');
       return false;
     }
@@ -658,6 +679,10 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
               nestIdIsValid = false;
             }
           }
+          AuthService.debugTrace(
+            'invite_trace_08_finish_onboarding_check',
+            'cached invite_code=${prefs.getString("invite_code") ?? "NULL"} joined_via_invite=${prefs.getBool("joined_via_invite")} existingNestId=${existingNestId.isEmpty ? "EMPTY" : existingNestId} nestIdIsValid=$nestIdIsValid',
+          );
           // Sep 11 2026: the check above only trusts a nest_id already
           // cached locally -- if local storage is empty (a fresh device,
           // a reinstall, or prefs cleared by signing out) it fell
