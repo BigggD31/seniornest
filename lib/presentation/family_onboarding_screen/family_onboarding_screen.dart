@@ -1516,9 +1516,13 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         ? _nameController.text.trim()
         : (_savedName.isNotEmpty ? _savedName : 'you');
 
+    // Sep 19 2026: same fix as senior_onboarding_screen.dart's identical
+    // spot -- an invite-joiner shouldn't see a specific wrong guess
+    // ("$name's Nest") for the moment before the real name arrives from
+    // the unawaited fetch; a neutral label is never wrong instead.
     final nestName = _nestNameController.text.trim().isNotEmpty
         ? _nestNameController.text.trim()
-        : '$name\'s Nest';
+        : (_joinedViaInvite ? 'Your Family\'s Nest' : '$name\'s Nest');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,

@@ -1307,9 +1307,22 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
     final name = _nameController.text.trim().isNotEmpty
         ? _nameController.text.trim()
         : (_savedName.isNotEmpty ? _savedName : 'your friend');
-    final nestName = _nestNameController.text.trim().isEmpty
-        ? '$name\'s Nest'
-        : _nestNameController.text.trim();
+    // Sep 19 2026: D Von's direct report -- for an invite-joiner, this
+    // fell back to "$name's Nest" (a plausible-looking but WRONG guess)
+    // for the split second before the real name arrives from the
+    // unawaited fetch above, and D Von caught it live ("Larry's Nest"
+    // briefly visible before switching to the real "Popy's Nest"). The
+    // fetch has to stay unawaited -- that's the fix for this same
+    // screen feeling slow, from just yesterday -- but the fallback it's
+    // covering for doesn't have to be a specific wrong answer. Someone
+    // who came via invite code already knows they're joining an
+    // existing family's nest, not naming their own, so a neutral label
+    // here is both more accurate and never wrong, cache-first as
+    // everywhere else: show what's true right now, correct only when
+    // there's genuinely new information, never guess in between.
+    final nestName = _nestNameController.text.trim().isNotEmpty
+        ? _nestNameController.text.trim()
+        : (_joinedViaInvite ? 'Your Family\'s Nest' : '$name\'s Nest');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
