@@ -125,10 +125,6 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     final preWipeNestId = preWipePrefs.getString('nest_id');
     final preWipeInviteCode = preWipePrefs.getString('invite_code');
     final preWipeJoinedViaInvite = preWipePrefs.getBool('joined_via_invite');
-    AuthService.debugTrace(
-      'invite_trace_09_prewipe_snapshot',
-      'userId=${userId ?? "NULL"} nest_id=${preWipeNestId ?? "NULL"} invite_code=${preWipeInviteCode ?? "NULL"} joined_via_invite=${preWipeJoinedViaInvite ?? "NULL"}',
-    );
     // Aug 29 2026: birthday/anniversary joined the account-scoped wipe
     // list today (auth_service.dart), for the same reason nest_name etc.
     // did back on Aug 21 -- but this function reads them from prefs
@@ -154,10 +150,6 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     if (preWipeJoinedViaInvite != null) await prefs.setBool('joined_via_invite', preWipeJoinedViaInvite);
     if (preWipeBirthday != null) await prefs.setString('birthday', preWipeBirthday);
     if (preWipeAnniversary != null) await prefs.setString('anniversary', preWipeAnniversary);
-    AuthService.debugTrace(
-      'invite_trace_10_postwipe_restored',
-      'nest_id=${prefs.getString("nest_id") ?? "NULL"} invite_code=${prefs.getString("invite_code") ?? "NULL"} joined_via_invite=${prefs.getBool("joined_via_invite")}',
-    );
 
     await prefs.setBool('onboarding_complete', true);
     await prefs.setBool('first_load', true);
@@ -649,10 +641,6 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           // already belongs to the nest they're trying to join.
           final joinedViaInvite = prefs.getBool('joined_via_invite') ?? false;
           final typedInviteCode = prefs.getString('invite_code') ?? '';
-          AuthService.debugTrace(
-            'invite_trace_11_navigatetohome_branch',
-            'joinedViaInvite=$joinedViaInvite typedInviteCode=${typedInviteCode.isEmpty ? "EMPTY" : typedInviteCode}',
-          );
 
           if (joinedViaInvite && typedInviteCode.isNotEmpty) {
             final lookupResult = await supabase.rpc(
@@ -662,66 +650,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
                 ? lookupResult.first as Map<String, dynamic>
                 : null;
-            AuthService.debugTrace(
-              'invite_trace_12_navigatetohome_lookup',
-              'typedInviteCode=$typedInviteCode found=${nestResponse != null}',
-            );
 
             if (nestResponse != null) {
               final nestId = nestResponse['id'] as String;
-
-              // Real, deterministic ban check -- replaces the earlier
-              // fragile account-age heuristic. Google/Apple/email sign-in
-              // all funnel through this same function for BOTH a brand-new
-              // signup and a returning sign-in, and a removed member's
-              // device still has 'joined_via_invite' and the old
-              // 'invite_code' cached locally (removal happens on the
-              // OWNER's device and touches nothing here). This checks
-              // whether THIS specific person was specifically removed from
-              // THIS specific nest -- a real record, not a guess based on
-              // how old the account looks.
-              bool isBanned = false;
-              try {
-                final banCheck = await supabase.rpc(
-                  'is_user_banned_from_nest',
-                  params: {'p_nest_id': nestId, 'p_user_id': effectiveUserId},
-                );
-                isBanned = banCheck == true;
-              } catch (e) {
-                print('BAN_CHECK_ERROR: $e');
-              }
-
-              if (isBanned) {
-                await prefs.remove('nest_id');
-                await prefs.remove('invite_code');
-                await prefs.setBool('joined_via_invite', false);
-                // Splash screen has its own auto-navigation logic that runs
-                // on load and would otherwise race against this banner --
-                // resetting these two flags is what makes it safely skip
-                // that logic and just show the normal splash screen instead.
-                await prefs.setBool('has_onboarded', false);
-                await prefs.setBool('onboarding_complete', false);
-                if (mounted) {
-                  // Previously this called showSnackBar() then immediately
-                  // cleared the entire navigation stack with
-                  // pushNamedAndRemoveUntil -- which tears down the very
-                  // screen hosting that SnackBar before it ever really
-                  // appears. That's why the red message kept vanishing.
-                  // Now the message is passed as an argument to the
-                  // destination screen, which shows it once it's actually
-                  // settled and staying on screen.
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    '/splash-screen',
-                    (route) => false,
-                    arguments: {
-                      'bannerMessage':
-                          'This invite is no longer valid for your account. Please ask the nest owner for a new invite.',
-                    },
-                  );
-                }
-                return;
-              }
 
               await prefs.setString('nest_id', nestId);
               // onConflict targets the real unique constraint
@@ -789,8 +720,14 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
                 ? prefs.getString(roleScopedNestNameKey)!
                 : (prefs.getString('nest_name') ?? 'My Family');
             final cachedCode = prefs.getString('invite_code') ?? '';
+            // Sep 19 2026: this only ever matched the original dash-less
+            // format ("NEST" + 6 digits) -- once the remove-member auto-
+            // rotate feature started generating dashed codes ("NEST-######"),
+            // this stopped matching any real current code at all, silently
+            // discarding a perfectly good cached code and generating a
+            // throwaway random one instead every single time.
             final reusableCachedCode =
-                RegExp(r'^NEST\d{6}$').hasMatch(cachedCode) ? cachedCode : null;
+                RegExp(r'^NEST-?\d{6}$').hasMatch(cachedCode) ? cachedCode : null;
             String? nestId;
             for (int attempt = 0; attempt < 5 && nestId == null; attempt++) {
               final inviteCode = (attempt == 0 && reusableCachedCode != null)

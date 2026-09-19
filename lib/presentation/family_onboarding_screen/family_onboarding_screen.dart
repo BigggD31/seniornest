@@ -451,10 +451,6 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
     try {
       final supabase = Supabase.instance.client;
       final userId = await AuthService.getReliableUserId();
-      AuthService.debugTrace(
-        'invite_trace_02_attempt_join',
-        'inviteCode=$inviteCode userId=${userId ?? "NULL"}',
-      );
       if (userId == null) return false;
 
       final prefs = await SharedPreferences.getInstance();
@@ -469,10 +465,6 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
             .maybeSingle();
         alreadyMember = membershipCheck != null;
       }
-      AuthService.debugTrace(
-        'invite_trace_03_membership_check',
-        'cached nest_id=${nestId ?? "NULL"} alreadyMember=$alreadyMember',
-      );
 
       if (!alreadyMember) {
         final lookupResult = await supabase.rpc(
@@ -482,37 +474,8 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         final nestResponse = (lookupResult is List && lookupResult.isNotEmpty)
             ? lookupResult.first as Map<String, dynamic>
             : null;
-        AuthService.debugTrace(
-          'invite_trace_04_lookup_result',
-          'inviteCode=$inviteCode found=${nestResponse != null} nestId=${nestResponse?['id'] ?? "NONE"}',
-        );
         if (nestResponse == null) return false;
         nestId = nestResponse['id'] as String;
-
-        // Same real ban check used on the sign-in path -- a person removed
-        // from this specific nest should never rejoin via a cached or
-        // freshly-entered invite code, on any path through the app.
-        bool isBanned = false;
-        try {
-          final banCheck = await supabase.rpc(
-            'is_user_banned_from_nest',
-            params: {'p_nest_id': nestId, 'p_user_id': userId},
-          );
-          isBanned = banCheck == true;
-        } catch (e) {
-          debugPrint('BAN_CHECK_ERROR: $e');
-        }
-        AuthService.debugTrace(
-          'invite_trace_05_ban_check',
-          'nestId=$nestId isBanned=$isBanned',
-        );
-        if (isBanned) {
-          await prefs.remove('nest_id');
-          await prefs.remove('invite_code');
-          await prefs.setBool('joined_via_invite', false);
-          if (mounted) setState(() => _nestNameDebugStatus = 'blocked: this account is banned from this nest');
-          return false;
-        }
 
         await prefs.setString('nest_id', nestId);
         // onConflict targets the real unique constraint (nest_id, user_id)
@@ -527,14 +490,9 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           },
           onConflict: 'nest_id,user_id',
         );
-        AuthService.debugTrace(
-          'invite_trace_06_join_succeeded',
-          'nestId=$nestId user_id=$userId',
-        );
       }
       return true;
     } catch (e) {
-      AuthService.debugTrace('invite_trace_07_join_exception', 'error=$e');
       debugPrint('JOIN_NEST_ERROR: $e');
       return false;
     }
@@ -679,10 +637,6 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
               nestIdIsValid = false;
             }
           }
-          AuthService.debugTrace(
-            'invite_trace_08_finish_onboarding_check',
-            'cached invite_code=${prefs.getString("invite_code") ?? "NULL"} joined_via_invite=${prefs.getBool("joined_via_invite")} existingNestId=${existingNestId.isEmpty ? "EMPTY" : existingNestId} nestIdIsValid=$nestIdIsValid',
-          );
           // Sep 11 2026: the check above only trusts a nest_id already
           // cached locally -- if local storage is empty (a fresh device,
           // a reinstall, or prefs cleared by signing out) it fell

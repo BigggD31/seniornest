@@ -13,26 +13,6 @@ import 'activity_badge_service.dart';
 class AuthService {
   static SupabaseClient get _client => Supabase.instance.client;
 
-  // Sep 18 2026: temporary, targeted tracing for D Von's live repro of the
-  // invite-code-goes-stale bug (family invite-join landing on a nest that
-  // isn't the one they joined). Writes a real breadcrumb to the database
-  // at each point along invite_code's actual path -- entered, read, wiped,
-  // restored, used -- so the exact moment it gets replaced with a stale
-  // value is visible after the fact instead of reconstructed by guesswork.
-  // Fire-and-forget and fully swallowed on failure: this must never be able
-  // to affect the real flow it's observing. Remove once the real mechanism
-  // is confirmed and fixed.
-  static Future<void> debugTrace(String context, String detail) async {
-    try {
-      final userId = _client.auth.currentUser?.id;
-      await _client.from('client_debug_log').insert({
-        'user_id': userId,
-        'context': context,
-        'detail': detail,
-      });
-    } catch (_) {}
-  }
-
   // ── Google Web Client ID (from env) ──────────────────────────────────────
   static const String _googleWebClientId = String.fromEnvironment(
     'GOOGLE_WEB_CLIENT_ID',
@@ -541,25 +521,13 @@ class AuthService {
       // after this feature ships) -- just record who's signed in now,
       // don't wipe anything, since there's no actual evidence of a switch.
       await prefs.setString('last_known_user_id', currentUserId);
-      debugTrace(
-        'invite_trace_13_account_switch_check',
-        'currentUserId=$currentUserId lastKnownUserId=NULL -- first run, no wipe, just recorded',
-      );
       return;
     }
 
     if (lastKnownUserId == currentUserId) {
-      debugTrace(
-        'invite_trace_13_account_switch_check',
-        'currentUserId=$currentUserId lastKnownUserId=$lastKnownUserId -- SAME, no wipe',
-      );
       return;
     }
 
-    debugTrace(
-      'invite_trace_13_account_switch_check',
-      'currentUserId=$currentUserId lastKnownUserId=$lastKnownUserId -- DIFFERENT, wiping now',
-    );
     // Confirmed genuine account switch -- wipe every account-specific key.
     for (final key in _accountScopedPrefsKeys) {
       await prefs.remove(key);
