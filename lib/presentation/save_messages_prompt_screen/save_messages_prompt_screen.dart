@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../routes/app_routes.dart';
+import '../../core/app_state.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart' show kProfilePhotoKey, kProfilePhotoOwnerKey;
 import '../../services/auth_service.dart';
 import '../../services/push_service.dart';
@@ -92,6 +93,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
 
     if (mounted) {
       setState(() => _isLoading = false);
+      // Same fix as the main sign-in path below -- fresh account, no
+      // real data existed when notifiers last resolved at cold start.
+      await resolveAppNotifiersFromPrefs(prefs);
       Navigator.pushReplacementNamed(
         context,
         AppRoutes.familyFeedScreen,
@@ -436,6 +440,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
         if (existingMemberships.isNotEmpty) {
           final existingNestId = existingMemberships.first['nest_id'] as String;
           await prefs.setString('nest_id', existingNestId);
+          // Same fix as the main path further down -- this is a separate
+          // early exit straight to Home that skips it entirely.
+          await resolveAppNotifiersFromPrefs(prefs);
           if (mounted) {
             Navigator.pushNamedAndRemoveUntil(
               context,
@@ -840,6 +847,21 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
         await Future.delayed(BrandedTransitionScreen.minDisplayDuration - elapsed);
       }
     }
+    // Sep 19 2026: D Von's direct report -- the very first entry into
+    // Home right after finishing onboarding (or any invite-join) never
+    // got the same smooth treatment every later reopen of the app
+    // already has. resolveAppNotifiersFromPrefs only ever ran at cold
+    // start, before sign-in, when this account had no real data yet --
+    // nothing re-ran it after this function had just finished writing
+    // the real nest_id, checkin/meds prefs, etc. Home would paint with
+    // whatever those notifiers held from before sign-in (stale
+    // defaults), then self-correct a beat later via its own fetch --
+    // exactly the "different cards loading at different milliseconds"
+    // symptom, just on this one specific entry point instead of a
+    // normal reopen. Re-resolving here, right before Home ever builds,
+    // gives this first-time entry the identical cache-first advantage
+    // every later app open already has.
+    await resolveAppNotifiersFromPrefs(prefs);
     if (mounted) {
       Navigator.pushReplacementNamed(
         context,
