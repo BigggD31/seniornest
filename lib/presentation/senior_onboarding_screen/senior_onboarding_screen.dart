@@ -255,17 +255,26 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
       await _stepController.forward();
       _stepController.reset();
       // Generate invite code when entering step 3 so it shows immediately
+      // -- ONLY when this senior is actually creating their own new nest.
+      // Sep 19 2026: this ran completely unconditionally before, for
+      // every single senior signup regardless of _joinedViaInvite --
+      // meaning even someone who had just typed and verified a real
+      // invite code (Larry, joining Popy's real nest, tested live
+      // repeatedly) got that correct code silently overwritten with a
+      // brand new random one right here, moments later, in the same
+      // signup -- every single time, a different random code. Confirmed
+      // the real root cause of D Von's exact repro. family_onboarding_
+      // screen.dart hit this identical bug months ago (Aug 17-18 2026,
+      // see the comment on its own equivalent block) and was fixed then
+      // with the same _joinedViaInvite gate -- this file's own version
+      // of the same code was simply never given the same fix.
       if (_currentStep == 2) {
-        final prefs = await SharedPreferences.getInstance();
-        final existingCode = prefs.getString('invite_code') ?? '';
-        if (existingCode.isEmpty ||
-            !RegExp(r'^NEST\d{6}$').hasMatch(existingCode)) {
+        if (!_joinedViaInvite) {
+          final prefs = await SharedPreferences.getInstance();
           final digits = (100000 + Random().nextInt(900000)).toString();
           final code = 'NEST$digits';
           await prefs.setString('invite_code', code);
           if (mounted) setState(() => _inviteCode = code);
-        } else {
-          if (mounted) setState(() => _inviteCode = existingCode);
         }
         // Sep 16 2026: fetch and show the REAL nest name before the step 3
         // summary screen ever renders -- previously this lookup only ran
@@ -584,7 +593,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
             // always inventing a new one regardless.
             final cachedCode = prefs.getString('invite_code') ?? '';
             final reusableCachedCode =
-                RegExp(r'^NEST\d{6}$').hasMatch(cachedCode) ? cachedCode : null;
+                RegExp(r'^NEST-?\d{6}$').hasMatch(cachedCode) ? cachedCode : null;
             String? nestIdCreated;
             for (int attempt = 0; attempt < 5 && nestIdCreated == null; attempt++) {
               final codeForThisAttempt = (attempt == 0 && reusableCachedCode != null)
