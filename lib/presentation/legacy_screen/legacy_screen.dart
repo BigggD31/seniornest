@@ -826,7 +826,24 @@ class _LegacyScreenState extends State<LegacyScreen>
           });
         }
       } catch (e) {
+        // Sep 19 2026: found during an audit -- this used to fail
+        // completely silently. The optimistic setState above already
+        // marked this bookmarked locally; if the actual server write
+        // fails, local and server state silently disagree (star shows
+        // filled here, isn't really saved, and won't be there in Favs
+        // or on another device). Reverting the optimistic update and
+        // telling the person keeps what they see honest, matching the
+        // same fix already made in family_feed_screen.dart.
         debugPrint('LEGACY BOOKMARK SUPABASE SYNC ERROR: $e');
+        if (mounted && globalIndex >= 0) {
+          setState(() => _stories[globalIndex]['isBookmarked'] = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Couldn\'t save that -- please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } else {
       allItems.removeWhere((e) => (e as Map<String, dynamic>)['id'] == id);
@@ -843,7 +860,17 @@ class _LegacyScreenState extends State<LegacyScreen>
               .eq('item_id', id);
         }
       } catch (e) {
+        // Same fix as above, mirrored for the unbookmark direction.
         debugPrint('LEGACY BOOKMARK SUPABASE SYNC ERROR: $e');
+        if (mounted && globalIndex >= 0) {
+          setState(() => _stories[globalIndex]['isBookmarked'] = true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Couldn\'t remove that -- please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }

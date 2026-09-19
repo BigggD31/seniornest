@@ -2022,6 +2022,7 @@ class _EditContactSheetState extends State<_EditContactSheet> {
             onPressed: () async {
               Navigator.pop(ctx);
               setState(() => _isDeleting = true);
+              bool succeeded = true;
               try {
                 final supabase = Supabase.instance.client;
                 final contactId = widget.contact['id'];
@@ -2032,8 +2033,18 @@ class _EditContactSheetState extends State<_EditContactSheet> {
                 }
               } catch (e) {
                 debugPrint('Delete contact error: $e');
+                succeeded = false;
+                if (mounted) {
+                  setState(() => _isDeleting = false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Couldn\'t remove that contact -- please try again.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               }
-              if (mounted) {
+              if (mounted && succeeded) {
                 Navigator.pop(context);
               }
             },
