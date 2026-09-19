@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../routes/app_routes.dart';
+import '../../services/auth_service.dart';
 import '../../core/app_state.dart';
 import '../../services/share_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
@@ -509,6 +510,10 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         if (nestId.isEmpty) {
           if (_joinedViaInvite && _inviteCode.isNotEmpty) {
             // Senior joining an existing nest via invite code
+            AuthService.debugTrace(
+              'invite_trace_S02_senior_attempt_join',
+              'inviteCode=$_inviteCode userId=$userId',
+            );
             try {
               final lookupResult = await supabase.rpc(
                 'lookup_nest_by_invite_code',
@@ -518,6 +523,10 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
                   (lookupResult is List && lookupResult.isNotEmpty)
                       ? lookupResult.first as Map<String, dynamic>
                       : null;
+              AuthService.debugTrace(
+                'invite_trace_S03_senior_lookup_result',
+                'inviteCode=$_inviteCode found=${joinNest != null} nestId=${joinNest?['id'] ?? "NONE"}',
+              );
 
               if (joinNest != null) {
                 nestId = joinNest['id'] as String;
@@ -541,6 +550,10 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
                 } catch (e) {
                   print('NEST_DEBUG: senior ban check error: $e');
                 }
+                AuthService.debugTrace(
+                  'invite_trace_S04_senior_ban_check',
+                  'nestId=$nestId isBanned=$isBanned',
+                );
                 if (isBanned) {
                   await prefs.remove('nest_id');
                   await prefs.remove('invite_code');
@@ -575,6 +588,10 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
                   }
                 }
                 if (lastJoinError != null) throw lastJoinError;
+                AuthService.debugTrace(
+                  'invite_trace_S05_senior_join_succeeded',
+                  'nestId=$nestId user_id=$userId',
+                );
                 // The RPC already returns the real name alongside the id --
                 // this path was only ever using the id, never the name,
                 // meaning a senior joining an existing nest via invite
