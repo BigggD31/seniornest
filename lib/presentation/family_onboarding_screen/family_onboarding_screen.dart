@@ -143,6 +143,15 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           } catch (_) {}
         }
       });
+      // Sep 19 2026: same fix as senior_onboarding_screen.dart's
+      // identical spot -- fetch the real nest name from the earliest
+      // possible moment (right here, screen load) instead of right
+      // before the summary screen that displays it. The whole rest of
+      // onboarding (name, preferences) is real head-start time for this
+      // network call to quietly finish before anyone ever sees it.
+      if (joinedViaInvite && saved != null && saved.isNotEmpty) {
+        unawaited(_fetchAndDisplayRealNestName(saved));
+      }
     }
   }
 
@@ -376,17 +385,11 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
       return;
     }
 
-    // Step 1: show the real name immediately -- needs only the invite
-    // code, nothing about the user's identity.
-    // Sep 17 2026: this was still awaited here, meaning the step
-    // transition itself (and the Continue button on this step) blocked
-    // on the full round-trip -- the same slow-3rd-screen symptom D Von
-    // reported on the senior flow, just here too. _fetchAndDisplayRealNestName
-    // already self-corrects the displayed name via setState once it
-    // resolves (mounted-guarded), so firing it without awaiting is safe:
-    // the next screen shows whatever fallback name it already has, then
-    // corrects a moment later, same as the join below already does.
-    unawaited(_fetchAndDisplayRealNestName(inviteCode));
+    // Sep 19 2026: the real-name fetch itself now fires much earlier --
+    // see _loadInviteCode(), triggered at screen load instead of here.
+    // Giving it the whole rest of onboarding as head start actually
+    // addresses the flash D Von kept catching; firing it this late was
+    // never reliably enough time to beat the summary screen's render.
 
     // Step 2: actually join as this specific person, genuinely in the
     // background this time -- previously this was still awaited despite

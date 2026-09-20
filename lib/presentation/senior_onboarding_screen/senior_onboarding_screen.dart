@@ -185,6 +185,21 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
           } catch (_) {}
         }
       });
+      // Sep 19 2026: D Von's direct catch -- moving this trigger from
+      // the step 2->3 transition (where it used to fire) to right here,
+      // the earliest possible moment _joinedViaInvite/_inviteCode are
+      // known, at the very start of this whole screen. The fetch itself
+      // still takes real time either way -- moving WHEN it starts is
+      // what actually helps: fired here, it has the entire rest of
+      // steps 0/1/2 (typing a name, setting preferences) as head start,
+      // several real seconds at minimum, almost always enough to
+      // finish quietly before step 3 ever renders. Firing it right as
+      // step 3 was about to show, as before, gave it no head start at
+      // all -- a flash was close to guaranteed every time, neutral
+      // placeholder or not.
+      if (joinedViaInvite && savedCode.isNotEmpty) {
+        unawaited(_fetchAndDisplayRealNestNameForInvite(savedCode));
+      }
     }
   }
 
@@ -276,31 +291,12 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
           await prefs.setString('invite_code', code);
           if (mounted) setState(() => _inviteCode = code);
         }
-        // Sep 16 2026: fetch and show the REAL nest name before the step 3
-        // summary screen ever renders -- previously this lookup only ran
-        // inside _finishOnboarding(), triggered by the final button ON
-        // step 3, which meant step 3 had already rendered and shown its
-        // "$name's Nest" fallback by the time the real name came back
-        // (confirmed live: a senior named Nana joining Popy's real nest
-        // via invite code saw "Nana's Nest" on this screen). Matches the
-        // pattern family_onboarding_screen.dart already uses correctly
-        // (_joinNestEarlyIfNeeded, called at its equivalent step
-        // transition). Read-only here -- the actual nest_members join
-        // still happens in _finishOnboarding() as before; this call can
-        // safely run again there without side effects.
-        // Sep 17 2026: D Von's direct report -- this step consistently
-        // felt slow transitioning to step 3. Root cause: this network
-        // lookup was awaited here, blocking the Continue button/step
-        // advance on a full round-trip before anything moved. The
-        // function itself already self-corrects step 3's displayed name
-        // via setState once it resolves (with a mounted guard), so it's
-        // safe to fire-and-forget -- step 3 shows whatever fallback name
-        // it already has instantly, then corrects a moment later. Same
-        // cache-first principle as today's Home flash-audit fixes,
-        // applied to a slow transition instead of a flash.
-        if (_joinedViaInvite && _inviteCode.isNotEmpty) {
-          unawaited(_fetchAndDisplayRealNestNameForInvite(_inviteCode));
-        }
+        // Sep 19 2026: this fetch now fires much earlier -- see
+        // _loadSavedName(), triggered the moment the screen first loads
+        // instead of right as step 3 is about to appear. Giving it the
+        // entire rest of onboarding as head start actually addresses
+        // the flash D Von kept catching; firing it here too, this late,
+        // was never long enough to reliably beat step 3's render.
       }
       setState(() => _currentStep++);
       _entranceController

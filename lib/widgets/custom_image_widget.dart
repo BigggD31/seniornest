@@ -142,6 +142,22 @@ class CustomImageWidget extends StatelessWidget {
             fit: fit,
             imageUrl: imageUrl!,
             color: color,
+            // Sep 19 2026: D Von's repeated report of Home (and really
+            // every screen with photos -- avatars, message attachments)
+            // feeling like "different cards coming in at different
+            // times." Root cause wasn't state/notifiers at all -- it's
+            // that every single image in the app goes through this one
+            // shared widget, and it swapped from the loading spinner
+            // straight to the finished photo the instant each one
+            // happened to finish downloading, with no transition. Several
+            // images on one screen each popping in abruptly, at their
+            // own slightly different moment, reads as messy even when
+            // every piece of text/state on the page was already correct
+            // and settled. A gentle fade here, applied once in the one
+            // widget every image in the app already goes through, is
+            // the actual fix -- not more state work.
+            fadeInDuration: const Duration(milliseconds: 300),
+            fadeOutDuration: const Duration(milliseconds: 100),
             placeholder: (context, url) => SizedBox(
               height: 30,
               width: 30,
