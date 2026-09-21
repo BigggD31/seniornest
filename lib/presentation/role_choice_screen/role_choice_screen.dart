@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../routes/app_routes.dart';
 import '../splash_screen/widgets/nest_logo_widget.dart';
@@ -504,6 +506,27 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
       final bool nestFound = result is List && result.isNotEmpty;
 
       if (nestFound) {
+        // Sep 21 2026: D Von's direct, precise ask -- for someone joining
+        // an ALREADY-ESTABLISHED nest via invite code (this sheet is
+        // shared by both the senior-member and family-member paths, the
+        // only two flows where this applies -- a nest owner or VIP
+        // signup has no existing nest/photos to preload), every photo
+        // Home will eventually show already exists on the server right
+        // now, the instant this code is confirmed valid. There's no
+        // reason to wait until Home actually builds to start downloading
+        // them. Firing this the moment the code is verified gives every
+        // real photo the entire rest of onboarding (typically 30+
+        // seconds) as head start to finish downloading in the background
+        // -- by the time Home renders, they're already sitting in the
+        // image cache and render instantly, zero placeholder, not just a
+        // smoother fade into one. Fully fire-and-forget: never blocks
+        // this screen's own navigation, and a failure here is invisible
+        // -- Home's own CachedNetworkImage still fetches normally as a
+        // fallback if a given image wasn't ready in time.
+        final nestId = (result.first as Map<String, dynamic>)['id'] as String?;
+        if (nestId != null) {
+          unawaited(_precacheNestImages(nestId));
+        }
         Navigator.pop(context);
         Navigator.pushNamed(
           context,
@@ -651,5 +674,47 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
       ),
     ),
     );
+  }
+
+  // Sep 21 2026: fires the instant a real invite code is confirmed valid
+  // (Flow 3/4 only -- see the call site's comment for the full reasoning).
+  // Deliberately context-free: resolving a CachedNetworkImageProvider
+  // directly, rather than calling precacheImage(context, ...), means this
+  // keeps downloading and populating the shared image cache even after
+  // this sheet closes and the screen navigates on through the rest of
+  // onboarding -- exactly the point, since it needs the WHOLE rest of
+  // onboarding as head start, not just however long this sheet stays open.
+  Future<void> _precacheNestImages(String nestId) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Sep 21 2026: real data check changed this from the original plan.
+      // Avatars are never a network image at all -- they're either an
+      // emoji character or base64 bytes decoded locally via
+      // Image.memory() (profile_photo_picker_screen.dart), so there was
+      // nothing to precache there. This targets only actual feed post
+      // photos, via a SECURITY DEFINER function that also filters out
+      // this nest's audio/video posts (same media_url column, different
+      // storage folder) -- see the call site's comment for why this has
+      // to go through a function rather than a direct query.
+      final rows = await supabase.rpc(
+        'get_nest_preview_images',
+        params: {'p_nest_id': nestId},
+      ) as List;
+
+      for (final row in rows) {
+        final url = row['media_url'] as String?;
+        if (url == null || url.isEmpty) continue;
+        // Fire-and-forget per image -- one slow or failing image should
+        // never hold up or break caching the rest.
+        CachedNetworkImageProvider(url)
+            .resolve(const ImageConfiguration())
+            .addListener(
+              ImageStreamListener((_, __) {}, onError: (_, __) {}),
+            );
+      }
+    } catch (e) {
+      debugPrint('PRECACHE_NEST_IMAGES_ERROR: $e');
+    }
   }
 }
