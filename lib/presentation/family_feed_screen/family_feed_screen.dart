@@ -939,6 +939,45 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     final cachedMessagesJson = (_cachedNestId.isNotEmpty && _cachedNestId == _currentNestIdForCache)
         ? prefs.getString('cached_real_messages')
         : null;
+    // Sep 22 2026: D Von's precise product rule, restated -- placeholders
+    // exist for exactly one reason: a nest that has never received real
+    // content yet. The moment any nest gets its first real content,
+    // placeholders retire for that nest permanently, for anyone who ever
+    // looks at it afterward -- a property of the NEST, not of who's
+    // viewing it or how they got there. hasRealPost can't express that:
+    // it's one flag per device, shared across every nest that device has
+    // EVER been part of -- not scoped to this specific nest_id at all.
+    // That's wrong in both directions: false on a brand-new invite-
+    // joiner's very first-ever launch regardless of how much real
+    // content the nest they just joined already has (sample content
+    // slipping through where it never should), AND true for someone who
+    // previously belonged to a DIFFERENT nest with content, now looking
+    // at a genuinely brand-new, empty second nest (skipping placeholders
+    // where they correctly belong). The nest-scoped local cache just
+    // above already gets this right when it has a hit; when it doesn't
+    // (a nest this device has never cached before), a quick, direct,
+    // nest-scoped existence check is the only way to answer this
+    // correctly and uniformly for owner and invite-joiner alike.
+    bool nestHasRealContent;
+    if (cachedMessagesJson != null && cachedMessagesJson.isNotEmpty) {
+      nestHasRealContent = true;
+    } else if (_currentNestIdForCache.isNotEmpty) {
+      try {
+        final existing = await Supabase.instance.client
+            .from('feed_posts')
+            .select('id')
+            .eq('nest_id', _currentNestIdForCache)
+            .limit(1);
+        nestHasRealContent = (existing as List).isNotEmpty;
+      } catch (_) {
+        // Can't reach the server to check -- fall back to this device's
+        // own history rather than risk showing sample content over a
+        // nest that may well already have real posts.
+        nestHasRealContent = hasRealPost;
+      }
+    } else {
+      nestHasRealContent = hasRealPost;
+    }
     List<MessageModel> initialMessages;
     if (cachedMessagesJson != null && cachedMessagesJson.isNotEmpty) {
       try {
@@ -947,10 +986,14 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             .map((m) => MessageModel.fromMap(m as Map<String, dynamic>))
             .toList();
       } catch (_) {
-        initialMessages = hasRealPost ? [] : _messageMaps.map(MessageModel.fromMap).toList();
+        initialMessages = nestHasRealContent
+            ? []
+            : _messageMaps.map(MessageModel.fromMap).toList();
       }
     } else {
-      initialMessages = hasRealPost ? [] : _messageMaps.map(MessageModel.fromMap).toList();
+      initialMessages = nestHasRealContent
+          ? []
+          : _messageMaps.map(MessageModel.fromMap).toList();
     }
 
     // Same cache-first pattern as messages -- avoid showing an empty
@@ -1036,7 +1079,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       _showMedsReminder = medsReminder;
       _showWelcomeToast = firstLoad;
       _isDarkMode = darkMode;
-      _hasRealPost = hasRealPost;
+      // Sep 22 2026: seeded from nestHasRealContent (computed above), not
+      // the raw device-only hasRealPost flag -- this also drives the
+      // sample-content banner's visibility, which had the identical gap:
+      // it could show for an invite-joiner into a nest that already has
+      // real content, purely because THIS device had never personally
+      // posted before.
+      _hasRealPost = nestHasRealContent;
       _inviteCodeShared = inviteCodeShared;
       _isGuest = isGuest;
       // Aug 19 2026: this used to be reset to !joinedViaInvite here, right
@@ -1075,7 +1124,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       // nothing local to show yet -- and that later fetch (search this
       // file for "cached_real_messages_nest_id") now correctly clears
       // loading itself once the real messages actually arrive.
-      final staleCacheGap = hasRealPost && initialMessages.isEmpty;
+      // Sep 22 2026: updated to match the real, nest-scoped signal
+      // (nestHasRealContent, computed above) instead of hasRealPost --
+      // same underlying gap this comment already describes, just fixed
+      // at its real source now rather than patched around per-flow.
+      final staleCacheGap = nestHasRealContent && initialMessages.isEmpty;
       _isLoading = staleCacheGap ? true : false;
       _todayCelebrations = todayEvents;
       _upcomingCelebrations = upcomingEvents;
