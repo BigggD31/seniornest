@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../routes/app_routes.dart';
 import '../splash_screen/widgets/nest_logo_widget.dart';
@@ -525,7 +524,7 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
         // fallback if a given image wasn't ready in time.
         final nestId = (result.first as Map<String, dynamic>)['id'] as String?;
         if (nestId != null) {
-          unawaited(_precacheNestImages(nestId));
+          unawaited(precacheNestImages(nestId));
         }
         Navigator.pop(context);
         Navigator.pushNamed(
@@ -674,47 +673,5 @@ class _InviteCodeSheetState extends State<_InviteCodeSheet> {
       ),
     ),
     );
-  }
-
-  // Sep 21 2026: fires the instant a real invite code is confirmed valid
-  // (Flow 3/4 only -- see the call site's comment for the full reasoning).
-  // Deliberately context-free: resolving a CachedNetworkImageProvider
-  // directly, rather than calling precacheImage(context, ...), means this
-  // keeps downloading and populating the shared image cache even after
-  // this sheet closes and the screen navigates on through the rest of
-  // onboarding -- exactly the point, since it needs the WHOLE rest of
-  // onboarding as head start, not just however long this sheet stays open.
-  Future<void> _precacheNestImages(String nestId) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      // Sep 21 2026: real data check changed this from the original plan.
-      // Avatars are never a network image at all -- they're either an
-      // emoji character or base64 bytes decoded locally via
-      // Image.memory() (profile_photo_picker_screen.dart), so there was
-      // nothing to precache there. This targets only actual feed post
-      // photos, via a SECURITY DEFINER function that also filters out
-      // this nest's audio/video posts (same media_url column, different
-      // storage folder) -- see the call site's comment for why this has
-      // to go through a function rather than a direct query.
-      final rows = await supabase.rpc(
-        'get_nest_preview_images',
-        params: {'p_nest_id': nestId},
-      ) as List;
-
-      for (final row in rows) {
-        final url = row['media_url'] as String?;
-        if (url == null || url.isEmpty) continue;
-        // Fire-and-forget per image -- one slow or failing image should
-        // never hold up or break caching the rest.
-        CachedNetworkImageProvider(url)
-            .resolve(const ImageConfiguration())
-            .addListener(
-              ImageStreamListener((_, __) {}, onError: (_, __) {}),
-            );
-      }
-    } catch (e) {
-      debugPrint('PRECACHE_NEST_IMAGES_ERROR: $e');
-    }
   }
 }

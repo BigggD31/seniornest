@@ -443,6 +443,20 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           // Same fix as the main path further down -- this is a separate
           // early exit straight to Home that skips it entirely.
           await resolveAppNotifiersFromPrefs(prefs);
+          // Sep 21 2026: this is the exact path a RETURNING member takes
+          // on every ordinary sign-in, not just a first-ever invite-join
+          // -- confirmed live: D Von saw the same placeholder flash
+          // signing into Popy's long-established account. Makes sense --
+          // this device's cache only has whatever it happened to already
+          // see; any post added to the nest since this device's last
+          // visit is genuinely new to it regardless of how long the app
+          // itself has been installed. Same awaited gate as the main
+          // path: don't show Home until its current photos are ready,
+          // capped at 3 seconds so a slow connection never hangs anyone.
+          try {
+            await precacheNestImages(existingNestId)
+                .timeout(const Duration(seconds: 3));
+          } catch (_) {}
           if (mounted) {
             Navigator.pushNamedAndRemoveUntil(
               context,
@@ -862,6 +876,27 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     // gives this first-time entry the identical cache-first advantage
     // every later app open already has.
     await resolveAppNotifiersFromPrefs(prefs);
+    // Sep 21 2026: D Von's direct, correct push -- firing the precache
+    // early and hoping it finished in time was never a real guarantee,
+    // just a bet. The actual fix: don't navigate into Home until its
+    // photos are genuinely ready, full stop -- same principle as the
+    // branded-transition minimum-display-duration wait right above this,
+    // just applied to images instead of elapsed time. Only relevant for
+    // Flow 3/4 (an invite-joined nest_id exists); a brand-new nest an
+    // owner just created has no existing photos to wait for. Capped at
+    // 3 seconds so a slow or broken connection can never hang someone on
+    // this screen indefinitely -- Home's own CachedNetworkImage still
+    // fetches normally as a fallback for anything not ready by then.
+    final joinedViaInviteForPrecache = prefs.getBool('joined_via_invite') ?? false;
+    final nestIdForPrecache = prefs.getString('nest_id');
+    if (joinedViaInviteForPrecache &&
+        nestIdForPrecache != null &&
+        nestIdForPrecache.isNotEmpty) {
+      try {
+        await precacheNestImages(nestIdForPrecache)
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {}
+    }
     if (mounted) {
       Navigator.pushReplacementNamed(
         context,

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 
 /// Global notifier — setup_screen writes here; MyApp rebuilds immediately.
@@ -406,5 +408,62 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
       }
     }
   } catch (_) {}
+}
+
+// Sep 21 2026: D Von's direct, correct push -- "start downloading early
+// and hope it finishes in time" isn't the real fix. The standard,
+// first-principles way to guarantee zero placeholder flash for KNOWN
+// content is simpler and more direct: don't show the screen until its
+// images are actually ready. This is that gate, shared so it can be used
+// two ways -- fired early and unawaited right when an invite code is
+// verified (role_choice_screen.dart) for maximum head start, AND awaited
+// with a timeout right before Home actually navigates into view
+// (save_messages_prompt_screen.dart's _navigateToHome) as the real
+// guarantee -- Home simply does not render until this either completes
+// or hits its time cap, same as the app's existing branded-transition
+// minimum-display-duration wait already does for the rest of this same
+// moment. Only for Flow 3/4 (joining an established nest via invite
+// code) -- the only two flows where the real photos already exist on
+// the server before onboarding even starts.
+Future<void> precacheNestImages(String nestId) async {
+  try {
+    final supabase = Supabase.instance.client;
+    // Avatars are never a network image (emoji character or base64
+    // bytes decoded locally via Image.memory() in
+    // profile_photo_picker_screen.dart) -- nothing to precache there.
+    // SECURITY DEFINER function since the person isn't a member of this
+    // nest yet at this point -- same trust boundary as the invite-code
+    // lookup itself (a verified code is what establishes the right to
+    // preview this nest's photos here), and it filters out this nest's
+    // audio/video posts, which share the same media_url column but a
+    // different storage folder from actual photo posts.
+    final rows = await supabase.rpc(
+      'get_nest_preview_images',
+      params: {'p_nest_id': nestId},
+    ) as List;
+
+    final futures = <Future<void>>[];
+    for (final row in rows) {
+      final url = row['media_url'] as String?;
+      if (url == null || url.isEmpty) continue;
+      final completer = Completer<void>();
+      CachedNetworkImageProvider(url)
+          .resolve(const ImageConfiguration())
+          .addListener(
+            ImageStreamListener(
+              (_, __) {
+                if (!completer.isCompleted) completer.complete();
+              },
+              onError: (_, __) {
+                if (!completer.isCompleted) completer.complete();
+              },
+            ),
+          );
+      futures.add(completer.future);
+    }
+    await Future.wait(futures);
+  } catch (e) {
+    debugPrint('PRECACHE_NEST_IMAGES_ERROR: $e');
+  }
 }
 
