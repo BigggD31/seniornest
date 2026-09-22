@@ -1835,7 +1835,21 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       final nestId = prefs.getString('nest_id') ?? '';
       final userId = supabase.auth.currentUser?.id;
 
-      if (nestId.isEmpty || userId == null) return;
+      if (nestId.isEmpty || userId == null) {
+        // Sep 22 2026: found via D Von's live report of a stuck loading
+        // skeleton -- this early return never touched _isLoading at all,
+        // unlike the safety nets just added to this function's other
+        // exit paths (empty result, thrown exception). If this guard
+        // ever fires while something upstream is deliberately waiting on
+        // this exact fetch to clear loading (see _loadData()'s own
+        // comment on staleCacheGap), nothing was left to do that -- a
+        // permanently stuck skeleton, not a placeholder and not real
+        // content either.
+        if (mounted && _isLoading) {
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
 
       final response = await supabase
           .from('feed_posts')
