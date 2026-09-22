@@ -426,6 +426,18 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
 // code) -- the only two flows where the real photos already exist on
 // the server before onboarding even starts.
 Future<void> precacheNestImages(String nestId) async {
+  final startTime = DateTime.now();
+  Future<void> trace(String detail) async {
+    try {
+      await Supabase.instance.client.from('client_debug_log').insert({
+        'context': 'precache_trace',
+        'detail':
+            '${DateTime.now().difference(startTime).inMilliseconds}ms: $detail',
+      });
+    } catch (_) {}
+  }
+
+  await trace('START nestId=$nestId');
   try {
     final supabase = Supabase.instance.client;
     // Avatars are never a network image (emoji character or base64
@@ -441,28 +453,38 @@ Future<void> precacheNestImages(String nestId) async {
       'get_nest_preview_images',
       params: {'p_nest_id': nestId},
     ) as List;
+    await trace('RPC returned ${rows.length} rows');
 
     final futures = <Future<void>>[];
     for (final row in rows) {
       final url = row['media_url'] as String?;
       if (url == null || url.isEmpty) continue;
       final completer = Completer<void>();
+      final shortUrl = url.split('/').last;
       CachedNetworkImageProvider(url)
           .resolve(const ImageConfiguration())
           .addListener(
             ImageStreamListener(
               (_, __) {
-                if (!completer.isCompleted) completer.complete();
+                if (!completer.isCompleted) {
+                  trace('OK $shortUrl');
+                  completer.complete();
+                }
               },
-              onError: (_, __) {
-                if (!completer.isCompleted) completer.complete();
+              onError: (err, __) {
+                if (!completer.isCompleted) {
+                  trace('ERROR $shortUrl: $err');
+                  completer.complete();
+                }
               },
             ),
           );
       futures.add(completer.future);
     }
     await Future.wait(futures);
+    await trace('ALL DONE, ${futures.length} images');
   } catch (e) {
+    await trace('CAUGHT EXCEPTION: $e');
     debugPrint('PRECACHE_NEST_IMAGES_ERROR: $e');
   }
 }
