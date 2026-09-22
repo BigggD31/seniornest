@@ -1057,7 +1057,26 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       // corrected by a genuine live Supabase check further down (see
       // "_isNestOwner used to be declared final" below).
       _messages = initialMessages;
-      _isLoading = false;
+      // Sep 22 2026: found via real trace evidence, not guesswork -- D Von
+      // saw Home render its genuinely-empty "No photos yet" state for
+      // Popy's real, long-established account. Root cause: hasRealPost
+      // (seeded instantly from a notifier) and initialMessages (this
+      // function's own local cache check just above) can legitimately
+      // disagree -- hasRealPost correctly says real posts exist, but no
+      // locally cached copy of them exists yet for this exact nest_id
+      // (exactly what happens after switching between several different
+      // test accounts on one device, or on a first sign-in on a new
+      // device) -- so initialMessages falls back to [] right above. This
+      // used to unconditionally declare loading finished here regardless,
+      // which rendered the "genuinely broken, zero messages ever" empty
+      // state instead of a loading state for that entire gap, however
+      // long the real fetch further down actually took. Now stays in
+      // loading state for this one specific case -- known real content,
+      // nothing local to show yet -- and that later fetch (search this
+      // file for "cached_real_messages_nest_id") now correctly clears
+      // loading itself once the real messages actually arrive.
+      final staleCacheGap = hasRealPost && initialMessages.isEmpty;
+      _isLoading = staleCacheGap ? true : false;
       _todayCelebrations = todayEvents;
       _upcomingCelebrations = upcomingEvents;
       if (initialNestMembers.isNotEmpty) {
@@ -1907,6 +1926,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           setState(() {
             _hasRealPost = true;
             _messages = loaded;
+            // Sep 22 2026: this fetch never touched _isLoading before --
+            // fine when the earlier setState had already correctly
+            // finished loading, but now that it can legitimately stay in
+            // a loading state waiting for exactly this fetch (see that
+            // setState's own comment), this needs to be the one to clear
+            // it once real content genuinely arrives.
+            _isLoading = false;
           });
           // Wasn't previously persisted anywhere -- without this, every
           // cold launch would still guess false here regardless of history,
@@ -1919,9 +1945,23 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           // replay. Real data should update quietly, not restart the reveal.
           _setupItemAnimations();
         }
+      } else if (mounted && _isLoading) {
+        // Safety net: hasRealPost said real content should exist, but
+        // this live fetch genuinely found none (stale flag, or the
+        // content was removed since). Clear loading regardless rather
+        // than risk waiting forever on this specific fetch -- the empty
+        // state is still the accurate thing to show in that genuine edge
+        // case, just not while there's still a real chance this fetch
+        // succeeds normally, which is what the setState above handles.
+        setState(() => _isLoading = false);
       }
     } catch (e) {
       debugPrint('Feed load error: $e');
+      if (mounted && _isLoading) {
+        // Same safety net for a genuine fetch failure -- never leave
+        // someone stuck on a spinner because of an error here.
+        setState(() => _isLoading = false);
+      }
     }
   }
 

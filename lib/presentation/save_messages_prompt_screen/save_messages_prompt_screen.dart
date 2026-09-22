@@ -457,12 +457,6 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             await precacheNestImages(existingNestId)
                 .timeout(const Duration(seconds: 3));
           } catch (_) {}
-          try {
-            await Supabase.instance.client.from('client_debug_log').insert({
-              'context': 'precache_trace',
-              'detail': 'NAV_FIRING early_exit_path',
-            });
-          } catch (_) {}
           if (mounted) {
             Navigator.pushNamedAndRemoveUntil(
               context,
@@ -895,13 +889,6 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     // fetches normally as a fallback for anything not ready by then.
     final joinedViaInviteForPrecache = prefs.getBool('joined_via_invite') ?? false;
     final nestIdForPrecache = prefs.getString('nest_id');
-    try {
-      await Supabase.instance.client.from('client_debug_log').insert({
-        'context': 'precache_trace',
-        'detail':
-            'MAIN_PATH_GATE joinedViaInvite=$joinedViaInviteForPrecache nestId=$nestIdForPrecache',
-      });
-    } catch (_) {}
     if (joinedViaInviteForPrecache &&
         nestIdForPrecache != null &&
         nestIdForPrecache.isNotEmpty) {
@@ -910,12 +897,6 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             .timeout(const Duration(seconds: 3));
       } catch (_) {}
     }
-    try {
-      await Supabase.instance.client.from('client_debug_log').insert({
-        'context': 'precache_trace',
-        'detail': 'NAV_FIRING main_path',
-      });
-    } catch (_) {}
     if (mounted) {
       Navigator.pushReplacementNamed(
         context,
