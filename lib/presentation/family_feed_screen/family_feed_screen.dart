@@ -932,6 +932,18 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
     upcomingEvents.sort((a, b) => a.daysUntil.compareTo(b.daysUntil));
 
+    // Sep 23 2026: D Von's direct, correct catch -- the nest-content check
+    // just below and _loadFeedFromSupabase() further down were two
+    // separate, sequential network round trips: check, THEN separately
+    // fetch. Each one only takes roughly a second on its own, but run one
+    // after another rather than at the same time, that's exactly the
+    // felt multi-second delay he reported. Starting the real fetch here,
+    // immediately, means it runs concurrently with the existence check
+    // below instead of waiting for it to finish first -- total wait
+    // becomes whichever of the two is slower, not both added together.
+    // Nothing else changes: this Future gets consumed at its original
+    // call site further down, not invoked a second time.
+    final loadFeedFuture = _loadFeedFromSupabase();
     // Prefer real cached messages over generic demo placeholders — avoids
     // showing mismatched content that then flashes/swaps once the network loads.
     final _currentNestIdForCache = prefs.getString('nest_id') ?? '';
@@ -1105,31 +1117,45 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       // owner (D Von's screenshots, Aug 25). Now a real mutable field,
       // corrected by a genuine live Supabase check further down (see
       // "_isNestOwner used to be declared final" below).
-      _messages = initialMessages;
-      // Sep 22 2026: found via real trace evidence, not guesswork -- D Von
-      // saw Home render its genuinely-empty "No photos yet" state for
-      // Popy's real, long-established account. Root cause: hasRealPost
-      // (seeded instantly from a notifier) and initialMessages (this
-      // function's own local cache check just above) can legitimately
-      // disagree -- hasRealPost correctly says real posts exist, but no
-      // locally cached copy of them exists yet for this exact nest_id
-      // (exactly what happens after switching between several different
-      // test accounts on one device, or on a first sign-in on a new
-      // device) -- so initialMessages falls back to [] right above. This
-      // used to unconditionally declare loading finished here regardless,
-      // which rendered the "genuinely broken, zero messages ever" empty
-      // state instead of a loading state for that entire gap, however
-      // long the real fetch further down actually took. Now stays in
-      // loading state for this one specific case -- known real content,
-      // nothing local to show yet -- and that later fetch (search this
-      // file for "cached_real_messages_nest_id") now correctly clears
-      // loading itself once the real messages actually arrive.
-      // Sep 22 2026: updated to match the real, nest-scoped signal
-      // (nestHasRealContent, computed above) instead of hasRealPost --
-      // same underlying gap this comment already describes, just fixed
-      // at its real source now rather than patched around per-flow.
-      final staleCacheGap = nestHasRealContent && initialMessages.isEmpty;
-      _isLoading = staleCacheGap ? true : false;
+      // Sep 23 2026: race-safety guard, needed now that loadFeedFuture (see
+      // above) starts concurrently with this whole function instead of
+      // after it -- it's now genuinely possible for it to finish and
+      // populate real _messages before this setState below runs. Without
+      // this check, that real content could get overwritten right back to
+      // [] (initialMessages, the stale-cache-gap case) or _isLoading
+      // reset to true a moment after it had already correctly gone false
+      // -- a visible regression, content appearing then vanishing back
+      // into a spinner. _messages already being non-empty here is exactly
+      // that signal: the concurrent fetch already won, so leave what it
+      // set alone rather than stomp on it a moment later.
+      final concurrentFetchAlreadyWon = _messages.isNotEmpty;
+      if (!concurrentFetchAlreadyWon) {
+        _messages = initialMessages;
+        // Sep 22 2026: found via real trace evidence, not guesswork -- D Von
+        // saw Home render its genuinely-empty "No photos yet" state for
+        // Popy's real, long-established account. Root cause: hasRealPost
+        // (seeded instantly from a notifier) and initialMessages (this
+        // function's own local cache check just above) can legitimately
+        // disagree -- hasRealPost correctly says real posts exist, but no
+        // locally cached copy of them exists yet for this exact nest_id
+        // (exactly what happens after switching between several different
+        // test accounts on one device, or on a first sign-in on a new
+        // device) -- so initialMessages falls back to [] right above. This
+        // used to unconditionally declare loading finished here regardless,
+        // which rendered the "genuinely broken, zero messages ever" empty
+        // state instead of a loading state for that entire gap, however
+        // long the real fetch further down actually took. Now stays in
+        // loading state for this one specific case -- known real content,
+        // nothing local to show yet -- and that later fetch (search this
+        // file for "cached_real_messages_nest_id") now correctly clears
+        // loading itself once the real messages actually arrive.
+        // Sep 22 2026: updated to match the real, nest-scoped signal
+        // (nestHasRealContent, computed above) instead of hasRealPost --
+        // same underlying gap this comment already describes, just fixed
+        // at its real source now rather than patched around per-flow.
+        final staleCacheGap = nestHasRealContent && initialMessages.isEmpty;
+        _isLoading = staleCacheGap ? true : false;
+      }
       _todayCelebrations = todayEvents;
       _upcomingCelebrations = upcomingEvents;
       if (initialNestMembers.isNotEmpty) {
@@ -1255,7 +1281,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // separately, before this block even started), which made the avatar
     // row (loaded last) visibly pop in after everything else.
     await Future.wait([
-      _loadFeedFromSupabase(),
+      loadFeedFuture,
       _loadCheckinStatus(),
       _loadNestMembers(),
       _loadBookmarks(),
