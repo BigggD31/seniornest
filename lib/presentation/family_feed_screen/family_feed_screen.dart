@@ -237,7 +237,22 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // and check-in card only ever pop in with their fade+lift once per
   // session, instead of empty-then-fade-in-and-shove-everything-down on
   // every single visit to Home, which is what read as "twitchy."
-  static bool _topCardsAnimatedOnceThisSession = false;
+  //
+  // Sep 23 2026: D Von's direct catch, and a real, confirmed bug -- this
+  // used to be ONE flag shared by both cards, each set true by its OWN
+  // independent network load (_loadNestMembers, _loadCheckinStatus) the
+  // instant THAT load finished. Since the two loads run concurrently and
+  // don't finish at exactly the same real-world moment, whichever
+  // finished first would set the flag true -- and the other, finishing
+  // moments later, would read that now-true flag as "already animated"
+  // and skip its own entrance animation entirely, popping in instantly
+  // instead of fading+lifting. Which card lost its animation varied by
+  // network timing alone, nothing to do with either card's own data --
+  // exactly "different cards loading at different times, not smooth."
+  // Split into two independent flags so neither card's animation can
+  // ever be stolen by the other one finishing first.
+  static bool _avatarRowAnimatedOnceThisSession = false;
+  static bool _checkinCardAnimatedOnceThisSession = false;
   final List<Animation<double>> _itemAnimations = [];
   final ScrollController _scrollController = ScrollController();
   // Aug 21 2026: collapsible year/month grouping -- which groups are
@@ -1464,7 +1479,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           _seniorCheckinTime = primary['checkinTime'] as DateTime?;
           _seniorMedsTakenToday = medsResponse;
           _seniorMedsTakenTime = primary['medsTime'] as DateTime?;
-          _topCardsAnimatedOnceThisSession = true;
+          _checkinCardAnimatedOnceThisSession = true;
           // Reconcile the local-only good_today_* flag (drives the
           // floating "I'm Good" button) against this real database check
           // (drives the "You checked in today" card above) whenever this
@@ -1638,7 +1653,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       if (mounted) {
         setState(() {
           _nestMembers = membersToShow;
-          _topCardsAnimatedOnceThisSession = true;
+          _avatarRowAnimatedOnceThisSession = true;
         });
       }
 
@@ -2280,7 +2295,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 // app instead of abruptly popping into the layout once its
                 // data finishes loading.
                 AnimatedSwitcher(
-                  duration: _topCardsAnimatedOnceThisSession
+                  duration: _avatarRowAnimatedOnceThisSession
                       ? Duration.zero
                       : const Duration(milliseconds: 300),
                   transitionBuilder: (child, animation) {
@@ -2314,7 +2329,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 ),
                 // Pinned daily check-in status card (shown once we know who the senior is)
                 AnimatedSwitcher(
-                  duration: _topCardsAnimatedOnceThisSession
+                  duration: _checkinCardAnimatedOnceThisSession
                       ? Duration.zero
                       : const Duration(milliseconds: 300),
                   transitionBuilder: (child, animation) {
