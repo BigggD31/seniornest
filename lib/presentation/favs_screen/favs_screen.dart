@@ -140,26 +140,11 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
     return _bookmarkedItems.where((item) => item['category'] == cat).toList();
   }
 
+  // Sep 24 2026: no longer navigates -- see the matching comment in
+  // family_feed_screen.dart's _onNavTap.
   void _onNavTap(int index) {
     if (index == _currentNavIndex) return;
-    setState(() => _currentNavIndex = index);
-    switch (index) {
-      case 0:
-        Navigator.pushReplacementNamed(context, '/family-feed-screen');
-        break;
-      case 1:
-        Navigator.pushReplacementNamed(context, '/send-screen');
-        break;
-      case 2:
-        Navigator.pushReplacementNamed(context, '/legacy-screen');
-        break;
-      case 3:
-        Navigator.pushReplacementNamed(context, '/safety-screen');
-        break;
-      case 5:
-        Navigator.pushReplacementNamed(context, '/setup-screen');
-        break;
-    }
+    appActiveTabNotifier.value = index;
   }
 
   Future<void> _removeBookmark(Map<String, dynamic> item) async {

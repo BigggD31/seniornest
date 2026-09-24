@@ -773,26 +773,11 @@ class _SafetyScreenState extends State<SafetyScreen>
     }
   }
 
+  // Sep 24 2026: no longer navigates -- see the matching comment in
+  // family_feed_screen.dart's _onNavTap.
   void _onNavTap(int index) {
     if (index == _currentNavIndex) return;
-    setState(() => _currentNavIndex = index);
-    switch (index) {
-      case 0:
-        Navigator.pushReplacementNamed(context, '/family-feed-screen');
-        break;
-      case 1:
-        Navigator.pushReplacementNamed(context, '/send-screen');
-        break;
-      case 2:
-        Navigator.pushReplacementNamed(context, '/legacy-screen');
-        break;
-      case 4:
-        Navigator.pushReplacementNamed(context, '/favs-screen');
-        break;
-      case 5:
-        Navigator.pushReplacementNamed(context, '/setup-screen');
-        break;
-    }
+    appActiveTabNotifier.value = index;
   }
 
   @override

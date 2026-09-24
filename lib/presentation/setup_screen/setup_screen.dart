@@ -1156,26 +1156,11 @@ class _SetupScreenState extends State<SetupScreen>
     }
   }
 
+  // Sep 24 2026: no longer navigates -- see the matching comment in
+  // family_feed_screen.dart's _onNavTap.
   void _onNavTap(int index) {
     if (index == _currentNavIndex) return;
-    setState(() => _currentNavIndex = index);
-    switch (index) {
-      case 0:
-        Navigator.pushReplacementNamed(context, '/family-feed-screen');
-        break;
-      case 1:
-        Navigator.pushReplacementNamed(context, '/send-screen');
-        break;
-      case 2:
-        Navigator.pushReplacementNamed(context, '/legacy-screen');
-        break;
-      case 3:
-        Navigator.pushReplacementNamed(context, '/safety-screen');
-        break;
-      case 4:
-        Navigator.pushReplacementNamed(context, '/favs-screen');
-        break;
-    }
+    appActiveTabNotifier.value = index;
   }
 
   void _shareInviteCode() async {

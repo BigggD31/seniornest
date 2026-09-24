@@ -13,6 +13,7 @@ import './presentation/send_screen/send_screen.dart';
 import './presentation/legacy_screen/legacy_screen.dart';
 import './presentation/safety_screen/safety_screen.dart';
 import './presentation/setup_screen/setup_screen.dart';
+import './presentation/main_tab_shell/main_tab_shell.dart';
 import './services/auth_service.dart';
 import './services/supabase_service.dart';
 import './services/push_service.dart';
@@ -590,7 +591,15 @@ class _MyAppState extends State<MyApp> {
     final staticBuilder = AppRoutes.routes[routeName];
     if (staticBuilder != null) return staticBuilder(context);
     final Widget? page = switch (routeName) {
-      AppRoutes.familyFeedScreen => const FamilyFeedScreen(),
+      // Sep 24 2026: familyFeedScreen is the one route name every real
+      // entry point (sign-out, onboarding completion, message-save
+      // prompts, subscribe-screen return) actually targets -- now opens
+      // MainTabShell, which keeps all six tabs alive, instead of the bare
+      // screen. The other five mappings below are unreachable dead code
+      // as of this change (confirmed via grep -- only messages_inbox_screen.dart
+      // references them, and that screen itself is unreachable from
+      // anywhere in the current app) but left as a defensive fallback.
+      AppRoutes.familyFeedScreen => const MainTabShell(),
       AppRoutes.sendScreen => const SendScreen(),
       AppRoutes.legacyScreen => const LegacyScreen(),
       AppRoutes.favsScreen => const FavsScreen(),
@@ -662,7 +671,9 @@ class _MyAppState extends State<MyApp> {
                   // he wants it as the standard everywhere.
                   onGenerateRoute: (settings) {
                     final Widget? page = switch (settings.name) {
-                      AppRoutes.familyFeedScreen => const FamilyFeedScreen(),
+                      // Sep 24 2026: see the matching comment in
+                      // _resolveRouteWidget above.
+                      AppRoutes.familyFeedScreen => const MainTabShell(),
                       AppRoutes.sendScreen => const SendScreen(),
                       AppRoutes.legacyScreen => const LegacyScreen(),
                       AppRoutes.favsScreen => const FavsScreen(),

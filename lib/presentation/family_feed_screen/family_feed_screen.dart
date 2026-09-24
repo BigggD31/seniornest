@@ -494,7 +494,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              Navigator.pushNamed(context, AppRoutes.setupScreen);
+              // Sep 24 2026: was Navigator.pushNamed(AppRoutes.setupScreen)
+              // -- now that Setup lives inside MainTabShell, pushing it as
+              // a new route would create a second, orphaned SetupScreen
+              // instance with its own separate state instead of switching
+              // to the real one already alive in the shell.
+              appActiveTabNotifier.value = 5;
             },
             child: Text(
               'View Request',
@@ -2183,26 +2188,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     }
   }
 
+  // Sep 24 2026: no longer navigates -- MainTabShell keeps all six tabs
+  // alive in an IndexedStack and just swaps which one is visible via
+  // appActiveTabNotifier (see app_state.dart). This screen no longer gets
+  // destroyed/rebuilt on tab switches, which was the actual root cause
+  // behind the animation-replay bug fixed Aug 6/Sep 23 and the flash
+  // pattern reported since -- see engineering-learnings.
   void _onNavTap(int index) {
     if (index == 0) return; // Already on Family Feed
-    setState(() => _currentNavIndex = index);
-    switch (index) {
-      case 1:
-        Navigator.pushReplacementNamed(context, '/send-screen');
-        break;
-      case 2:
-        Navigator.pushReplacementNamed(context, '/legacy-screen');
-        break;
-      case 3:
-        Navigator.pushReplacementNamed(context, '/safety-screen');
-        break;
-      case 4:
-        Navigator.pushReplacementNamed(context, '/favs-screen');
-        break;
-      case 5:
-        Navigator.pushReplacementNamed(context, '/setup-screen');
-        break;
-    }
+    appActiveTabNotifier.value = index;
   }
 
   @override
@@ -2444,7 +2438,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                         'What\'s your favorite family tradition that you\'d love to pass down?',
                     isSenior: _isSenior,
                     onRespond: () {
-                      Navigator.pushReplacementNamed(context, '/legacy-screen');
+                      appActiveTabNotifier.value = 2;
                     },
                   ),
                 const SizedBox(height: 20),
@@ -2465,8 +2459,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                   hasScrollBody: false,
                   child: FeedEmptyStateWidget(
                     isDarkMode: _isDarkMode,
-                    onSend: () =>
-                        Navigator.pushReplacementNamed(context, '/send-screen'),
+                    onSend: () => appActiveTabNotifier.value = 1,
                   ),
                 )
               : isTablet
@@ -2603,7 +2596,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   Widget _buildInviteReminderBanner() {
     return GestureDetector(
       onTap: () {
-        Navigator.pushReplacementNamed(context, '/setup-screen');
+        appActiveTabNotifier.value = 5;
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

@@ -3913,26 +3913,12 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     }
   }
 
+  // Sep 24 2026: no longer navigates -- see the matching comment in
+  // family_feed_screen.dart's _onNavTap. MainTabShell/appActiveTabNotifier
+  // now own tab switching.
   void _onNavTap(int index) {
     if (index == _currentNavIndex) return;
-    setState(() => _currentNavIndex = index);
-    switch (index) {
-      case 0:
-        Navigator.pushReplacementNamed(context, '/family-feed-screen');
-        break;
-      case 2:
-        Navigator.pushReplacementNamed(context, '/legacy-screen');
-        break;
-      case 3:
-        Navigator.pushReplacementNamed(context, '/safety-screen');
-        break;
-      case 4:
-        Navigator.pushReplacementNamed(context, '/favs-screen');
-        break;
-      case 5:
-        Navigator.pushReplacementNamed(context, '/setup-screen');
-        break;
-    }
+    appActiveTabNotifier.value = index;
   }
 }
 

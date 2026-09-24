@@ -12,6 +12,16 @@ final ValueNotifier<double> appTextScaleNotifier = ValueNotifier<double>(1.0);
 /// Global dark-mode notifier — setup_screen writes here; MyApp switches ThemeMode.
 final ValueNotifier<bool> appDarkModeNotifier = ValueNotifier<bool>(false);
 
+/// Bottom-nav tab index (0=Home, 1=Share, 2=Legacy, 3=Safety, 4=Favs,
+/// 5=Setup) for MainTabShell's IndexedStack. Sep 24 2026: replaces the old
+/// Navigator.pushReplacementNamed-per-tab pattern, which rebuilt the
+/// destination screen from scratch on every single tap (see
+/// ActivityBadgeService's comment on why that pattern existed and its
+/// cost). Any screen wanting to switch tabs sets this instead of
+/// navigating -- MainTabShell listens and swaps which child is visible,
+/// with all six kept alive underneath.
+final ValueNotifier<int> appActiveTabNotifier = ValueNotifier<int>(0);
+
 /// Global nest-name notifier — resolved once in main.dart's
 /// _resolveInitialRoute(), before any screen ever builds, same pattern as
 /// appDarkModeNotifier above. Once someone has named their nest, that name
