@@ -609,6 +609,27 @@ class _MyAppState extends State<MyApp> {
       (initialRoute == null) != (home == null),
       'Provide exactly one of initialRoute or home',
     );
+    // Sep 23 2026: found on Android's very first genuinely fresh
+    // install/emulator (Claude Code, overnight) -- a brand-new device
+    // that's never set has_seen_intro_sequence calls this with `home`
+    // set to the intro screens, while routes below is always passed
+    // unconditionally and includes an entry for the exact key '/'
+    // (AppRoutes.initial). Flutter's MaterialApp explicitly forbids
+    // providing both `home` and a routes entry for '/' at the same
+    // time -- an assertion failure, not a soft warning. Purely a gap in
+    // the shared Dart code, never exercised before since no test
+    // account on any platform had ever hit a truly fresh install with
+    // this flag unset until last night's first-ever clean Android
+    // emulator. Same standing risk on iOS for the identical rare case,
+    // just never actually triggered there yet.
+    // Fix: when `home` is in use, pass a copy of the routes map with
+    // only the '/' key removed -- every other named route stays
+    // available for when initialRoute is used instead, on every other
+    // call to this same function.
+    final effectiveRoutes = home != null
+        ? (Map<String, WidgetBuilder>.from(AppRoutes.routes)
+          ..remove(AppRoutes.initial))
+        : AppRoutes.routes;
     return Sizer(
       builder: (context, orientation, screenType) {
         return ValueListenableBuilder<bool>(
@@ -633,7 +654,7 @@ class _MyAppState extends State<MyApp> {
                   },
                   // 🚨 END CRITICAL SECTION
                   debugShowCheckedModeBanner: false,
-                  routes: AppRoutes.routes,
+                  routes: effectiveRoutes,
                   // App-wide fade + gentle lift transition for all six
                   // bottom-nav screens (Aug 5 2026), replacing whatever
                   // each screen's platform default happened to be. D Von
