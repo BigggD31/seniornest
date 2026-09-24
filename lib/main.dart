@@ -8,7 +8,6 @@ import './core/app_export.dart';
 import './core/app_state.dart';
 import './routes/app_routes.dart';
 import './presentation/favs_screen/favs_screen.dart';
-import './presentation/family_feed_screen/family_feed_screen.dart';
 import './presentation/send_screen/send_screen.dart';
 import './presentation/legacy_screen/legacy_screen.dart';
 import './presentation/safety_screen/safety_screen.dart';
