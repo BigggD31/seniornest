@@ -31,7 +31,7 @@ class LegacyScreen extends StatefulWidget {
 
 class _LegacyScreenState extends State<LegacyScreen>
     with TickerProviderStateMixin {
-  int _currentNavIndex = 2;
+  final int _currentNavIndex = 2;
   bool _isSenior = appIsSeniorNotifier.value;
   bool _isNestArchived = appIsNestArchivedNotifier.value; // Sep 2 2026: hides senior-only Legacy posting (Tell Your Story hero, Answer a Prompt) once a nest is a memorial -- family's own posting stays untouched
   // Aug 21 2026: added for the delete-post feature (matching Home's

@@ -25,7 +25,7 @@ class SafetyScreen extends StatefulWidget {
 
 class _SafetyScreenState extends State<SafetyScreen>
     with TickerProviderStateMixin {
-  int _currentNavIndex = 3;
+  final int _currentNavIndex = 3;
   bool _isSenior = appIsSeniorNotifier.value;
   // Seeded from the already-resolved app-wide notifier instead of a
   // hardcoded false -- see messages_inbox_screen.dart for the full

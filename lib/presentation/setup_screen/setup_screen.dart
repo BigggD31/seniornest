@@ -23,7 +23,7 @@ class SetupScreen extends StatefulWidget {
 
 class _SetupScreenState extends State<SetupScreen>
     with TickerProviderStateMixin {
-  int _currentNavIndex = 5;
+  final int _currentNavIndex = 5;
   bool _isSenior = appIsSeniorNotifier.value;
   // Seeded from the already-resolved app-wide notifier instead of a
   // hardcoded false -- see messages_inbox_screen.dart for the full

@@ -168,7 +168,7 @@ class FamilyFeedScreen extends StatefulWidget {
 class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     with TickerProviderStateMixin {
   // TODO: Replace with Riverpod/Bloc for production — feed state, user state
-  int _currentNavIndex = 0;
+  final int _currentNavIndex = 0;
   bool _isSenior = appIsSeniorNotifier.value;
   String _displayName = appDisplayNameNotifier.value;
   // Seeded from the already-resolved app-wide notifier instead of an

@@ -24,7 +24,7 @@ class FavsScreen extends StatefulWidget {
 }
 
 class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
-  int _currentNavIndex = 4;
+  final int _currentNavIndex = 4;
   // Seeded from the already-resolved app-wide notifier instead of a
   // hardcoded false -- see messages_inbox_screen.dart for the full
   // explanation of the white-flash bug this fixes.

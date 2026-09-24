@@ -32,7 +32,7 @@ class SendScreen extends StatefulWidget {
 }
 
 class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
-  int _currentNavIndex = 1;
+  final int _currentNavIndex = 1;
   bool _isSenior = appIsSeniorNotifier.value;
   bool _isNestOwner = false;
   String _displayName = appDisplayNameNotifier.value;
