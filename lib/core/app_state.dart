@@ -176,6 +176,15 @@ final ValueNotifier<String> appSeniorUserIdNotifier = ValueNotifier<String>('');
 final ValueNotifier<List<Map<String, dynamic>>> appNestMembersNotifier =
     ValueNotifier<List<Map<String, dynamic>>>([]);
 
+/// Sep 24 2026: full multi-senior version of appSeniorCheckedInTodayNotifier
+/// etc. above -- those only ever describe one ("primary") senior, which
+/// left every genuine second/third senior's check-in card always
+/// animating in on first load regardless. Resolved from
+/// cached_senior_statuses (JSON, DateTime fields as ISO strings), same
+/// nest+date scoping as the scalar checkin notifiers just above.
+final ValueNotifier<List<Map<String, dynamic>>> appSeniorStatusesNotifier =
+    ValueNotifier<List<Map<String, dynamic>>>([]);
+
 // ── Aug 31 2026: whole-app flash audit, prompted by D Von finding the "I'm
 // Good" button still flashing on a cold open even after Archive Nest Mode
 // itself worked correctly. Turned out to be the same hardcoded-false-
@@ -334,6 +343,23 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
         prefs.getBool('cached_checkin_checked_in') ?? false;
     appSeniorMedsTakenTodayNotifier.value =
         prefs.getBool('cached_checkin_meds_taken') ?? false;
+    // Sep 24 2026: full multi-senior list, same nest+date scoping as the
+    // scalar values just above (reusing the exact same match, not a
+    // separate check) -- see appSeniorStatusesNotifier's own doc comment.
+    final cachedStatusesJson = prefs.getString('cached_senior_statuses');
+    if (cachedStatusesJson != null && cachedStatusesJson.isNotEmpty) {
+      try {
+        final List<dynamic> decoded = jsonDecode(cachedStatusesJson) as List<dynamic>;
+        appSeniorStatusesNotifier.value = decoded.map((s) {
+          final entry = Map<String, dynamic>.from(s as Map);
+          final ct = entry['checkinTime'] as String?;
+          final mt = entry['medsTime'] as String?;
+          entry['checkinTime'] = ct != null ? DateTime.parse(ct) : null;
+          entry['medsTime'] = mt != null ? DateTime.parse(mt) : null;
+          return entry;
+        }).toList();
+      } catch (_) {}
+    }
   } else {
     // On a genuine account switch, a stale nest/date match is impossible
     // (nest_id itself was just wiped), so these correctly fall back to

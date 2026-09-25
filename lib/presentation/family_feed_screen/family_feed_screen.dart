@@ -239,33 +239,30 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // below already having real, correctly-seeded values (_seniorName,
   // _seniorCheckedInToday, etc. -- all seeded the same way, just genuinely
   // unused elsewhere in this class per flutter analyze, since the actual
-  // check-in card renders from THIS list, not those scalars). Builds a
-  // single-entry synchronous fallback from them when a senior is already
-  // known, so the check-in card can skip its entrance animation on a
-  // returning session instead of always waiting for _loadData()'s own
-  // async read. checkinTime/medsTime aren't covered by a scalar notifier,
-  // so they start null here -- the live fetch fills them in a moment
-  // later without re-animating, same as everything else on this screen.
-  // checkinEnabled/medsRemindersEnabled default true to match the exact
-  // fallback the build method already uses for a missing key. Genuine
-  // multi-senior nests (a second senior beyond this one) still show the
-  // brief entrance animation on true first load, since only one senior's
-  // scalar data has a resolved notifier -- a known, accepted limitation,
-  // not an oversight.
-  List<Map<String, dynamic>> _seniorStatuses = appSeniorUserIdNotifier.value.isNotEmpty
-      ? [
-          {
-            'id': appSeniorUserIdNotifier.value,
-            'name': appSeniorNameNotifier.value,
-            'checkedIn': appSeniorCheckedInTodayNotifier.value,
-            'checkinTime': null,
-            'medsTaken': appSeniorMedsTakenTodayNotifier.value,
-            'medsTime': null,
-            'checkinEnabled': true,
-            'medsRemindersEnabled': true,
-          }
-        ]
-      : [];
+  // check-in card renders from THIS list, not those scalars). Prefers
+  // appSeniorStatusesNotifier (the real multi-senior cache) when it has
+  // data; falls back to a single-entry synthetic built from the scalar
+  // notifiers only for the gap right after this update, before the next
+  // live fetch has had a chance to populate the new cache. checkinTime/
+  // medsTime aren't covered by the scalar fallback, so they start null in
+  // that case -- the live fetch fills them in a moment later without
+  // re-animating, same as everything else on this screen.
+  List<Map<String, dynamic>> _seniorStatuses = appSeniorStatusesNotifier.value.isNotEmpty
+      ? appSeniorStatusesNotifier.value
+      : (appSeniorUserIdNotifier.value.isNotEmpty
+          ? [
+              {
+                'id': appSeniorUserIdNotifier.value,
+                'name': appSeniorNameNotifier.value,
+                'checkedIn': appSeniorCheckedInTodayNotifier.value,
+                'checkinTime': null,
+                'medsTaken': appSeniorMedsTakenTodayNotifier.value,
+                'medsTime': null,
+                'checkinEnabled': true,
+                'medsRemindersEnabled': true,
+              }
+            ]
+          : <Map<String, dynamic>>[]);
   bool _inviteCodeShared = appInviteCodeSharedNotifier.value; // tracks if family owner has shared invite code
   bool _isGuest = appIsGuestNotifier.value;
   bool _isNestOwner = appIsNestOwnerNotifier.value;
@@ -313,7 +310,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // hide this) was removed. Now skip the animation together whenever
   // there's already real data to show.
   static bool _avatarRowAnimatedOnceThisSession = appNestMembersNotifier.value.isNotEmpty;
-  static bool _checkinCardAnimatedOnceThisSession = appSeniorUserIdNotifier.value.isNotEmpty;
+  static bool _checkinCardAnimatedOnceThisSession =
+      appSeniorStatusesNotifier.value.isNotEmpty || appSeniorUserIdNotifier.value.isNotEmpty;
   final List<Animation<double>> _itemAnimations = [];
   final ScrollController _scrollController = ScrollController();
   // Aug 21 2026: collapsible year/month grouping -- which groups are
@@ -1618,6 +1616,23 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         } else {
           await prefs.remove('cached_checkin_meds_time');
         }
+        // Sep 24 2026: added to cover genuine multi-senior nests -- the
+        // scalar keys above only ever describe the first/"primary" senior,
+        // which left every OTHER senior's card animating in on every true
+        // first load regardless of this cache. DateTime fields don't
+        // jsonEncode directly, so each entry is copied with checkinTime/
+        // medsTime converted to ISO strings first.
+        await prefs.setString(
+          'cached_senior_statuses',
+          jsonEncode(seniorStatuses.map((s) {
+            final copy = Map<String, dynamic>.from(s);
+            final ct = copy['checkinTime'] as DateTime?;
+            final mt = copy['medsTime'] as DateTime?;
+            copy['checkinTime'] = ct?.toIso8601String();
+            copy['medsTime'] = mt?.toIso8601String();
+            return copy;
+          }).toList()),
+        );
       } catch (_) {}
     } catch (e) {
       debugPrint('CHECKIN_STATUS_LOAD_ERROR: $e');
