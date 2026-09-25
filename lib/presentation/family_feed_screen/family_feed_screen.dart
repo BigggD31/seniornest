@@ -182,7 +182,28 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   bool _justCheckedIn = false; // true only briefly right after tapping, to show the "Sent!" confirmation
   bool _showMedsReminder = appShowMedsReminderNotifier.value;
   bool _showWelcomeToast = false;
-  bool _isLoading = true;
+  // Sep 24 2026: was unconditionally true regardless of how much of this
+  // screen's data was already available synchronously from seeded
+  // notifiers -- confirmed via git log that this has been the case since
+  // the very first working build (June 9 2026), not a regression. Now
+  // starts false whenever appNestNameNotifier already has a value, which
+  // is true for every returning session (including every warm re-entry)
+  // -- the only case that still shows the full skeleton is a genuinely
+  // brand-new device that's never set a nest name at all. _buildLoadingState()
+  // still exists and still covers that one real first-time case correctly.
+  bool _isLoading = appNestNameNotifier.value.isEmpty;
+  // Tracks the messages list specifically, separate from _isLoading above.
+  // Needed because _messages itself can't be seeded synchronously --
+  // SharedPreferences has no sync read API -- so even with _isLoading
+  // starting false, _messages is still genuinely [] for one microtask.
+  // Without this flag, the (_messages.isEmpty && _hasRealPost) branch a
+  // few hundred lines down would show FeedEmptyStateWidget (a "you have
+  // no messages, send one" prompt) during that real gap, to someone who
+  // actually has messages -- worse than the skeleton it replaces. Set to
+  // true at every point _isLoading already gets set false below, since
+  // those are exactly the points where _messages has been definitively
+  // resolved one way or another.
+  bool _messagesLoaded = false;
   // Seeded from the already-resolved app-wide notifier instead of a
   // hardcoded false -- see messages_inbox_screen.dart for the full
   // explanation of the white-flash bug this fixes. This screen matters
@@ -1175,6 +1196,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         // at its real source now rather than patched around per-flow.
         final staleCacheGap = nestHasRealContent && initialMessages.isEmpty;
         _isLoading = staleCacheGap ? true : false;
+        // Sep 24 2026: mirrors _isLoading above -- see _messagesLoaded's
+        // own comment at its declaration. Not loaded yet specifically
+        // when staleCacheGap is true (still waiting on the real fetch);
+        // loaded (even if genuinely empty) otherwise.
+        _messagesLoaded = !staleCacheGap;
       }
       _todayCelebrations = todayEvents;
       _upcomingCelebrations = upcomingEvents;
@@ -1891,8 +1917,16 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         // comment on staleCacheGap), nothing was left to do that -- a
         // permanently stuck skeleton, not a placeholder and not real
         // content either.
-        if (mounted && _isLoading) {
-          setState(() => _isLoading = false);
+        // Sep 24 2026: guard changed from `_isLoading` to `!_messagesLoaded`
+        // -- _isLoading can now already be false from the start for a
+        // returning user, which would've skipped this whole block and left
+        // _messagesLoaded permanently false, stuck showing the feed
+        // placeholder forever. _messagesLoaded is the precise gate now.
+        if (mounted && !_messagesLoaded) {
+          setState(() {
+            _isLoading = false;
+            _messagesLoaded = true;
+          });
         }
         return;
       }
@@ -2046,6 +2080,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             // setState's own comment), this needs to be the one to clear
             // it once real content genuinely arrives.
             _isLoading = false;
+            _messagesLoaded = true;
           });
           // Wasn't previously persisted anywhere -- without this, every
           // cold launch would still guess false here regardless of history,
@@ -2058,7 +2093,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           // replay. Real data should update quietly, not restart the reveal.
           _setupItemAnimations();
         }
-      } else if (mounted && _isLoading) {
+      } else if (mounted && !_messagesLoaded) {
         // Safety net: hasRealPost said real content should exist, but
         // this live fetch genuinely found none (stale flag, or the
         // content was removed since). Clear loading regardless rather
@@ -2066,14 +2101,22 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         // state is still the accurate thing to show in that genuine edge
         // case, just not while there's still a real chance this fetch
         // succeeds normally, which is what the setState above handles.
-        setState(() => _isLoading = false);
+        // Sep 24 2026: guard changed from _isLoading to !_messagesLoaded,
+        // same reason as _loadFeedFromSupabase's other early return.
+        setState(() {
+          _isLoading = false;
+          _messagesLoaded = true;
+        });
       }
     } catch (e) {
       debugPrint('Feed load error: $e');
-      if (mounted && _isLoading) {
+      if (mounted && !_messagesLoaded) {
         // Same safety net for a genuine fetch failure -- never leave
         // someone stuck on a spinner because of an error here.
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _messagesLoaded = true;
+        });
       }
     }
   }
@@ -2454,7 +2497,18 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             ),
           ),
           // Messages
-          (_messages.isEmpty && _hasRealPost)
+          // Sep 24 2026: added the !_messagesLoaded case -- without it,
+          // this showed FeedEmptyStateWidget ("no messages, send one")
+          // during the real gap between _isLoading starting false (now
+          // conditional, see its declaration) and _messages actually
+          // finishing its own load, which is misleading for anyone who
+          // genuinely has messages. See _messagesLoaded's own comment.
+          (_messages.isEmpty && _hasRealPost && !_messagesLoaded)
+              ? SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _buildFeedLoadingPlaceholder(),
+                )
+              : (_messages.isEmpty && _hasRealPost)
               ? SliverFillRemaining(
                   hasScrollBody: false,
                   child: FeedEmptyStateWidget(
@@ -2797,6 +2851,25 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             ),
           );
         }, childCount: _messages.length),
+      ),
+    );
+  }
+
+  // Sep 24 2026: scoped version of _buildLoadingState() below -- same
+  // skeleton card, fewer of them, used only for the feed area specifically
+  // while the rest of the screen (header, avatar row, check-in cards) is
+  // already showing real content. See _messagesLoaded's declaration.
+  Widget _buildFeedLoadingPlaceholder() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: List.generate(
+          2,
+          (_) => Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _buildSkeletonCard(),
+          ),
+        ),
       ),
     );
   }

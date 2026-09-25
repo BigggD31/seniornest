@@ -586,6 +586,17 @@ class _MyAppState extends State<MyApp> {
   // map. Checks the static map first, falls back to the same six-screen
   // switch onGenerateRoute uses, so this never crashes regardless of
   // which of the two systems the resolved route actually lives in.
+  // Sep 24 2026: familyFeedScreen means "go to Home" by name -- but
+  // appActiveTabNotifier is a persistent, session-wide value, so without
+  // this reset, navigating here while the notifier is sitting on some
+  // other tab (e.g. after using Setup) opens the shell showing that other
+  // tab instead of Home. Confirmed bug: adding a family member via Setup
+  // was landing back on Setup instead of Home for exactly this reason.
+  Widget _openShellOnHome() {
+    appActiveTabNotifier.value = 0;
+    return const MainTabShell();
+  }
+
   Widget _resolveRouteWidget(String routeName, BuildContext context) {
     final staticBuilder = AppRoutes.routes[routeName];
     if (staticBuilder != null) return staticBuilder(context);
@@ -598,7 +609,7 @@ class _MyAppState extends State<MyApp> {
       // as of this change (confirmed via grep -- only messages_inbox_screen.dart
       // references them, and that screen itself is unreachable from
       // anywhere in the current app) but left as a defensive fallback.
-      AppRoutes.familyFeedScreen => const MainTabShell(),
+      AppRoutes.familyFeedScreen => _openShellOnHome(),
       AppRoutes.sendScreen => const SendScreen(),
       AppRoutes.legacyScreen => const LegacyScreen(),
       AppRoutes.favsScreen => const FavsScreen(),
@@ -672,7 +683,7 @@ class _MyAppState extends State<MyApp> {
                     final Widget? page = switch (settings.name) {
                       // Sep 24 2026: see the matching comment in
                       // _resolveRouteWidget above.
-                      AppRoutes.familyFeedScreen => const MainTabShell(),
+                      AppRoutes.familyFeedScreen => _openShellOnHome(),
                       AppRoutes.sendScreen => const SendScreen(),
                       AppRoutes.legacyScreen => const LegacyScreen(),
                       AppRoutes.favsScreen => const FavsScreen(),
