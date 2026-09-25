@@ -235,7 +235,37 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // status -- drives one small card pair per senior. The five fields above
   // stay as "the primary/first senior" for other screens and the shared
   // notifiers, which still only expect a single senior. See _loadCheckinStatus.
-  List<Map<String, dynamic>> _seniorStatuses = [];
+  // Sep 24 2026: was unconditional [] regardless of the scalar notifiers
+  // below already having real, correctly-seeded values (_seniorName,
+  // _seniorCheckedInToday, etc. -- all seeded the same way, just genuinely
+  // unused elsewhere in this class per flutter analyze, since the actual
+  // check-in card renders from THIS list, not those scalars). Builds a
+  // single-entry synchronous fallback from them when a senior is already
+  // known, so the check-in card can skip its entrance animation on a
+  // returning session instead of always waiting for _loadData()'s own
+  // async read. checkinTime/medsTime aren't covered by a scalar notifier,
+  // so they start null here -- the live fetch fills them in a moment
+  // later without re-animating, same as everything else on this screen.
+  // checkinEnabled/medsRemindersEnabled default true to match the exact
+  // fallback the build method already uses for a missing key. Genuine
+  // multi-senior nests (a second senior beyond this one) still show the
+  // brief entrance animation on true first load, since only one senior's
+  // scalar data has a resolved notifier -- a known, accepted limitation,
+  // not an oversight.
+  List<Map<String, dynamic>> _seniorStatuses = appSeniorUserIdNotifier.value.isNotEmpty
+      ? [
+          {
+            'id': appSeniorUserIdNotifier.value,
+            'name': appSeniorNameNotifier.value,
+            'checkedIn': appSeniorCheckedInTodayNotifier.value,
+            'checkinTime': null,
+            'medsTaken': appSeniorMedsTakenTodayNotifier.value,
+            'medsTime': null,
+            'checkinEnabled': true,
+            'medsRemindersEnabled': true,
+          }
+        ]
+      : [];
   bool _inviteCodeShared = appInviteCodeSharedNotifier.value; // tracks if family owner has shared invite code
   bool _isGuest = appIsGuestNotifier.value;
   bool _isNestOwner = appIsNestOwnerNotifier.value;
@@ -246,7 +276,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   Set<String> _removedMemberIds = {};
   List<CelebrationEvent> _todayCelebrations = [];
   List<CelebrationEvent> _upcomingCelebrations = [];
-  List<Map<String, dynamic>> _nestMembers = []; // for avatar row (excludes current user)
+  // Sep 24 2026: was unconditional [] -- now seeded from appNestMembersNotifier
+  // (app_state.dart), same reasoning as _seniorStatuses above.
+  List<Map<String, dynamic>> _nestMembers = appNestMembersNotifier.value; // for avatar row (excludes current user)
 
   late AnimationController _listEntranceController;
   bool _hasPlayedEntranceOnce = false;
@@ -272,8 +304,16 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // exactly "different cards loading at different times, not smooth."
   // Split into two independent flags so neither card's animation can
   // ever be stolen by the other one finishing first.
-  static bool _avatarRowAnimatedOnceThisSession = false;
-  static bool _checkinCardAnimatedOnceThisSession = false;
+  // Sep 24 2026: both were unconditionally false, meaning the entrance
+  // animation played on every genuine first load of the session even when
+  // the data above was already available synchronously -- these two
+  // independent Supabase fetches finishing at slightly different real
+  // moments is exactly what produced the "elements show up at different
+  // times" D Von reported once the full-screen skeleton (which used to
+  // hide this) was removed. Now skip the animation together whenever
+  // there's already real data to show.
+  static bool _avatarRowAnimatedOnceThisSession = appNestMembersNotifier.value.isNotEmpty;
+  static bool _checkinCardAnimatedOnceThisSession = appSeniorUserIdNotifier.value.isNotEmpty;
   final List<Animation<double>> _itemAnimations = [];
   final ScrollController _scrollController = ScrollController();
   // Aug 21 2026: collapsible year/month grouping -- which groups are

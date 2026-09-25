@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -162,6 +163,18 @@ final ValueNotifier<String> appSeniorNameNotifier = ValueNotifier<String>('');
 /// _loadData()'s async read finished, so the card appeared late on every
 /// load instead of being there from the first frame when a senior exists.
 final ValueNotifier<String> appSeniorUserIdNotifier = ValueNotifier<String>('');
+
+/// Sep 24 2026: added while fixing Home's avatar row and check-in card
+/// still visibly popping in at slightly different moments even after the
+/// full-screen skeleton was removed -- two genuinely separate Supabase
+/// fetches (nest members, check-in status) were never going to resolve at
+/// the same millisecond, and the skeleton had been the only thing hiding
+/// that gap. This notifier gives the avatar row the same "already known,
+/// skip the entrance animation" treatment the scalar fields above already
+/// get, mirroring family_feed_screen.dart's own cached_nest_members read
+/// (same nest+user scoping) instead of inventing a new cache key.
+final ValueNotifier<List<Map<String, dynamic>>> appNestMembersNotifier =
+    ValueNotifier<List<Map<String, dynamic>>>([]);
 
 // ── Aug 31 2026: whole-app flash audit, prompted by D Von finding the "I'm
 // Good" button still flashing on a cold open even after Archive Nest Mode
@@ -352,6 +365,28 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
 
   appSeniorUserIdNotifier.value =
       prefs.getString('cached_checkin_senior_id') ?? '';
+
+  // Sep 24 2026: same nest+user scoping as family_feed_screen.dart's own
+  // read of these exact keys -- a stale list from a different nest, or
+  // from a different account on the same device, would be worse than no
+  // list at all.
+  final cachedMembersNestId = prefs.getString('cached_nest_members_nest_id') ?? '';
+  final cachedMembersUserId = prefs.getString('cached_nest_members_user_id') ?? '';
+  final currentUserIdForMembersCache = Supabase.instance.client.auth.currentUser?.id ?? '';
+  if (cachedMembersNestId.isNotEmpty &&
+      cachedMembersNestId == currentNestId &&
+      cachedMembersUserId.isNotEmpty &&
+      cachedMembersUserId == currentUserIdForMembersCache) {
+    final cachedMembersJson = prefs.getString('cached_nest_members');
+    if (cachedMembersJson != null && cachedMembersJson.isNotEmpty) {
+      try {
+        final List<dynamic> cachedList = jsonDecode(cachedMembersJson) as List<dynamic>;
+        appNestMembersNotifier.value = cachedList
+            .map((m) => Map<String, dynamic>.from(m as Map))
+            .toList();
+      } catch (_) {}
+    }
+  }
 
   // Aug 31 2026: three new fields brought into this system, same reasoning
   // as everything above -- see each notifier's own doc comment for why.
