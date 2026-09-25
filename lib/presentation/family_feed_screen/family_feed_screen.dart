@@ -808,6 +808,24 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // accounts and coming back same-day: every check-in read was silently
     // scoped to the WRONG nest because this early-returned without ever
     // checking whether the cached id actually belongs to this user.
+    //
+    // Sep 24 2026: that fix worked, but it paid for it on EVERY single
+    // app launch, for every user, with a real network round trip before
+    // anything else in _loadData() could even start -- confirmed root
+    // cause of the ~2-second gap D Von reported after backgrounding and
+    // reopening the app (MainTabShell now only runs _loadData() once per
+    // process, so this validation query only ever ran on a genuine
+    // relaunch, not on every tab switch -- which is exactly why it read
+    // as inconsistent: smooth when the process was still warm from
+    // testing, slow on a real cold relaunch). The actual risk this
+    // guards against is an ACCOUNT change, not the mere passage of time
+    // -- so remember which account last confirmed this nest_id, and only
+    // pay for the network check when that account has actually changed.
+    final validatedForUserId = prefs.getString('nest_id_validated_user_id') ?? '';
+    if (existingNestId.isNotEmpty && validatedForUserId == userId) {
+      return; // same account that already confirmed this nest_id -- trust it
+    }
+
     if (existingNestId.isNotEmpty) {
       try {
         final membership = await supabase
@@ -816,11 +834,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             .eq('nest_id', existingNestId)
             .eq('user_id', userId)
             .maybeSingle();
-        if (membership != null) return; // still valid, nothing to do
+        if (membership != null) {
+          await prefs.setString('nest_id_validated_user_id', userId);
+          return; // still valid, nothing to do
+        }
       } catch (e) {
         print('NEST_ID VALIDATION ERROR: $e');
         // Fail open on a network error -- don't discard a possibly-correct
         // cached id just because we couldn't reach the server to confirm it.
+        // Deliberately NOT writing nest_id_validated_user_id here -- a
+        // network error should keep re-checking on the next launch, not
+        // get permanently trusted off the back of a failed request.
         return;
       }
       // Cached id didn't validate -- fall through and look up the real one.
@@ -836,6 +860,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       if (owned != null) {
         final nestId = owned['id'] as String;
         await prefs.setString('nest_id', nestId);
+        await prefs.setString('nest_id_validated_user_id', userId);
         print('NEST_ID: saved (owner) = $nestId');
         return;
       }
@@ -851,6 +876,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       if (membership != null) {
         final nestId = membership['nest_id'] as String;
         await prefs.setString('nest_id', nestId);
+        await prefs.setString('nest_id_validated_user_id', userId);
         print('NEST_ID: saved (member) = $nestId');
       }
     } catch (e) {
