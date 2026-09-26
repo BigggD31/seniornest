@@ -378,62 +378,29 @@ class _SplashScreenState extends State<SplashScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'One tap, one smile, one family',
+          'One tap, one family, one smile.',
           textAlign: TextAlign.center,
           style: GoogleFonts.nunitoSans(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.3,
-            fontStyle: FontStyle.italic,
-            color: _gold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Never Feel Forgotten Again',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.nunitoSans(
-            fontSize: 28,
+            fontSize: 22,
             fontWeight: FontWeight.w800,
             color: Colors.white,
-            height: 1.15,
-            shadows: const [Shadow(blurRadius: 12, color: Color(0x4D000000))],
+            height: 1.22,
+            shadows: const [Shadow(blurRadius: 10, color: Color(0x59000000))],
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 10),
         Text(
-          'One private place to stay close to the people who matter most.',
+          'CHECK-INS · MESSAGES · LEGACY STORIES · SAFETY',
           textAlign: TextAlign.center,
           style: GoogleFonts.nunitoSans(
-            fontSize: 14,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
             color: Colors.white.withOpacity(0.82),
-            height: 1.4,
           ),
         ),
+
         const SizedBox(height: 18),
-
-        // Invite code button
-        GestureDetector(
-          onTap: () => _showInviteCodeSheet(context),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 20),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.14),
-              borderRadius: BorderRadius.circular(100),
-              border: Border.all(color: Colors.white.withOpacity(0.3)),
-            ),
-            child: Text(
-              'I have an invite code',
-              style: GoogleFonts.nunitoSans(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 14),
 
         // Nest Owner note
         Container(
@@ -448,7 +415,7 @@ class _SplashScreenState extends State<SplashScreen> {
             'One person pays — everyone else joins free',
             textAlign: TextAlign.center,
             style: GoogleFonts.nunitoSans(
-              fontSize: 12.5,
+              fontSize: 11.5,
               fontWeight: FontWeight.w700,
               color: Colors.white,
             ),
@@ -457,66 +424,97 @@ class _SplashScreenState extends State<SplashScreen> {
 
         const SizedBox(height: 18),
 
-        // Get Started button
-        GestureDetector(
-          onTap: () {
-            Navigator.pushNamed(
-              context,
-              AppRoutes.subscribeNestScreen,
-              arguments: {
-                'returnRoute': AppRoutes.roleChoiceScreen,
-                'returnArgs': <String, dynamic>{},
-              },
-            );
-          },
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 17),
-            decoration: BoxDecoration(
-              color: _teal,
-              borderRadius: BorderRadius.circular(100),
-              boxShadow: [
-                BoxShadow(
-                  color: _teal.withOpacity(0.45),
-                  blurRadius: 18,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Get Started',
-                  style: GoogleFonts.nunitoSans(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: 0.3,
+        // CTAs side by side, matching the approved mockup exactly --
+        // Get Started (primary) and I have an invite code (secondary),
+        // not a separate small invite-code pill above the CTA.
+        Row(
+          children: [
+            Expanded(
+              flex: 11,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.pushNamed(
+                    context,
+                    AppRoutes.subscribeNestScreen,
+                    arguments: {
+                      'returnRoute': AppRoutes.roleChoiceScreen,
+                      'returnArgs': <String, dynamic>{},
+                    },
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: _teal,
+                    borderRadius: BorderRadius.circular(100),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _teal.withOpacity(0.45),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Get Started',
+                        style: GoogleFonts.nunitoSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.arrow_forward_rounded,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                const Icon(
-                  Icons.arrow_forward_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 10,
+              child: GestureDetector(
+                onTap: () => _showInviteCodeSheet(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(100),
+                    border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+                  ),
+                  child: Text(
+                    'I have an invite code',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
 
-        const SizedBox(height: 10),
+        const SizedBox(height: 14),
 
         Text(
           'No commitment • Cancel anytime',
           style: GoogleFonts.nunitoSans(
-            fontSize: 12.5,
-            color: Colors.white.withOpacity(0.6),
+            fontSize: 12,
+            color: Colors.white.withOpacity(0.65),
           ),
         ),
 
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
 
         // Always present here, unlike the returning-user view above -- this
         // branch is also what a fresh install or a different device shows
