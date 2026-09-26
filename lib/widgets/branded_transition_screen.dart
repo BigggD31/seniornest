@@ -18,7 +18,16 @@ class BrandedTransitionScreen extends StatelessWidget {
   // post-signup gate) are responsible for actually enforcing this by timing
   // their own async work against it; this constant just keeps both call
   // sites in agreement on the one shared value instead of duplicating it.
-  static const Duration minDisplayDuration = Duration(milliseconds: 1500);
+  // Sep 26 2026: raised from 1500ms to 2500ms -- D Von's direct ask after
+  // build 264 made a warm, already-signed-in relaunch resolve so quickly
+  // (warm cache, no real network wait) that this screen was only visible
+  // for 0.5-1s, reading as a flash rather than an intentional brand
+  // moment. Both call sites already gate on real content being fully
+  // resolved before releasing this screen (not a bare timer), so raising
+  // this only adds a floor under an already-fast resolution -- it never
+  // makes a slow one slower, and never releases to a skeleton/placeholder
+  // Home underneath it.
+  static const Duration minDisplayDuration = Duration(milliseconds: 2500);
 
   static const String _iconAsset = 'assets/images/nest_icon_transparent.png';
 

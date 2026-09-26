@@ -327,6 +327,13 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _resolveInitialRoute() async {
+    // Sep 26 2026: timed the same way save_messages_prompt_screen.dart's
+    // post-signup gate already times its own version of this -- captured
+    // before any of the real work below, so the minimum-display check at
+    // the bottom of this function measures the actual wall-clock time this
+    // screen has been on screen, not just the async work's own duration.
+    final routeResolveStartTime = DateTime.now();
+    var isSignedInForWarmEntranceTiming = false;
     try {
       // Must run before anything else in this function, including the
       // dark_mode read two lines down -- detects a genuine account switch
@@ -397,6 +404,11 @@ class _MyAppState extends State<MyApp> {
               // left (a Keychain-restored session with no local flag) before
               // ever reaching this fallback.
               : false;
+      // Sep 26 2026: only the warm, already-signed-in relaunch is what
+      // was flashing -- a genuinely new/signed-out device still lands on
+      // splash_screen (or the intro sequence) exactly as fast as it
+      // always has, unchanged.
+      isSignedInForWarmEntranceTiming = isSignedIn;
 
       if (isSignedIn && hasOnboarded) {
         // Signed in and onboarded -- but only let them straight into the
@@ -475,18 +487,40 @@ class _MyAppState extends State<MyApp> {
     } catch (_) {
       _initialRoute = AppRoutes.splashScreen;
     }
-    // Aug 21 2026: removed the artificial minDisplayDuration wait here.
-    // It existed to keep the OLD gold logo screen visible for a
-    // consistent minimum time regardless of connection speed -- but this
-    // gate no longer shows that screen, it shows the grandmother photo
-    // now. Since the real IntroSequenceScreen (once _ready flips) starts
-    // its own fresh timer on the same image, that artificial 1.5s wait
-    // was only adding a guaranteed extra pause plus a visible
-    // timer-restart before the real, interactive slide ever got a
-    // chance to begin -- exactly the stutter D Von was seeing. Letting
-    // _ready flip the moment resolution actually finishes minimizes that
-    // handoff window to whatever the real async work took, instead of a
-    // fixed 1.5s no matter how fast the connection was.
+    // Aug 21 2026: removed the artificial minDisplayDuration wait here for
+    // the NOT-signed-in/intro-photo path. It existed to keep the OLD gold
+    // logo screen visible for a consistent minimum time regardless of
+    // connection speed -- but that gate no longer shows that screen, it
+    // shows the grandmother photo now, and the real IntroSequenceScreen
+    // (once _ready flips) starts its own fresh timer on the same image.
+    // An artificial wait here would only add a guaranteed extra pause
+    // plus a visible timer-restart before that real, interactive slide
+    // ever got a chance to begin -- exactly the stutter D Von was seeing.
+    // That reasoning never applied to a WARM, already-signed-in relaunch
+    // though -- that path never shows the intro photos at all (see
+    // _shouldShowIntro), so there's no second timer to double up with.
+    // Sep 26 2026: on build 264, that warm path had gotten fast enough
+    // (cache warm, no real network wait) that this branded logo screen
+    // was only on screen for 0.5-1s, reading as a flash rather than an
+    // intentional brand moment -- D Von's direct ask. This restores a
+    // floor under that one case only, using the same shared constant the
+    // post-signup gate in save_messages_prompt_screen.dart already
+    // enforces the same way (see that file's _navigateToHome), so both
+    // "moments the branded logo carries the whole screen" now agree.
+    // Crucially, this is a floor UNDER real resolution, not a fixed
+    // delay in place of it -- _initialRoute above is already fully
+    // resolved (sign-in, entitlement, nest membership, notifiers all
+    // seeded) by the time this runs, so extending the logo's visibility
+    // never releases to a skeleton/placeholder Home underneath it; it
+    // only means Home is fully painted and waiting behind the logo for
+    // whatever's left of the 2.5s, instead of swapping in the instant
+    // resolution finishes.
+    if (isSignedInForWarmEntranceTiming) {
+      final elapsed = DateTime.now().difference(routeResolveStartTime);
+      if (elapsed < BrandedTransitionScreen.minDisplayDuration) {
+        await Future.delayed(BrandedTransitionScreen.minDisplayDuration - elapsed);
+      }
+    }
     if (mounted) setState(() => _ready = true);
   }
 
