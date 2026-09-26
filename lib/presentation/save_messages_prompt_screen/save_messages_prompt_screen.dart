@@ -431,15 +431,48 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
         // deterministically picks the same one every time -- the
         // earliest membership is the one most likely to be the person's
         // real, original nest rather than an accidental duplicate.
+        // Sep 26 2026: joined nests(name, invite_code, created_by) onto
+        // this same query -- was previously just 'nest_id, joined_at'.
+        // D Von's "cold entrance via login" report traced to exactly
+        // this branch: a real Sign Out (setup_screen.dart) deliberately
+        // wipes nest_name from prefs, and on a genuinely cold app
+        // process the in-memory appNestNameNotifier has no prior value
+        // to fall back on either. This branch was restoring nest_id to
+        // prefs and then calling resolveAppNotifiersFromPrefs, but never
+        // restoring nest_name itself -- so that call had nothing to seed
+        // appNestNameNotifier with, and family_feed_screen.dart's own
+        // `_isLoading = appNestNameNotifier.value.isEmpty` field
+        // initializer came back true, showing the old full-screen
+        // skeleton on an ordinary returning sign-in instead of the
+        // cache-first instant paint every other entry point already
+        // gets. Same join main.dart's _tryRestoreServerMembership already
+        // uses for the equivalent cold-start case.
         final existingMemberships = await supabaseClient
             .from('nest_members')
-            .select('nest_id, joined_at')
+            .select('nest_id, joined_at, nests(name, invite_code, created_by)')
             .eq('user_id', checkUserId)
             .order('joined_at', ascending: true)
             .limit(1);
         if (existingMemberships.isNotEmpty) {
           final existingNestId = existingMemberships.first['nest_id'] as String;
           await prefs.setString('nest_id', existingNestId);
+          final existingNest =
+              existingMemberships.first['nests'] as Map<String, dynamic>?;
+          if (existingNest != null) {
+            final existingNestName = existingNest['name'] as String?;
+            if (existingNestName != null && existingNestName.isNotEmpty) {
+              await prefs.setString('nest_name', existingNestName);
+            }
+            final existingInviteCode = existingNest['invite_code'] as String?;
+            if (existingInviteCode != null && existingInviteCode.isNotEmpty) {
+              await prefs.setString('invite_code', existingInviteCode);
+            }
+            final existingCreatedBy = existingNest['created_by'] as String?;
+            await prefs.setBool(
+              'joined_via_invite',
+              existingCreatedBy != null && existingCreatedBy != checkUserId,
+            );
+          }
           // Same fix as the main path further down -- this is a separate
           // early exit straight to Home that skips it entirely.
           await resolveAppNotifiersFromPrefs(prefs);
