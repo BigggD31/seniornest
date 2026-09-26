@@ -993,7 +993,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
               color: const Color(0xFF2C2417),
             ),
             decoration: InputDecoration(
-              hintText: 'e.g. "The Johnson Family Nest"',
+              hintText: 'e.g. "Popy & Nana\'s Nest"',
               hintStyle: GoogleFonts.nunitoSans(
                 fontSize: isTablet ? 22 : 20,
                 color: const Color(0xFFE8E0D0),

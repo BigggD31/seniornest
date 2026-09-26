@@ -1270,7 +1270,7 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
                 color: textPrimary,
               ),
               decoration: InputDecoration(
-                hintText: 'e.g. Poppy & Nana\'s Nest',
+                hintText: 'e.g. "Popy & Nana\'s Nest"',
                 hintStyle: GoogleFonts.nunitoSans(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
