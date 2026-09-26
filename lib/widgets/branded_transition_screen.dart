@@ -18,16 +18,14 @@ class BrandedTransitionScreen extends StatelessWidget {
   // post-signup gate) are responsible for actually enforcing this by timing
   // their own async work against it; this constant just keeps both call
   // sites in agreement on the one shared value instead of duplicating it.
-  // Sep 26 2026: raised from 1500ms to 2500ms -- D Von's direct ask after
-  // build 264 made a warm, already-signed-in relaunch resolve so quickly
-  // (warm cache, no real network wait) that this screen was only visible
-  // for 0.5-1s, reading as a flash rather than an intentional brand
-  // moment. Both call sites already gate on real content being fully
-  // resolved before releasing this screen (not a bare timer), so raising
-  // this only adds a floor under an already-fast resolution -- it never
-  // makes a slow one slower, and never releases to a skeleton/placeholder
-  // Home underneath it.
-  static const Duration minDisplayDuration = Duration(milliseconds: 2500);
+  // Sep 26 2026: briefly raised to 2500ms to make a warm, already-signed-in
+  // relaunch hold this screen longer, then reverted back to 1500ms the same
+  // day -- that change added a new floor-delay in main.dart's
+  // _resolveInitialRoute() that reintroduced the Home skeleton-flash
+  // regression on sign-in that build 264 had already fixed. Back to the
+  // build-264-clean value; do not re-add a floor delay in main.dart without
+  // re-verifying against that regression first.
+  static const Duration minDisplayDuration = Duration(milliseconds: 1500);
 
   static const String _iconAsset = 'assets/images/nest_icon_transparent.png';
 

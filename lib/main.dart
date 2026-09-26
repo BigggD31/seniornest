@@ -327,13 +327,6 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _resolveInitialRoute() async {
-    // Sep 26 2026: timed the same way save_messages_prompt_screen.dart's
-    // post-signup gate already times its own version of this -- captured
-    // before any of the real work below, so the minimum-display check at
-    // the bottom of this function measures the actual wall-clock time this
-    // screen has been on screen, not just the async work's own duration.
-    final routeResolveStartTime = DateTime.now();
-    var isSignedInForWarmEntranceTiming = false;
     try {
       // Must run before anything else in this function, including the
       // dark_mode read two lines down -- detects a genuine account switch
@@ -404,12 +397,6 @@ class _MyAppState extends State<MyApp> {
               // left (a Keychain-restored session with no local flag) before
               // ever reaching this fallback.
               : false;
-      // Sep 26 2026: only the warm, already-signed-in relaunch is what
-      // was flashing -- a genuinely new/signed-out device still lands on
-      // splash_screen (or the intro sequence) exactly as fast as it
-      // always has, unchanged.
-      isSignedInForWarmEntranceTiming = isSignedIn;
-
       if (isSignedIn && hasOnboarded) {
         // Signed in and onboarded -- but only let them straight into the
         // app if they're currently entitled. Previously this went straight
@@ -496,31 +483,13 @@ class _MyAppState extends State<MyApp> {
     // An artificial wait here would only add a guaranteed extra pause
     // plus a visible timer-restart before that real, interactive slide
     // ever got a chance to begin -- exactly the stutter D Von was seeing.
-    // That reasoning never applied to a WARM, already-signed-in relaunch
-    // though -- that path never shows the intro photos at all (see
-    // _shouldShowIntro), so there's no second timer to double up with.
-    // Sep 26 2026: on build 264, that warm path had gotten fast enough
-    // (cache warm, no real network wait) that this branded logo screen
-    // was only on screen for 0.5-1s, reading as a flash rather than an
-    // intentional brand moment -- D Von's direct ask. This restores a
-    // floor under that one case only, using the same shared constant the
-    // post-signup gate in save_messages_prompt_screen.dart already
-    // enforces the same way (see that file's _navigateToHome), so both
-    // "moments the branded logo carries the whole screen" now agree.
-    // Crucially, this is a floor UNDER real resolution, not a fixed
-    // delay in place of it -- _initialRoute above is already fully
-    // resolved (sign-in, entitlement, nest membership, notifiers all
-    // seeded) by the time this runs, so extending the logo's visibility
-    // never releases to a skeleton/placeholder Home underneath it; it
-    // only means Home is fully painted and waiting behind the logo for
-    // whatever's left of the 2.5s, instead of swapping in the instant
-    // resolution finishes.
-    if (isSignedInForWarmEntranceTiming) {
-      final elapsed = DateTime.now().difference(routeResolveStartTime);
-      if (elapsed < BrandedTransitionScreen.minDisplayDuration) {
-        await Future.delayed(BrandedTransitionScreen.minDisplayDuration - elapsed);
-      }
-    }
+    // Sep 26 2026: briefly added a floor-delay here for the warm,
+    // already-signed-in relaunch case (to hold the branded logo on screen
+    // longer), then removed it again the same day -- it reintroduced the
+    // Home skeleton-flash regression on sign-in that this comment's
+    // original Aug 21 fix had already resolved. Flips _ready immediately
+    // once resolution finishes, unconditionally, matching build 264's
+    // confirmed-clean behavior.
     if (mounted) setState(() => _ready = true);
   }
 
