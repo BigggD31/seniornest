@@ -5,11 +5,16 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
-import './widgets/heartbeat_painter_widget.dart';
-import './widgets/nest_logo_widget.dart';
 import '../../widgets/keyboard_done_bar.dart';
 import '../../core/app_state.dart';
 
+// Sep 26 2026: rebuilt as a full-bleed photo hero, matching the approved
+// Landing-Fullbleed Claude Design mockup D Von signed off on -- the
+// animated gradient/logo/heartbeat/benefits-grid version this replaces is
+// gone from here, but every real behavior it had (returning-user branch,
+// invite code entry, sign-in fallback, Get Started routing, the banner
+// passed in via route arguments) is preserved unchanged below, just
+// reskinned onto the photo.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -17,22 +22,19 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with TickerProviderStateMixin {
-  late AnimationController _logoController;
-  late AnimationController _taglineController;
-  late AnimationController _heartbeatController;
-  late AnimationController _pulseController;
-  late AnimationController _contentController;
+class _SplashScreenState extends State<SplashScreen> {
+  static const String _heroAsset = 'assets/images/landing_hero_porch.jpg';
+  static const String _iconAsset = 'assets/images/nest_icon_transparent.png';
 
-  late Animation<double> _logoScale;
-  late Animation<double> _logoOpacity;
-  late Animation<double> _taglineOpacity;
-  late Animation<Offset> _taglineSlide;
-  late Animation<double> _heartbeatProgress;
-  late Animation<double> _pulseScale;
-  late Animation<double> _contentOpacity;
-  late Animation<Offset> _contentSlide;
+  static const Color _teal = Color(0xFF5DA399);
+  static const Color _gold = Color(0xFFC8922A);
+  static const Color _ink = Color(0xFF2C2417);
+
+  // Seeded synchronously from the already-resolved app-wide notifier --
+  // see appIsReturningUserNotifier in app_state.dart. Correct on the very
+  // first build, so this screen never flashes the full first-time pitch
+  // before switching to the leaner returning-user view.
+  bool _isReturningUser = appIsReturningUserNotifier.value;
 
   @override
   void initState() {
@@ -40,7 +42,7 @@ class _SplashScreenState extends State<SplashScreen>
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
+        statusBarIconBrightness: Brightness.light,
       ),
     );
     // Shows a banner passed from a redirect (e.g. a removed member trying
@@ -59,79 +61,6 @@ class _SplashScreenState extends State<SplashScreen>
         );
       }
     });
-    _setupAnimations();
-    _startSequence();
-  }
-
-  void _setupAnimations() {
-    _logoController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-    _taglineController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _heartbeatController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2200),
-    )..repeat(reverse: true);
-
-    _contentController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-
-    _logoScale = Tween<double>(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(parent: _logoController, curve: Curves.elasticOut),
-    );
-    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _logoController,
-        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
-      ),
-    );
-    _taglineOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _taglineController, curve: Curves.easeOut),
-    );
-    _taglineSlide = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
-        .animate(
-          CurvedAnimation(
-            parent: _taglineController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
-    _heartbeatProgress = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _heartbeatController, curve: Curves.easeInOut),
-    );
-    _pulseScale = Tween<double>(begin: 1.0, end: 1.06).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-    _contentOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _contentController, curve: Curves.easeOut),
-    );
-    _contentSlide =
-        Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _contentController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
-  }
-
-  Future<void> _startSequence() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    _logoController.forward();
-    await Future.delayed(const Duration(milliseconds: 600));
-    _heartbeatController.forward();
-    await Future.delayed(const Duration(milliseconds: 400));
-    _taglineController.forward();
-    await Future.delayed(const Duration(milliseconds: 500));
-    _contentController.forward();
   }
 
   void _showInviteCodeSheet(BuildContext context) {
@@ -271,521 +200,361 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  // Seeded synchronously from the already-resolved app-wide notifier --
-  // see appIsReturningUserNotifier in app_state.dart. Correct on the very
-  // first build, so this screen never flashes the full first-time pitch
-  // before switching to the leaner returning-user view.
-  bool _isReturningUser = appIsReturningUserNotifier.value;
-
-  @override
-  void dispose() {
-    _logoController.dispose();
-    _taglineController.dispose();
-    _heartbeatController.dispose();
-    _pulseController.dispose();
-    _contentController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final isTablet = size.width >= 600;
-    final logoSize = isTablet ? 285.0 : 266.0;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFE9F1EE),
+      backgroundColor: _ink,
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFE9F1EE), Color(0xFFF3E7C4), Color(0xFFF8E9E1)],
+          // Full-bleed hero photo -- carries the entire screen, matching
+          // the approved Landing-Fullbleed mockup.
+          Image.asset(
+            _heroAsset,
+            fit: BoxFit.cover,
+            alignment: const Alignment(0, -0.55),
           ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SizedBox(
-              width: isTablet ? 440 : double.infinity,
-              child: SingleChildScrollView(
-                physics: const ClampingScrollPhysics(),
-                padding: EdgeInsets.symmetric(
-                  horizontal: isTablet ? 40 : 24,
-                  vertical: 4,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Top spacer — very tight, logo near top
-                    SizedBox(height: size.height * 0.005),
 
-                    // ── Logo ──
-                    AnimatedBuilder(
-                      animation: Listenable.merge([
-                        _logoController,
-                        _pulseController,
-                      ]),
-                      builder: (context, child) {
-                        return Transform.scale(
-                          scale: _logoScale.value * _pulseScale.value,
-                          child: Opacity(
-                            opacity: _logoOpacity.value,
-                            child: NestLogoWidget(size: logoSize),
-                          ),
-                        );
-                      },
-                    ),
+          // Top scrim -- just enough for the status bar / small mark to read.
+          Container(
+            height: 160,
+            alignment: Alignment.topCenter,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x8C140F08), Color(0x00140F08)],
+              ),
+            ),
+          ),
 
-                    const SizedBox(height: 2),
-
-                    // ── Heartbeat line ──
-                    AnimatedBuilder(
-                      animation: _heartbeatProgress,
-                      builder: (context, child) {
-                        return SizedBox(
-                          width: isTablet ? 260 : 200,
-                          height: 28,
-                          child: CustomPaint(
-                            painter: HeartbeatPainterWidget(
-                              progress: _heartbeatProgress.value,
-                              color: const Color(0xFFE8A0A0),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 2),
-
-                    if (_isReturningUser) ...[
-                      // ── Returning-user mode ──
-                      // Shown only when this device just signed out. Skips
-                      // the entire first-time pitch below (trial framing,
-                      // invite-code button, pricing disclaimer, feature
-                      // grid) since none of it applies to someone who
-                      // already has an account and just wants back in --
-                      // it was only ever there for a first-time visitor,
-                      // and made "Sign In" feel bolted onto a page built
-                      // for someone else.
-                      AnimatedBuilder(
-                        animation: _contentController,
-                        builder: (context, child) {
-                          return SlideTransition(
-                            position: _contentSlide,
-                            child: Opacity(
-                              opacity: _contentOpacity.value,
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Welcome back',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.nunitoSans(
-                                fontSize: isTablet ? 22 : 20,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF2C2417),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Sign in to pick up right where you left off.',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.nunitoSans(
-                                fontSize: 20,
-                                color: const Color(0xFF6B5E4E),
-                                height: 1.4,
-                              ),
-                            ),
-                            const SizedBox(height: 28),
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.pushNamed(
-                                  context,
-                                  '/save-messages-prompt-screen',
-                                  arguments: {'signInMode': true},
-                                );
-                              },
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Color(0xFF5DA399),
-                                      Color(0xFF7DBDB5),
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(18),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF5DA399)
-                                          .withOpacity(0.35),
-                                      blurRadius: 18,
-                                      offset: const Offset(0, 5),
-                                    ),
-                                  ],
-                                ),
-                                child: Text(
-                                  'Sign In',
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.nunitoSans(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            // Fallback for a different person picking up the
-                            // same device (e.g. a shared family phone) --
-                            // drops back to the full first-time pitch for
-                            // this session without needing a separate page.
-                            GestureDetector(
-                              onTap: () {
-                                setState(() => _isReturningUser = false);
-                              },
-                              child: RichText(
-                                text: TextSpan(
-                                  style: GoogleFonts.nunitoSans(
-                                    fontSize: 18,
-                                    color: const Color(0xFF9E8E7E),
-                                  ),
-                                  children: [
-                                    const TextSpan(text: 'New here? '),
-                                    TextSpan(
-                                      text: 'Get Started',
-                                      style: GoogleFonts.nunitoSans(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w700,
-                                        color: const Color(0xFF5DA399),
-                                        decoration: TextDecoration.underline,
-                                        decorationColor: const Color(0xFF5DA399),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ] else ...[
-                    // ── Tagline ──
-                    AnimatedBuilder(
-                      animation: _taglineController,
-                      builder: (context, child) {
-                        return SlideTransition(
-                          position: _taglineSlide,
-                          child: Opacity(
-                            opacity: _taglineOpacity.value,
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: Text(
-                        'One tap, one smile, one family',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.nunitoSans(
-                          fontSize: isTablet ? 18 : 16,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFFD4AA00),
-                          fontStyle: FontStyle.italic,
-                          height: 1.4,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // ── Content: pricing + note + benefits + CTA ──
-                    AnimatedBuilder(
-                      animation: _contentController,
-                      builder: (context, child) {
-                        return SlideTransition(
-                          position: _contentSlide,
-                          child: Opacity(
-                            opacity: _contentOpacity.value,
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: [
-                          // Invite code button (smaller, replaces pricing box)
-                          GestureDetector(
-                            onTap: () {
-                              _showInviteCodeSheet(context);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 8,
-                                horizontal: 20,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF8B6914),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Text(
-                                'I have an invite code',
-                                style: GoogleFonts.nunitoSans(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 6),
-
-                          // Nest Owner note
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 6,
-                              horizontal: 14,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFF3E8),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: const Color(0xFFE8A0A0).withAlpha(80),
-                                width: 1.0,
-                              ),
-                            ),
-                            child: Text(
-                              'One person (the Nest Owner) pays. Invite unlimited family members for free.',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.nunitoSans(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFFB07040),
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 8),
-
-                          // Benefits grid
-                          GridView.count(
-                            crossAxisCount: 2,
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
-                            childAspectRatio: 2.8,
-                            children: const [
-                              _BenefitTile(
-                                icon: Icons.favorite_rounded,
-                                label: 'Daily Check-ins',
-                                iconColor: Color(0xFFE8A0A0),
-                              ),
-                              _BenefitTile(
-                                icon: Icons.auto_stories_rounded,
-                                label: 'Legacy Stories',
-                                iconColor: Color(0xFFD4AA00),
-                              ),
-                              _BenefitTile(
-                                icon: Icons.chat_bubble_rounded,
-                                label: 'Easy Messages',
-                                iconColor: Color(0xFF5DA399),
-                              ),
-                              _BenefitTile(
-                                icon: Icons.shield_rounded,
-                                label: 'Family Safety',
-                                iconColor: Color(0xFF7DBDB5),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 8),
-
-                          // Get Started button
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.pushNamed(
-                                context,
-                                AppRoutes.subscribeNestScreen,
-                                arguments: {
-                                  'returnRoute': AppRoutes.roleChoiceScreen,
-                                  'returnArgs': <String, dynamic>{},
-                                },
-                              );
-                            },
-                            child: AnimatedBuilder(
-                              animation: _pulseController,
-                              builder: (context, child) {
-                                return Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [
-                                        Color(0xFF5DA399),
-                                        Color(0xFF7DBDB5),
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(18),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(0xFF5DA399)
-                                            .withOpacity(
-                                              0.35 + _pulseScale.value * 0.05,
-                                            ),
-                                        blurRadius: 18,
-                                        offset: const Offset(0, 5),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        'Get Started',
-                                        style: GoogleFonts.nunitoSans(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.white,
-                                          letterSpacing: 0.3,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Icon(
-                                        Icons.arrow_forward_rounded,
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-
-                          // Bottom note
-                          Padding(
-                            padding: const EdgeInsets.only(top: 5, bottom: 8),
-                            child: Text(
-                              'No commitment • Cancel anytime',
-                              style: GoogleFonts.nunitoSans(
-                                fontSize: 16,
-                                color: const Color(0xFFA8A090),
-                              ),
-                            ),
-                          ),
-                          // Always present here, unlike the returning-user
-                          // view above -- this branch is also what a
-                          // fresh install or a different device shows to
-                          // someone who already has an account but never
-                          // explicitly signed out on this exact device, so
-                          // just_signed_out/appIsReturningUserNotifier
-                          // wouldn't have caught them. Without this, that
-                          // person would have no way back into their
-                          // account from this screen at all.
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4, bottom: 8),
-                            child: GestureDetector(
-                              onTap: () {
-                                Navigator.pushNamed(
-                                  context,
-                                  '/save-messages-prompt-screen',
-                                  arguments: {'signInMode': true},
-                                );
-                              },
-                              child: RichText(
-                                text: TextSpan(
-                                  style: GoogleFonts.nunitoSans(
-                                    fontSize: 18,
-                                    color: const Color(0xFF9E8E7E),
-                                  ),
-                                  children: [
-                                    const TextSpan(text: 'Already have an account? '),
-                                    TextSpan(
-                                      text: 'Sign In',
-                                      style: GoogleFonts.nunitoSans(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w700,
-                                        color: const Color(0xFF5DA399),
-                                        decoration: TextDecoration.underline,
-                                        decorationColor: const Color(0xFF5DA399),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ],
-                  ],
+          // Small icon mark, no wordmark -- D Von's direct ask removing the
+          // "SeniorNest" wordmark from this board's photo.
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Image.asset(
+                  _iconAsset,
+                  width: 44,
+                  height: 44,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.favorite_rounded,
+                    color: _gold,
+                    size: 36,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+
+          // Bottom scrim -- carries all the copy.
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: [0.0, 0.42, 1.0],
+                colors: [
+                  Color(0x00140F08),
+                  Color(0xB8140F08),
+                  Color(0xF0140F08),
+                ],
+              ),
+            ),
+          ),
+
+          SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+                child: _isReturningUser
+                    ? _buildReturningUserContent(context)
+                    : _buildFirstTimeContent(context),
+              ),
+            ),
+          ),
+
           const KeyboardDoneBarOverlay(),
         ],
       ),
     );
   }
-}
 
-class _BenefitTile extends StatelessWidget {
-  const _BenefitTile({
-    required this.icon,
-    required this.label,
-    required this.iconColor,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color iconColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFDF9F4),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEDE5D8), width: 1.5),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: iconColor, size: 16),
-          const SizedBox(width: 7),
-          Expanded(
+  Widget _buildReturningUserContent(BuildContext context) {
+    // Shown only when this device just signed out. Skips the entire
+    // first-time pitch below (trial framing, invite-code button, pricing
+    // disclaimer, feature list) since none of it applies to someone who
+    // already has an account and just wants back in.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Welcome back',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.nunitoSans(
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            shadows: const [Shadow(blurRadius: 10, color: Color(0x4D000000))],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Sign in to pick up right where you left off.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.nunitoSans(
+            fontSize: 14,
+            color: Colors.white.withOpacity(0.8),
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 22),
+        GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/save-messages-prompt-screen',
+              arguments: {'signInMode': true},
+            );
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 17),
+            decoration: BoxDecoration(
+              color: _teal,
+              borderRadius: BorderRadius.circular(100),
+            ),
             child: Text(
-              label,
+              'Sign In',
+              textAlign: TextAlign.center,
               style: GoogleFonts.nunitoSans(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF2C2417),
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 0.3,
               ),
-              overflow: TextOverflow.ellipsis,
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 18),
+        // Fallback for a different person picking up the same device
+        // (e.g. a shared family phone) -- drops back to the full
+        // first-time pitch for this session without needing a separate page.
+        GestureDetector(
+          onTap: () {
+            setState(() => _isReturningUser = false);
+          },
+          child: RichText(
+            text: TextSpan(
+              style: GoogleFonts.nunitoSans(
+                fontSize: 13,
+                color: Colors.white.withOpacity(0.65),
+              ),
+              children: [
+                const TextSpan(text: 'New here? '),
+                TextSpan(
+                  text: 'Get Started',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFirstTimeContent(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'One tap, one smile, one family',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.nunitoSans(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.3,
+            fontStyle: FontStyle.italic,
+            color: _gold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Never Feel Forgotten Again',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.nunitoSans(
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            height: 1.15,
+            shadows: const [Shadow(blurRadius: 12, color: Color(0x4D000000))],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'One private place to stay close to the people who matter most.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.nunitoSans(
+            fontSize: 14,
+            color: Colors.white.withOpacity(0.82),
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        // Invite code button
+        GestureDetector(
+          onTap: () => _showInviteCodeSheet(context),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 20),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(100),
+              border: Border.all(color: Colors.white.withOpacity(0.3)),
+            ),
+            child: Text(
+              'I have an invite code',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 14),
+
+        // Nest Owner note
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
+          decoration: BoxDecoration(
+            color: _gold.withOpacity(0.18),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(color: _gold.withOpacity(0.55), width: 1.5),
+          ),
+          child: Text(
+            'One person pays — everyone else joins free',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.nunitoSans(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 18),
+
+        // Get Started button
+        GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              AppRoutes.subscribeNestScreen,
+              arguments: {
+                'returnRoute': AppRoutes.roleChoiceScreen,
+                'returnArgs': <String, dynamic>{},
+              },
+            );
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 17),
+            decoration: BoxDecoration(
+              color: _teal,
+              borderRadius: BorderRadius.circular(100),
+              boxShadow: [
+                BoxShadow(
+                  color: _teal.withOpacity(0.45),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Get Started',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.arrow_forward_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 10),
+
+        Text(
+          'No commitment • Cancel anytime',
+          style: GoogleFonts.nunitoSans(
+            fontSize: 12.5,
+            color: Colors.white.withOpacity(0.6),
+          ),
+        ),
+
+        const SizedBox(height: 10),
+
+        // Always present here, unlike the returning-user view above -- this
+        // branch is also what a fresh install or a different device shows
+        // to someone who already has an account but never explicitly
+        // signed out on this exact device, so
+        // just_signed_out/appIsReturningUserNotifier wouldn't have caught
+        // them. Without this, that person would have no way back into
+        // their account from this screen at all.
+        GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/save-messages-prompt-screen',
+              arguments: {'signInMode': true},
+            );
+          },
+          child: RichText(
+            text: TextSpan(
+              style: GoogleFonts.nunitoSans(
+                fontSize: 13,
+                color: Colors.white.withOpacity(0.65),
+              ),
+              children: [
+                const TextSpan(text: 'Already have an account? '),
+                TextSpan(
+                  text: 'Sign In',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

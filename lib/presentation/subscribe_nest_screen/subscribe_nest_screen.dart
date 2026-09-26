@@ -335,110 +335,169 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
+  static const String _heroAsset = 'assets/images/pricing_hero_tablet.jpg';
+  static const Color _teal = Color(0xFF5DA399);
+  static const Color _gold = Color(0xFFC8922A);
+  static const Color _ink = Color(0xFF2C2417);
+
+  // Sep 26 2026: rebuilt as a full-bleed photo hero, matching the approved
+  // Pricing-Fullbleed Claude Design mockup D Von signed off on -- same
+  // real Monthly/Yearly toggle, same $9.99/mo vs $99/yr copy, same IAP,
+  // VIP-redemption and additional-nest logic as before, just reskinned
+  // onto the photo instead of the plain card layout it replaces.
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final isTablet = size.width >= 600;
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFDFD),
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFFDFDFD), Color(0xFFF5F0E8)],
+      backgroundColor: _ink,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            _heroAsset,
+            fit: BoxFit.cover,
+            alignment: const Alignment(0, -0.5),
           ),
-        ),
-        child: SafeArea(
-          child: AnimatedBuilder(
-            animation: _animController,
-            builder: (context, child) => SlideTransition(
-              position: _slideAnim,
-              child: Opacity(opacity: _fadeAnim.value, child: child),
+
+          // Top scrim -- just enough for the back button to read.
+          Container(
+            height: 140,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x8C140F08), Color(0x00140F08)],
+              ),
             ),
-            child: Column(
-              children: [
-                _buildHeader(),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('One-time setup only—takes just a minute!',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.nunitoSans(fontSize: 12,
-                      fontWeight: FontWeight.w400, color: const Color(0xFFB0A898))),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isTablet ? 60 : 28, vertical: 20),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: isTablet ? 500 : 420),
-                      child: _buildContent(isTablet),
-                    ),
+          ),
+
+          // Bottom scrim -- carries all the copy.
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: [0.0, 0.34, 1.0],
+                colors: [
+                  Color(0x00140F08),
+                  Color(0xB8140F08),
+                  Color(0xF5140F08),
+                ],
+              ),
+            ),
+          ),
+
+          SafeArea(
+            child: AnimatedBuilder(
+              animation: _animController,
+              builder: (context, child) => SlideTransition(
+                position: _slideAnim,
+                child: Opacity(opacity: _fadeAnim.value, child: child),
+              ),
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  const Spacer(),
+                  SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                    child: _buildContent(),
                   ),
-                ),
-                _buildSubscribeButton(isTablet),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(children: [
         GestureDetector(
           onTap: () => Navigator.pop(context),
           child: Container(
-            width: 44, height: 44,
+            width: 36, height: 36,
             decoration: BoxDecoration(
-              color: const Color(0xFF5DA399).withAlpha(31),
-              borderRadius: BorderRadius.circular(12)),
+              color: Colors.black.withOpacity(0.35),
+              shape: BoxShape.circle),
             child: const Icon(Icons.arrow_back_rounded,
-              color: Color(0xFF5DA399), size: 22)),
+              color: Colors.white, size: 19)),
         ),
         const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(100)),
+          child: Text('Takes about a minute',
+            style: GoogleFonts.manrope(fontSize: 10.5,
+              fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.9))),
+        ),
       ]),
     );
   }
 
-  Widget _buildContent(bool isTablet) {
+  Widget _buildContent() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text('Subscribe to Your Nest',
-          style: GoogleFonts.manrope(fontSize: isTablet ? 30 : 26,
-            fontWeight: FontWeight.w800, color: const Color(0xFF2C2417), height: 1.2)),
+        Text('YOUR FIRST 3 DAYS',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.nunitoSans(fontSize: 11.5,
+            fontWeight: FontWeight.w800, letterSpacing: 1.2, color: _gold)),
         const SizedBox(height: 8),
-        Text('Keep your family connected with everything SeniorNest has to offer.',
-          style: GoogleFonts.manrope(fontSize: 15, fontWeight: FontWeight.w400,
-            color: const Color(0xFF7A6E5F), height: 1.5)),
-        const SizedBox(height: 28),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFF5DA399).withAlpha(26),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF5DA399).withAlpha(60), width: 1)),
-          child: Row(children: [
-            const Icon(Icons.people_alt_rounded, color: Color(0xFF5DA399), size: 18),
-            const SizedBox(width: 10),
-            Expanded(child: Text('One person pays — the whole family connects for free.',
-              style: GoogleFonts.manrope(fontSize: 13,
-                fontWeight: FontWeight.w600, color: const Color(0xFF3D7A72)))),
-          ]),
-        ),
-        const SizedBox(height: 28),
-        _buildPricingToggle(),
-        const SizedBox(height: 28),
-        _buildBenefitsList(),
-        const SizedBox(height: 20),
-        _buildLegalLinks(),
+        Text("Welcome to your family's private nest.",
+          textAlign: TextAlign.center,
+          style: GoogleFonts.manrope(fontSize: 25,
+            fontWeight: FontWeight.w800, color: Colors.white, height: 1.18,
+            shadows: const [Shadow(blurRadius: 10, color: Color(0x4D000000))])),
         const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: _gold.withOpacity(0.18),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(color: _gold.withOpacity(0.55), width: 1.5)),
+          child: Text('One person pays — everyone else joins free',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.manrope(fontSize: 12,
+              fontWeight: FontWeight.w700, color: Colors.white)),
+        ),
+        const SizedBox(height: 18),
+        _buildPricingToggle(),
+        const SizedBox(height: 18),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isPurchasing ? null : _onSubscribeNow,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _teal,
+              foregroundColor: Colors.white, elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 17),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(100))),
+            child: _isPurchasing
+              ? const SizedBox(width: 22, height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+              : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text('Start My 3-Day Free Trial', style: GoogleFonts.manrope(
+                      fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+                ]),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text('No payment required right now · Cancel anytime',
+          style: GoogleFonts.manrope(fontSize: 11,
+            fontWeight: FontWeight.w400, color: Colors.white.withOpacity(0.65)),
+          textAlign: TextAlign.center),
+        const SizedBox(height: 14),
+        _buildLegalLinks(),
+        const SizedBox(height: 12),
         _buildVipCodeSection(),
       ],
     );
@@ -450,8 +509,9 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         child: GestureDetector(
           onTap: () => setState(() => _showVipField = true),
           child: Text('Have a VIP code?',
-            style: GoogleFonts.manrope(fontSize: 13, fontWeight: FontWeight.w600,
-              color: const Color(0xFF9E9080), decoration: TextDecoration.underline)),
+            style: GoogleFonts.manrope(fontSize: 12.5, fontWeight: FontWeight.w700,
+              color: _gold, decoration: TextDecoration.underline,
+              decorationColor: _gold)),
         ),
       );
     }
@@ -463,18 +523,20 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
             textCapitalization: TextCapitalization.characters,
             enabled: !_isRedeemingVip,
             onSubmitted: (_) => _redeemVipCode(),
+            style: GoogleFonts.manrope(fontSize: 14, color: Colors.white),
             decoration: InputDecoration(
               hintText: 'Enter VIP code',
-              hintStyle: GoogleFonts.manrope(fontSize: 14, color: const Color(0xFFB0A898)),
+              hintStyle: GoogleFonts.manrope(fontSize: 14, color: Colors.white.withOpacity(0.5)),
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.12),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: const Color(0xFF2C2417).withAlpha(30))),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.25))),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: const Color(0xFF2C2417).withAlpha(30))),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.25))),
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFF5DA399), width: 1.5)),
+                borderSide: const BorderSide(color: Colors.white, width: 1.5)),
             ),
-            style: GoogleFonts.manrope(fontSize: 14, color: const Color(0xFF2C2417)),
           ),
         ),
         const SizedBox(width: 10),
@@ -483,13 +545,13 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           child: ElevatedButton(
             onPressed: _isRedeemingVip ? null : _redeemVipCode,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2C2417),
-              foregroundColor: Colors.white, elevation: 0,
+              backgroundColor: Colors.white,
+              foregroundColor: _ink, elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 16)),
             child: _isRedeemingVip
-              ? const SizedBox(width: 16, height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              ? SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: _ink))
               : Text('Apply', style: GoogleFonts.manrope(fontSize: 14, fontWeight: FontWeight.w700)),
           ),
         ),
@@ -497,7 +559,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
       if (_vipError != null) ...[
         const SizedBox(height: 8),
         Text(_vipError!, style: GoogleFonts.manrope(fontSize: 12,
-          fontWeight: FontWeight.w500, color: const Color(0xFFC0392B))),
+          fontWeight: FontWeight.w500, color: const Color(0xFFFFAA8A))),
       ],
     ]);
   }
@@ -509,16 +571,16 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         GestureDetector(
           onTap: () => _launchUrl('https://seniornestapp.com/privacy.html'),
           child: Text('Privacy Policy',
-            style: GoogleFonts.manrope(fontSize: 12,
-              color: const Color(0xFF5DA399),
+            style: GoogleFonts.manrope(fontSize: 11,
+              color: Colors.white.withOpacity(0.7),
               decoration: TextDecoration.underline))),
-        Text('  •  ',
-          style: GoogleFonts.manrope(fontSize: 12, color: const Color(0xFF9E9080))),
+        Text('  ·  ',
+          style: GoogleFonts.manrope(fontSize: 11, color: Colors.white.withOpacity(0.4))),
         GestureDetector(
           onTap: () => _launchUrl('https://seniornestapp.com/terms.html'),
           child: Text('Terms of Use',
-            style: GoogleFonts.manrope(fontSize: 12,
-              color: const Color(0xFF5DA399),
+            style: GoogleFonts.manrope(fontSize: 11,
+              color: Colors.white.withOpacity(0.7),
               decoration: TextDecoration.underline))),
       ],
     );
@@ -527,10 +589,11 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   Widget _buildPricingToggle() {
     return Column(children: [
       Container(
-        padding: const EdgeInsets.all(4),
+        width: double.infinity,
+        padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
-          color: const Color(0xFFF0EBE0),
-          borderRadius: BorderRadius.circular(14)),
+          color: Colors.white.withOpacity(0.14),
+          borderRadius: BorderRadius.circular(100)),
         child: Row(children: [
           _buildToggleOption(label: 'Monthly', isSelected: !_isYearly,
             onTap: () => setState(() => _isYearly = false)),
@@ -538,20 +601,17 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
             onTap: () => setState(() => _isYearly = true), badge: 'Save 15%'),
         ]),
       ),
-      const SizedBox(height: 20),
+      const SizedBox(height: 12),
       AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
         child: _isYearly
-          ? _buildPriceCard(key: const ValueKey('yearly'),
+          ? _buildPriceLine(key: const ValueKey('yearly'),
               price: r'$99', period: '/ year',
-              subtitle: 'Billed annually — just \$8.25/month',
-              accentColor: const Color(0xFFD4A853))
-          : _buildPriceCard(key: const ValueKey('monthly'),
+              subtitle: 'Billed annually — just \$8.25/month')
+          : _buildPriceLine(key: const ValueKey('monthly'),
               price: r'$9.99', period: '/ month',
-              subtitle: 'Billed monthly, cancel anytime',
-              accentColor: const Color(0xFF5DA399)),
+              subtitle: 'Billed monthly, cancel anytime'),
       ),
-      const SizedBox(height: 16),
     ]);
   }
 
@@ -563,25 +623,23 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
             color: isSelected ? Colors.white : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: isSelected ? [BoxShadow(color: Colors.black.withAlpha(18),
-              blurRadius: 8, offset: const Offset(0, 2))] : null),
+            borderRadius: BorderRadius.circular(100)),
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text(label, style: GoogleFonts.manrope(fontSize: 14,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              color: isSelected ? const Color(0xFF2C2417) : const Color(0xFF9E9080))),
+            Text(label, style: GoogleFonts.manrope(fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: isSelected ? _ink : Colors.white.withOpacity(0.75))),
             if (badge != null) ...[
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD4A853).withAlpha(40),
+                  color: _gold.withOpacity(0.28),
                   borderRadius: BorderRadius.circular(6)),
-                child: Text(badge, style: GoogleFonts.manrope(fontSize: 10,
-                  fontWeight: FontWeight.w700, color: const Color(0xFFB8892A)))),
+                child: Text(badge, style: GoogleFonts.manrope(fontSize: 9,
+                  fontWeight: FontWeight.w800, color: const Color(0xFFF0C878)))),
             ],
           ]),
         ),
@@ -589,88 +647,23 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     );
   }
 
-  Widget _buildPriceCard({required Key key, required String price,
-    required String period, required String subtitle, required Color accentColor}) {
-    return Container(
-      key: key, width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accentColor.withAlpha(80), width: 1.5),
-        boxShadow: [BoxShadow(color: accentColor.withAlpha(30),
-          blurRadius: 20, offset: const Offset(0, 6))]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(price, style: GoogleFonts.manrope(fontSize: 42,
-            fontWeight: FontWeight.w800, color: const Color(0xFF2C2417), height: 1.0)),
-          const SizedBox(width: 4),
-          Padding(padding: const EdgeInsets.only(bottom: 6),
-            child: Text(period, style: GoogleFonts.manrope(fontSize: 16,
-              fontWeight: FontWeight.w500, color: const Color(0xFF9E9080)))),
+  Widget _buildPriceLine({required Key key, required String price,
+    required String period, required String subtitle}) {
+    return Column(
+      key: key,
+      children: [
+        Row(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic, children: [
+          Text(price, style: GoogleFonts.manrope(fontSize: 27,
+            fontWeight: FontWeight.w800, color: Colors.white)),
+          const SizedBox(width: 5),
+          Text(period, style: GoogleFonts.manrope(fontSize: 13,
+            fontWeight: FontWeight.w500, color: Colors.white.withOpacity(0.65))),
         ]),
-        const SizedBox(height: 4),
-        Text(subtitle, style: GoogleFonts.manrope(fontSize: 13,
-          fontWeight: FontWeight.w400, color: const Color(0xFF9E9080))),
-      ]),
-    );
-  }
-
-  Widget _buildBenefitsList() {
-    final benefits = [
-      (Icons.check_circle_rounded, 'Daily check-in & wellness tracking'),
-      (Icons.check_circle_rounded, 'Family feed with photos & messages'),
-      (Icons.check_circle_rounded, 'Medication & appointment reminders'),
-      (Icons.check_circle_rounded, 'Legacy stories & memory vault'),
-      (Icons.check_circle_rounded, 'Unlimited family members — free'),
-      (Icons.check_circle_rounded, 'Safety alerts & emergency contacts'),
-    ];
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text("What's included", style: GoogleFonts.manrope(fontSize: 15,
-        fontWeight: FontWeight.w700, color: const Color(0xFF2C2417))),
-      const SizedBox(height: 14),
-      ...benefits.map((b) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(b.$1, color: const Color(0xFF5DA399), size: 20),
-          const SizedBox(width: 12),
-          Expanded(child: Text(b.$2, style: GoogleFonts.manrope(fontSize: 14,
-            fontWeight: FontWeight.w500, color: const Color(0xFF4A3F30), height: 1.4))),
-        ]),
-      )),
-    ]);
-  }
-
-  Widget _buildSubscribeButton(bool isTablet) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(isTablet ? 60 : 28, 16, isTablet ? 60 : 28,
-        MediaQuery.of(context).padding.bottom + 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFDFDFD),
-        border: Border(top: BorderSide(
-          color: const Color(0xFF2C2417).withAlpha(15), width: 1))),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        SizedBox(
-          width: double.infinity, height: 52,
-          child: ElevatedButton(
-            onPressed: _isPurchasing ? null : _onSubscribeNow,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF5DA399),
-              foregroundColor: Colors.white, elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16))),
-            child: _isPurchasing
-              ? const SizedBox(width: 22, height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-              : Text('Start 3-Day Free Trial', style: GoogleFonts.manrope(
-                  fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text('No payment required right now — set up first.',
-          style: GoogleFonts.manrope(fontSize: 12,
-            fontWeight: FontWeight.w400, color: const Color(0xFF9E9080)),
-          textAlign: TextAlign.center),
-      ]),
+        const SizedBox(height: 2),
+        Text(subtitle, textAlign: TextAlign.center, style: GoogleFonts.manrope(fontSize: 12,
+          fontWeight: FontWeight.w400, color: Colors.white.withOpacity(0.7))),
+      ],
     );
   }
 }
