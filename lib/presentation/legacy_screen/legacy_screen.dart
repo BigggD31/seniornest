@@ -557,6 +557,13 @@ class _LegacyScreenState extends State<LegacyScreen>
           'excerpt': e['content'] ?? '',
           'category': e['category'] ?? 'Memories',
           'date': e['created_at']?.toString().substring(0, 10) ?? '',
+          // Sep 26 2026: full-precision creation timestamp, kept alongside
+          // the truncated 'date' string above -- added so bookmarking this
+          // story (_toggleStoryBookmark below) can stamp the Favs card with
+          // the story's REAL creation time instead of the moment it was
+          // bookmarked. 'date' alone was already good enough to display,
+          // but bookmarking needs the original full timestamp to hand off.
+          'createdAt': e['created_at']?.toString() ?? '',
           'entry_type': e['entry_type'] ?? 'text',
           'media_url': e['media_url'] ?? '',
           'isBookmarked': realBookmarkedIds.contains(e['id'] as String),
@@ -804,7 +811,22 @@ class _LegacyScreenState extends State<LegacyScreen>
         'content': story['excerpt'] as String? ?? '',
         'imageUrl': story['imageUrl'] as String? ?? '',
         'imageSemanticLabel': story['imageLabel'] as String? ?? '',
-        'timestamp': DateTime.now().toIso8601String(),
+        // Sep 26 2026: D Von's direct report -- bookmarking a story showed
+        // today's date on the Favs card instead of the date the story was
+        // actually written, because this used DateTime.now() (the moment
+        // of bookmarking) instead of the story's own creation time. This
+        // is exactly the bug family_feed_screen.dart's _toggleBookmark
+        // already avoids (it uses msg.timestamp, the message's real
+        // creation time) -- Legacy's bookmark path just never matched that
+        // fix. Prefers the full-precision 'createdAt' added above; falls
+        // back to the truncated 'date' string for any story loaded before
+        // that field existed (e.g. still in a stale local cache), and only
+        // to DateTime.now() if neither is present at all.
+        'timestamp': (story['createdAt'] as String? ?? '').isNotEmpty
+            ? story['createdAt'] as String
+            : (story['date'] as String? ?? '').isNotEmpty
+                ? '${story['date']}T00:00:00.000Z'
+                : DateTime.now().toIso8601String(),
         'sourceType': 'story',
         'storyTitle': story['title'] as String? ?? '',
         'storyCategory': story['category'] as String? ?? '',
@@ -1840,17 +1862,48 @@ class _LegacyScreenState extends State<LegacyScreen>
                             ),
                           ),
                           const SizedBox(width: 10),
-                          // Bookmark button
-                          GestureDetector(
-                            onTap: () => _toggleStoryBookmark(story),
-                            child: Icon(
-                              (story['isBookmarked'] as bool? ?? false)
-                                  ? Icons.bookmark_rounded
-                                  : Icons.bookmark_outline_rounded,
-                              size: 22,
-                              color: (story['isBookmarked'] as bool? ?? false)
-                                  ? const Color(0xFF5DA399)
-                                  : _textSecondary,
+                          // Bookmark button — Sep 26 2026: D Von's direct
+                          // report that checking/unchecking felt less
+                          // smooth than the heart button right next to it.
+                          // Root cause: this was a bare GestureDetector
+                          // with a hard instant icon swap, while the heart
+                          // button above already uses IconButton (real
+                          // Material tap feedback/ripple, a proper 36x36
+                          // hit target). Switched to the same IconButton
+                          // shape for consistent tap feedback, plus a
+                          // short AnimatedSwitcher scale transition on the
+                          // icon itself so the fill/outline swap reads as
+                          // an intentional toggle instead of a hard cut.
+                          SizedBox(
+                            width: 36,
+                            height: 36,
+                            child: IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 36,
+                                minHeight: 36,
+                              ),
+                              onPressed: () => _toggleStoryBookmark(story),
+                              icon: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 180),
+                                transitionBuilder: (child, animation) =>
+                                    ScaleTransition(
+                                      scale: animation,
+                                      child: child,
+                                    ),
+                                child: Icon(
+                                  (story['isBookmarked'] as bool? ?? false)
+                                      ? Icons.bookmark_rounded
+                                      : Icons.bookmark_outline_rounded,
+                                  key: ValueKey<bool>(
+                                    story['isBookmarked'] as bool? ?? false,
+                                  ),
+                                  size: 22,
+                                  color: (story['isBookmarked'] as bool? ?? false)
+                                      ? const Color(0xFF5DA399)
+                                      : _textSecondary,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -4970,12 +5023,36 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                             ),
                           ),
                           const SizedBox(width: 10),
-                          GestureDetector(
-                            onTap: widget.onBookmark,
-                            child: Icon(
-                              (story['isBookmarked'] as bool? ?? false) ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
-                              size: 22,
-                              color: (story['isBookmarked'] as bool? ?? false) ? const Color(0xFF5DA399) : _textSecondary,
+                          // Sep 26 2026: same IconButton + AnimatedSwitcher
+                          // fix as the story card's bookmark button above --
+                          // this popup had the identical bare-GestureDetector,
+                          // hard-cut version of the same button.
+                          SizedBox(
+                            width: 36,
+                            height: 36,
+                            child: IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 36,
+                                minHeight: 36,
+                              ),
+                              onPressed: widget.onBookmark,
+                              icon: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 180),
+                                transitionBuilder: (child, animation) =>
+                                    ScaleTransition(
+                                      scale: animation,
+                                      child: child,
+                                    ),
+                                child: Icon(
+                                  (story['isBookmarked'] as bool? ?? false) ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                                  key: ValueKey<bool>(
+                                    story['isBookmarked'] as bool? ?? false,
+                                  ),
+                                  size: 22,
+                                  color: (story['isBookmarked'] as bool? ?? false) ? const Color(0xFF5DA399) : _textSecondary,
+                                ),
+                              ),
                             ),
                           ),
                           if (widget.canDelete) ...[
