@@ -1,4 +1,4 @@
-package com.example.seniornest
+package com.devonmurphy.seniornest
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.FlutterFragmentActivity

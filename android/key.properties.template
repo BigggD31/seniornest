@@ -1,0 +1,4 @@
+storePassword=REPLACE_WITH_YOUR_PASSWORD
+keyPassword=REPLACE_WITH_YOUR_PASSWORD
+keyAlias=upload
+storeFile=/Users/devonmurphy/keys/seniornest-upload.jks
