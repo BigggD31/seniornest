@@ -308,7 +308,7 @@ class _SplashScreenState extends State<SplashScreen> {
           textAlign: TextAlign.center,
           style: GoogleFonts.nunitoSans(
             fontSize: 14,
-            color: Colors.white.withOpacity(0.8),
+            color: Colors.white.withValues(alpha: 0.8),
             height: 1.4,
           ),
         ),
@@ -352,7 +352,7 @@ class _SplashScreenState extends State<SplashScreen> {
             text: TextSpan(
               style: GoogleFonts.nunitoSans(
                 fontSize: 13,
-                color: Colors.white.withOpacity(0.65),
+                color: Colors.white.withValues(alpha: 0.65),
               ),
               children: [
                 const TextSpan(text: 'New here? '),
@@ -396,7 +396,7 @@ class _SplashScreenState extends State<SplashScreen> {
             fontSize: 11.5,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.6,
-            color: Colors.white.withOpacity(0.82),
+            color: Colors.white.withValues(alpha: 0.82),
           ),
         ),
 
@@ -407,9 +407,9 @@ class _SplashScreenState extends State<SplashScreen> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
           decoration: BoxDecoration(
-            color: _gold.withOpacity(0.18),
+            color: _gold.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(100),
-            border: Border.all(color: _gold.withOpacity(0.55), width: 1.5),
+            border: Border.all(color: _gold.withValues(alpha: 0.55), width: 1.5),
           ),
           child: Text(
             'One person pays — everyone else joins free',
@@ -449,7 +449,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     borderRadius: BorderRadius.circular(100),
                     boxShadow: [
                       BoxShadow(
-                        color: _teal.withOpacity(0.45),
+                        color: _teal.withValues(alpha: 0.45),
                         blurRadius: 18,
                         offset: const Offset(0, 6),
                       ),
@@ -485,9 +485,9 @@ class _SplashScreenState extends State<SplashScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
+                    color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(100),
-                    border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
                   ),
                   child: Text(
                     'I have an invite code',
@@ -510,7 +510,7 @@ class _SplashScreenState extends State<SplashScreen> {
           'No commitment • Cancel anytime',
           style: GoogleFonts.nunitoSans(
             fontSize: 12,
-            color: Colors.white.withOpacity(0.65),
+            color: Colors.white.withValues(alpha: 0.65),
           ),
         ),
 
@@ -535,7 +535,7 @@ class _SplashScreenState extends State<SplashScreen> {
             text: TextSpan(
               style: GoogleFonts.nunitoSans(
                 fontSize: 13,
-                color: Colors.white.withOpacity(0.65),
+                color: Colors.white.withValues(alpha: 0.65),
               ),
               children: [
                 const TextSpan(text: 'Already have an account? '),
@@ -691,7 +691,7 @@ class _InviteCodeSubmitButtonState extends State<_InviteCodeSubmitButton> {
             padding: const EdgeInsets.symmetric(vertical: 15),
             decoration: BoxDecoration(
               color: _isValidating
-                  ? const Color(0xFF8B6914).withOpacity(0.6)
+                  ? const Color(0xFF8B6914).withValues(alpha: 0.6)
                   : const Color(0xFF8B6914),
               borderRadius: BorderRadius.circular(16),
             ),

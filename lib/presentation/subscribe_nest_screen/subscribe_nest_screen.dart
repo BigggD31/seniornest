@@ -420,7 +420,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           child: Container(
             width: 36, height: 36,
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.35),
+              color: Colors.black.withValues(alpha: 0.35),
               shape: BoxShape.circle),
             child: const Icon(Icons.arrow_back_rounded,
               color: Colors.white, size: 19)),
@@ -429,11 +429,11 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.35),
+            color: Colors.black.withValues(alpha: 0.35),
             borderRadius: BorderRadius.circular(100)),
           child: Text('Takes about a minute',
             style: GoogleFonts.manrope(fontSize: 10.5,
-              fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.9))),
+              fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.9))),
         ),
       ]),
     );
@@ -458,9 +458,9 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           decoration: BoxDecoration(
-            color: _gold.withOpacity(0.18),
+            color: _gold.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(100),
-            border: Border.all(color: _gold.withOpacity(0.55), width: 1.5)),
+            border: Border.all(color: _gold.withValues(alpha: 0.55), width: 1.5)),
           child: Text('One person pays — everyone else joins free',
             textAlign: TextAlign.center,
             style: GoogleFonts.manrope(fontSize: 12,
@@ -493,7 +493,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         const SizedBox(height: 10),
         Text('No payment required right now · Cancel anytime',
           style: GoogleFonts.manrope(fontSize: 11,
-            fontWeight: FontWeight.w400, color: Colors.white.withOpacity(0.65)),
+            fontWeight: FontWeight.w400, color: Colors.white.withValues(alpha: 0.65)),
           textAlign: TextAlign.center),
         const SizedBox(height: 14),
         _buildLegalLinks(),
@@ -526,14 +526,14 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
             style: GoogleFonts.manrope(fontSize: 14, color: Colors.white),
             decoration: InputDecoration(
               hintText: 'Enter VIP code',
-              hintStyle: GoogleFonts.manrope(fontSize: 14, color: Colors.white.withOpacity(0.5)),
+              hintStyle: GoogleFonts.manrope(fontSize: 14, color: Colors.white.withValues(alpha: 0.5)),
               filled: true,
-              fillColor: Colors.white.withOpacity(0.12),
+              fillColor: Colors.white.withValues(alpha: 0.12),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.25))),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.25))),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.25))),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.25))),
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(color: Colors.white, width: 1.5)),
             ),
@@ -572,15 +572,15 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           onTap: () => _launchUrl('https://seniornestapp.com/privacy.html'),
           child: Text('Privacy Policy',
             style: GoogleFonts.manrope(fontSize: 11,
-              color: Colors.white.withOpacity(0.7),
+              color: Colors.white.withValues(alpha: 0.7),
               decoration: TextDecoration.underline))),
         Text('  ·  ',
-          style: GoogleFonts.manrope(fontSize: 11, color: Colors.white.withOpacity(0.4))),
+          style: GoogleFonts.manrope(fontSize: 11, color: Colors.white.withValues(alpha: 0.4))),
         GestureDetector(
           onTap: () => _launchUrl('https://seniornestapp.com/terms.html'),
           child: Text('Terms of Use',
             style: GoogleFonts.manrope(fontSize: 11,
-              color: Colors.white.withOpacity(0.7),
+              color: Colors.white.withValues(alpha: 0.7),
               decoration: TextDecoration.underline))),
       ],
     );
@@ -592,7 +592,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         width: double.infinity,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.14),
+          color: Colors.white.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(100)),
         child: Row(children: [
           _buildToggleOption(label: 'Monthly', isSelected: !_isYearly,
@@ -630,13 +630,13 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Text(label, style: GoogleFonts.manrope(fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: isSelected ? _ink : Colors.white.withOpacity(0.75))),
+              color: isSelected ? _ink : Colors.white.withValues(alpha: 0.75))),
             if (badge != null) ...[
               const SizedBox(width: 5),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(
-                  color: _gold.withOpacity(0.28),
+                  color: _gold.withValues(alpha: 0.28),
                   borderRadius: BorderRadius.circular(6)),
                 child: Text(badge, style: GoogleFonts.manrope(fontSize: 9,
                   fontWeight: FontWeight.w800, color: const Color(0xFFF0C878)))),
@@ -658,11 +658,11 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
             fontWeight: FontWeight.w800, color: Colors.white)),
           const SizedBox(width: 5),
           Text(period, style: GoogleFonts.manrope(fontSize: 13,
-            fontWeight: FontWeight.w500, color: Colors.white.withOpacity(0.65))),
+            fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: 0.65))),
         ]),
         const SizedBox(height: 2),
         Text(subtitle, textAlign: TextAlign.center, style: GoogleFonts.manrope(fontSize: 12,
-          fontWeight: FontWeight.w400, color: Colors.white.withOpacity(0.7))),
+          fontWeight: FontWeight.w400, color: Colors.white.withValues(alpha: 0.7))),
       ],
     );
   }
