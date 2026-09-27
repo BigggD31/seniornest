@@ -29,7 +29,6 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   static const String _heroAsset = 'assets/images/landing_hero_porch.jpg';
-  static const String _iconAsset = 'assets/images/nest_icon_transparent.png';
 
   static const Color _teal = Color(0xFF5DA399);
   static const Color _gold = Color(0xFFC8922A);
@@ -240,26 +239,8 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
           ),
 
-          // Small icon mark, no wordmark -- D Von's direct ask removing the
-          // "SeniorNest" wordmark from this board's photo.
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: Image.asset(
-                  _iconAsset,
-                  width: 44,
-                  height: 44,
-                  errorBuilder: (context, error, stackTrace) => const Icon(
-                    Icons.favorite_rounded,
-                    color: _gold,
-                    size: 36,
-                  ),
-                ),
-              ),
-            ),
-          ),
+          // Sep 27 2026: top icon mark removed entirely per D Von's direct
+          // ask -- no logo/mark at the top of this screen at all now.
 
           // Bottom scrim -- carries all the copy.
           Container(
@@ -446,15 +427,21 @@ class _SplashScreenState extends State<SplashScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'One tap, one family, one smile.',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.nunitoSans(
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-            height: 1.22,
-            shadows: const [Shadow(blurRadius: 10, color: Color(0x59000000))],
+        // FittedBox keeps this on one line on every device width, rather
+        // than a fixed font size that happens to wrap on narrower phones.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            'One tap, one family, one smile.',
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            style: GoogleFonts.nunitoSans(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: Colors.white.withValues(alpha: 0.88),
+              height: 1.22,
+              shadows: const [Shadow(blurRadius: 6, color: Color(0x40000000))],
+            ),
           ),
         ),
         const SizedBox(height: 10),
@@ -603,7 +590,7 @@ class _SplashScreenState extends State<SplashScreen> {
           child: RichText(
             text: TextSpan(
               style: GoogleFonts.nunitoSans(
-                fontSize: 13,
+                fontSize: 15,
                 color: Colors.white.withValues(alpha: 0.65),
               ),
               children: [
@@ -611,7 +598,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 TextSpan(
                   text: 'Sign In',
                   style: GoogleFonts.nunitoSans(
-                    fontSize: 13,
+                    fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: Colors.white,
                     decoration: TextDecoration.underline,
