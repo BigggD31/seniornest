@@ -358,19 +358,23 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
             alignment: const Alignment(0, -0.5),
           ),
 
-          // Top scrim -- just enough for the back button to read.
+          // Top scrim -- just enough for the back button to read. Sep 27
+          // 2026: lightened (was 0x8C) so more of the photo shows through,
+          // per D Von's direct ask.
           Container(
             height: 140,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0x8C140F08), Color(0x00140F08)],
+                colors: [Color(0x63140F08), Color(0x00140F08)],
               ),
             ),
           ),
 
-          // Bottom scrim -- carries all the copy.
+          // Bottom scrim -- carries all the copy. Sep 27 2026: lightened
+          // (was 0xB8/0xF5) so more of the photo shows through, per D
+          // Von's direct ask.
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -379,8 +383,8 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
                 stops: [0.0, 0.34, 1.0],
                 colors: [
                   Color(0x00140F08),
-                  Color(0xB8140F08),
-                  Color(0xF5140F08),
+                  Color(0x8C140F08),
+                  Color(0xD8140F08),
                 ],
               ),
             ),

@@ -226,7 +226,9 @@ class _SplashScreenState extends State<SplashScreen> {
             alignment: const Alignment(0, -0.55),
           ),
 
-          // Top scrim -- just enough for the status bar / small mark to read.
+          // Top scrim -- just enough for the status bar / small mark to
+          // read. Sep 27 2026: lightened (was 0x8C) so more of the photo
+          // shows through, per D Von's direct ask.
           Container(
             height: 160,
             alignment: Alignment.topCenter,
@@ -234,7 +236,7 @@ class _SplashScreenState extends State<SplashScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0x8C140F08), Color(0x00140F08)],
+                colors: [Color(0x63140F08), Color(0x00140F08)],
               ),
             ),
           ),
@@ -242,7 +244,9 @@ class _SplashScreenState extends State<SplashScreen> {
           // Sep 27 2026: top icon mark removed entirely per D Von's direct
           // ask -- no logo/mark at the top of this screen at all now.
 
-          // Bottom scrim -- carries all the copy.
+          // Bottom scrim -- carries all the copy. Sep 27 2026: lightened
+          // (was 0xB8/0xF0) so more of the photo shows through, per D
+          // Von's direct ask.
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -251,8 +255,8 @@ class _SplashScreenState extends State<SplashScreen> {
                 stops: [0.0, 0.42, 1.0],
                 colors: [
                   Color(0x00140F08),
-                  Color(0xB8140F08),
-                  Color(0xF0140F08),
+                  Color(0x8C140F08),
+                  Color(0xD2140F08),
                 ],
               ),
             ),
