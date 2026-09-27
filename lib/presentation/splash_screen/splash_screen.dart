@@ -7,14 +7,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/keyboard_done_bar.dart';
 import '../../core/app_state.dart';
+import './widgets/heartbeat_painter_widget.dart';
+import './widgets/nest_logo_widget.dart';
 
 // Sep 26 2026: rebuilt as a full-bleed photo hero, matching the approved
-// Landing-Fullbleed Claude Design mockup D Von signed off on -- the
-// animated gradient/logo/heartbeat/benefits-grid version this replaces is
-// gone from here, but every real behavior it had (returning-user branch,
-// invite code entry, sign-in fallback, Get Started routing, the banner
-// passed in via route arguments) is preserved unchanged below, just
-// reskinned onto the photo.
+// Landing-Fullbleed Claude Design mockup D Von signed off on -- but this
+// only ever applied to the first-time pitch. Sep 27 2026: the rebuild had
+// also put the returning-user ("just signed out") screen behind the same
+// hero photo, which was never the intent -- that screen keeps its own
+// longstanding look (the pale cream/gold/clay gradient with the Nest
+// logo), completely separate from the new photo-hero Landing screen.
+// Every other real behavior (invite code entry, sign-in fallback, Get
+// Started routing, the banner passed in via route arguments) is
+// preserved unchanged below.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -202,13 +207,20 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Returning-user (just-signed-out) screen is wholly separate from the
+    // hero-photo first-time pitch below -- its own Scaffold, own
+    // background, never the marketing photo.
+    if (_isReturningUser) {
+      return _buildReturningUserScreen(context);
+    }
+
     return Scaffold(
       backgroundColor: _ink,
       body: Stack(
         fit: StackFit.expand,
         children: [
           // Full-bleed hero photo -- carries the entire screen, matching
-          // the approved Landing-Fullbleed mockup.
+          // the approved Landing-Fullbleed mockup. First-time pitch only.
           Image.asset(
             _heroAsset,
             fit: BoxFit.cover,
@@ -271,9 +283,7 @@ class _SplashScreenState extends State<SplashScreen> {
               child: SingleChildScrollView(
                 physics: const ClampingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-                child: _isReturningUser
-                    ? _buildReturningUserContent(context)
-                    : _buildFirstTimeContent(context),
+                child: _buildFirstTimeContent(context),
               ),
             ),
           ),
@@ -284,92 +294,151 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
-  Widget _buildReturningUserContent(BuildContext context) {
-    // Shown only when this device just signed out. Skips the entire
-    // first-time pitch below (trial framing, invite-code button, pricing
-    // disclaimer, feature list) since none of it applies to someone who
-    // already has an account and just wants back in.
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Welcome back',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.nunitoSans(
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-            shadows: const [Shadow(blurRadius: 10, color: Color(0x4D000000))],
+  Widget _buildReturningUserScreen(BuildContext context) {
+    // Shown only when this device just signed out. This is the
+    // longstanding "welcome back" screen -- pale cream/gold/clay
+    // gradient, the Nest logo, static heartbeat line -- restored to its
+    // own Scaffold after the Sep 26 hero-photo rebuild wrongly put it
+    // behind the same marketing photo used for the first-time pitch.
+    // Not animated (the original ran its logo/heartbeat entrance on
+    // AnimationControllers this rebuilt class no longer has) -- the
+    // static mark reads the same to someone just signing back in.
+    final size = MediaQuery.of(context).size;
+    final isTablet = size.width >= 600;
+    final logoSize = isTablet ? 285.0 : 266.0;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFE9F1EE),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE9F1EE), Color(0xFFF3E7C4), Color(0xFFF8E9E1)],
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          'Sign in to pick up right where you left off.',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.nunitoSans(
-            fontSize: 14,
-            color: Colors.white.withValues(alpha: 0.8),
-            height: 1.4,
-          ),
-        ),
-        const SizedBox(height: 22),
-        GestureDetector(
-          onTap: () {
-            Navigator.pushNamed(
-              context,
-              '/save-messages-prompt-screen',
-              arguments: {'signInMode': true},
-            );
-          },
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 17),
-            decoration: BoxDecoration(
-              color: _teal,
-              borderRadius: BorderRadius.circular(100),
-            ),
-            child: Text(
-              'Sign In',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.nunitoSans(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                letterSpacing: 0.3,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 18),
-        // Fallback for a different person picking up the same device
-        // (e.g. a shared family phone) -- drops back to the full
-        // first-time pitch for this session without needing a separate page.
-        GestureDetector(
-          onTap: () {
-            setState(() => _isReturningUser = false);
-          },
-          child: RichText(
-            text: TextSpan(
-              style: GoogleFonts.nunitoSans(
-                fontSize: 13,
-                color: Colors.white.withValues(alpha: 0.65),
-              ),
-              children: [
-                const TextSpan(text: 'New here? '),
-                TextSpan(
-                  text: 'Get Started',
-                  style: GoogleFonts.nunitoSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    decoration: TextDecoration.underline,
-                  ),
+        child: SafeArea(
+          child: Center(
+            child: SizedBox(
+              width: isTablet ? 440 : double.infinity,
+              child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isTablet ? 40 : 24,
+                  vertical: 4,
                 ),
-              ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: size.height * 0.04),
+                    NestLogoWidget(size: logoSize),
+                    const SizedBox(height: 2),
+                    SizedBox(
+                      width: isTablet ? 260 : 200,
+                      height: 28,
+                      child: CustomPaint(
+                        painter: HeartbeatPainterWidget(
+                          progress: 1.0,
+                          color: const Color(0xFFE8A0A0),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    Text(
+                      'Welcome back',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: isTablet ? 22 : 20,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF2C2417),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Sign in to pick up right where you left off.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 14,
+                        color: const Color(0xFF6B5E4E),
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 26),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pushNamed(
+                          context,
+                          '/save-messages-prompt-screen',
+                          arguments: {'signInMode': true},
+                        );
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF5DA399), Color(0xFF7DBDB5)],
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF5DA399).withValues(alpha: 0.35),
+                              blurRadius: 18,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          'Sign In',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    // Fallback for a different person picking up the same
+                    // device (e.g. a shared family phone) -- drops back
+                    // to the full first-time pitch for this session
+                    // without needing a separate page.
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => _isReturningUser = false);
+                      },
+                      child: RichText(
+                        text: TextSpan(
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 13,
+                            color: const Color(0xFF9E8E7E),
+                          ),
+                          children: [
+                            const TextSpan(text: 'New here? '),
+                            TextSpan(
+                              text: 'Get Started',
+                              style: GoogleFonts.nunitoSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF5DA399),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: size.height * 0.04),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 
