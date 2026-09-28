@@ -23,6 +23,34 @@ final ValueNotifier<bool> appDarkModeNotifier = ValueNotifier<bool>(false);
 /// with all six kept alive underneath.
 final ValueNotifier<int> appActiveTabNotifier = ValueNotifier<int>(0);
 
+/// Sep 28 2026: Legacy and Favs (like all six tabs, kept alive together
+/// in MainTabShell's IndexedStack -- see appActiveTabNotifier above) each
+/// keep their own independent local bookmark list, and each only loads
+/// its real state from user_favourites once, in initState. D Von's direct
+/// report: bookmarking a story on Legacy didn't show up on Favs until a
+/// manual pull-to-refresh, and unbookmarking on Favs left Legacy still
+/// showing it as bookmarked until the same. Neither screen was wrong
+/// against Supabase -- they just never told each other about a change.
+/// This is a broadcast, not a cached state -- whichever screen performs a
+/// bookmark add/remove sets this right after its own Supabase write
+/// succeeds, and both screens listen and reconcile their own local list
+/// against it. itemData carries the full user_favourites 'item_data'
+/// payload and is only needed on an add (Favs needs it to insert a new
+/// card without reloading); a removal only needs the id.
+class BookmarkEvent {
+  final String itemId;
+  final bool isBookmarked;
+  final Map<String, dynamic>? itemData;
+  const BookmarkEvent({
+    required this.itemId,
+    required this.isBookmarked,
+    this.itemData,
+  });
+}
+
+final ValueNotifier<BookmarkEvent?> bookmarkEventNotifier =
+    ValueNotifier<BookmarkEvent?>(null);
+
 /// Global nest-name notifier — resolved once in main.dart's
 /// _resolveInitialRoute(), before any screen ever builds, same pattern as
 /// appDarkModeNotifier above. Once someone has named their nest, that name

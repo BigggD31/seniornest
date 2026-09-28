@@ -73,6 +73,26 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 500),
     );
     _loadData();
+    // Sep 28 2026: keeps this screen's list in sync with bookmarks
+    // added/removed from Legacy (or elsewhere) without needing a manual
+    // reload -- see bookmarkEventNotifier's comment in app_state.dart.
+    bookmarkEventNotifier.addListener(_onBookmarkEventChanged);
+  }
+
+  void _onBookmarkEventChanged() {
+    final event = bookmarkEventNotifier.value;
+    if (event == null || !mounted) return;
+    final existingIndex =
+        _bookmarkedItems.indexWhere((e) => e['id'] == event.itemId);
+    if (event.isBookmarked) {
+      if (existingIndex < 0 && event.itemData != null) {
+        setState(() => _bookmarkedItems.insert(0, event.itemData!));
+      }
+    } else {
+      if (existingIndex >= 0) {
+        setState(() => _bookmarkedItems.removeAt(existingIndex));
+      }
+    }
   }
 
   Future<void> _loadData() async {
@@ -117,6 +137,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    bookmarkEventNotifier.removeListener(_onBookmarkEventChanged);
     _entranceController.dispose();
     super.dispose();
   }
@@ -171,6 +192,11 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
             .delete()
             .eq('user_id', bookmarkUserId)
             .eq('item_id', id);
+        // Sep 28 2026: tell Legacy (or wherever this was bookmarked from)
+        // about this without it needing to reload -- see
+        // bookmarkEventNotifier's comment in app_state.dart.
+        bookmarkEventNotifier.value =
+            BookmarkEvent(itemId: id, isBookmarked: false);
       }
     } catch (_) {
       if (mounted) {

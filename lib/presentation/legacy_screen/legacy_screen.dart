@@ -244,6 +244,20 @@ class _LegacyScreenState extends State<LegacyScreen>
     // already on this tab.
     _scheduleLegacySeenClear();
     ActivityBadgeService.legacyCount.addListener(_onLegacyCountChanged);
+    // Sep 28 2026: see bookmarkEventNotifier's comment in app_state.dart --
+    // keeps this screen's bookmark icons in sync with the Favs tab without
+    // needing a manual reload.
+    bookmarkEventNotifier.addListener(_onBookmarkEventChanged);
+  }
+
+  void _onBookmarkEventChanged() {
+    final event = bookmarkEventNotifier.value;
+    if (event == null) return;
+    final index = _stories.indexWhere((s) => s['id'] == event.itemId);
+    if (index >= 0 && mounted &&
+        (_stories[index]['isBookmarked'] as bool? ?? false) != event.isBookmarked) {
+      setState(() => _stories[index]['isBookmarked'] = event.isBookmarked);
+    }
   }
 
   Timer? _legacySeenDelayTimer;
@@ -650,6 +664,7 @@ class _LegacyScreenState extends State<LegacyScreen>
   void dispose() {
     _legacySeenDelayTimer?.cancel();
     ActivityBadgeService.legacyCount.removeListener(_onLegacyCountChanged);
+    bookmarkEventNotifier.removeListener(_onBookmarkEventChanged);
     _entranceController.dispose();
     super.dispose();
   }
@@ -846,6 +861,10 @@ class _LegacyScreenState extends State<LegacyScreen>
             'item_id': id,
             'item_data': item,
           });
+          // Sep 28 2026: tell Favs about this without it needing to reload --
+          // see bookmarkEventNotifier's comment in app_state.dart.
+          bookmarkEventNotifier.value =
+              BookmarkEvent(itemId: id, isBookmarked: true, itemData: item);
         }
       } catch (e) {
         // Sep 19 2026: found during an audit -- this used to fail
@@ -880,6 +899,10 @@ class _LegacyScreenState extends State<LegacyScreen>
               .delete()
               .eq('user_id', bookmarkUserId)
               .eq('item_id', id);
+          // Sep 28 2026: tell Favs about this without it needing to reload --
+          // see bookmarkEventNotifier's comment in app_state.dart.
+          bookmarkEventNotifier.value =
+              BookmarkEvent(itemId: id, isBookmarked: false);
         }
       } catch (e) {
         // Same fix as above, mirrored for the unbookmark direction.
