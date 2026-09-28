@@ -400,11 +400,30 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
               child: Column(
                 children: [
                   _buildHeader(),
-                  const Spacer(),
-                  SingleChildScrollView(
-                    physics: const ClampingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                    child: _buildContent(),
+                  // Sep 28 2026: the Sep 26 full-bleed rebuild dropped the
+                  // Expanded wrapper this scroll view used to have (see git
+                  // history at commit 043c569), replacing it with a bare
+                  // Spacer + unconstrained SingleChildScrollView. Without
+                  // Expanded, the scroll view sizes itself to its own
+                  // content instead of the real remaining screen height, so
+                  // when tapping "Have a VIP code?" grows _buildContent()
+                  // (swapping the text link for a field + button), the
+                  // added height has nowhere to scroll into and gets
+                  // clipped off-screen -- D Von's direct report: the button
+                  // "disappears and nothing happens." Expanded restores a
+                  // real bounded height so it scrolls properly again;
+                  // Align(bottomCenter) keeps the content anchored to the
+                  // bottom of that space when it's shorter than the screen,
+                  // matching the original bottom-sheet-over-photo look.
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                        child: _buildContent(),
+                      ),
+                    ),
                   ),
                 ],
               ),
