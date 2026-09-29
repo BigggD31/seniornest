@@ -43,11 +43,6 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   // is completed with the store but skipped for everything else below.
   final Set<String> _processedPurchaseIds = {};
 
-  final TextEditingController _vipCodeController = TextEditingController();
-  bool _showVipField = false;
-  bool _isRedeemingVip = false;
-  String? _vipError;
-
   @override
   void initState() {
     super.initState();
@@ -181,114 +176,6 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     appNestNameNotifier.value = nestName;
   }
 
-  // Sep 28 2026: covers a VIP redemption on this screen for an account that
-  // turns out to have no nest at all yet -- see the call site's comment in
-  // _redeemVipCode for the full explanation of the stuck-Home-skeleton bug
-  // this fixes. Checks for an existing nest/membership first (unlike
-  // _createAdditionalNest, which is only called when one is already known
-  // not to exist) so this is safe to call unconditionally on every
-  // non-additional-nest VIP redemption without disturbing an account that
-  // already has a real nest.
-  Future<void> _ensureNestExistsForVipRedemption() async {
-    final supabase = Supabase.instance.client;
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null || !mounted) return;
-    final prefs = await SharedPreferences.getInstance();
-
-    try {
-      // Already owns a nest?
-      final owned = await supabase
-          .from('nests')
-          .select('id, name')
-          .eq('created_by', userId)
-          .maybeSingle();
-      if (owned != null) {
-        final nestId = owned['id'] as String;
-        final nestName = owned['name'] as String? ?? '';
-        await prefs.setString('nest_id', nestId);
-        if (nestName.isNotEmpty) {
-          await prefs.setString('nest_name', nestName);
-          appNestNameNotifier.value = nestName;
-        }
-        return;
-      }
-
-      // Already a member of someone else's nest?
-      final membership = await supabase
-          .from('nest_members')
-          .select('nest_id, nests(name)')
-          .eq('user_id', userId)
-          .maybeSingle();
-      if (membership != null) {
-        final nestId = membership['nest_id'] as String;
-        final nestRow = membership['nests'] as Map<String, dynamic>?;
-        final nestName = nestRow?['name'] as String? ?? '';
-        await prefs.setString('nest_id', nestId);
-        if (nestName.isNotEmpty) {
-          await prefs.setString('nest_name', nestName);
-          appNestNameNotifier.value = nestName;
-        }
-        return;
-      }
-    } catch (e) {
-      debugPrint('VIP_NEST_LOOKUP_ERROR: $e');
-      // Can't confirm either way -- don't risk creating a duplicate nest
-      // for someone who may already have one. Home's own _ensureNestId
-      // will retry this same lookup on arrival.
-      return;
-    }
-
-    // No existing nest or membership -- this VIP redemption never went
-    // through the normal onboarding steps that would have created one, so
-    // create it now. No "name your nest" prompt here (unlike
-    // _createAdditionalNest): this happens for an account that hasn't
-    // named anything yet, so fall back to whatever display name is cached
-    // locally, same default Home itself would show.
-    final preferredName = prefs.getString('preferred_name') ?? '';
-    final displayName = prefs.getString('display_name') ?? '';
-    final ownerName = preferredName.isNotEmpty ? preferredName : displayName;
-    final nestName = ownerName.isNotEmpty ? "$ownerName's Nest" : 'My Nest';
-
-    String? nestId;
-    for (int attempt = 0; attempt < 5 && nestId == null; attempt++) {
-      final inviteCode = 'NEST${(100000 + Random().nextInt(900000))}';
-      try {
-        final nestResponse = await supabase
-            .from('nests')
-            .insert({'name': nestName, 'created_by': userId, 'invite_code': inviteCode})
-            .select('id')
-            .single();
-        nestId = nestResponse['id'] as String;
-      } on PostgrestException catch (e) {
-        if (e.code == '23505') continue; // invite_code collision, retry
-        rethrow;
-      }
-    }
-    if (nestId == null) {
-      debugPrint('VIP_NEST_CREATE_ERROR: could not generate a unique invite code after 5 attempts');
-      return;
-    }
-
-    await supabase.from('nest_members').upsert(
-      {'nest_id': nestId, 'user_id': userId},
-      onConflict: 'nest_id,user_id',
-    );
-
-    // Attach this redemption's subscription row (still nest_id = NULL,
-    // written by the redeem_vip_code RPC just above) to the nest that just
-    // got created -- same pattern _createAdditionalNest uses for a
-    // purchase. Only touches a NULL row, so it can't clobber another nest.
-    await supabase.from('subscriptions')
-        .update({'nest_id': nestId})
-        .eq('user_id', userId)
-        .isFilter('nest_id', null);
-
-    await AuthService.clearStaleNestDataIfNestChanged(nestId);
-    await prefs.setString('nest_id', nestId);
-    await prefs.setString('nest_name', nestName);
-    appNestNameNotifier.value = nestName;
-  }
-
   // Actually records the purchase in Supabase so the rest of the app can
   // tell whether this person is currently entitled. Previously nothing
   // wrote this down anywhere -- purchasing and access were disconnected.
@@ -368,73 +255,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   void dispose() {
     _purchaseSubscription?.cancel();
     _animController.dispose();
-    _vipCodeController.dispose();
     super.dispose();
-  }
-
-  // p_nest_id is left null in the RPC call below for the same reason
-  // _recordSubscription() leaves nestId null on this screen -- at this
-  // point the nest doesn't exist yet, whether this is a first-time signup
-  // or an existing owner adding a second nest. save_messages_prompt_screen.dart
-  // (first-time) and _createAdditionalNest() below (existing owner) each
-  // attach the real nest_id retroactively once their nest actually gets created.
-  Future<void> _redeemVipCode() async {
-    final code = _vipCodeController.text.trim();
-    if (code.isEmpty || _isRedeemingVip) return;
-    setState(() { _isRedeemingVip = true; _vipError = null; });
-    try {
-      final supabase = Supabase.instance.client;
-      final userId = supabase.auth.currentUser?.id;
-      if (userId == null) {
-        setState(() { _isRedeemingVip = false; _vipError = 'Please sign in first.'; });
-        return;
-      }
-      final result = await supabase.rpc('redeem_vip_code', params: {
-        'p_code': code,
-        'p_user_id': userId,
-        'p_nest_id': null,
-      });
-      if (!mounted) return;
-      if (result == true) {
-        if (_isAdditionalNest) {
-          await _createAdditionalNest();
-        } else {
-          // Sep 28 2026: D Von's direct report -- redeeming a VIP code here
-          // landed on a stuck loading skeleton on Home. Root cause: this
-          // branch used to do nothing but navigate straight to Home for
-          // every non-additional-nest redemption, on the unstated
-          // assumption that an already-signed-in account always already
-          // has a nest by the time it can reach this screen. That's true
-          // for the common paths (an existing owner/member whose
-          // entitlement lapsed), but not guaranteed -- an account that's
-          // signed in and locally flagged as onboarded on THIS device can
-          // still have no real nest/membership row at all (e.g. a fresh
-          // sign-in on a new device/reinstall before this device's own
-          // onboarding ever ran, or any other gap between "signed in" and
-          // "actually has a nest"). Home's _isLoading starts true whenever
-          // appNestNameNotifier is empty and only ever resolves once a
-          // real nest is found -- with no nest to find, it never does.
-          // This mirrors _createAdditionalNest()'s own create-then-attach
-          // pattern, but checks for an existing nest first (unlike that
-          // method, which is only ever called when one is already known
-          // not to exist) and skips the "name your nest" prompt, since a
-          // VIP redemption on this screen never went through the normal
-          // onboarding steps that would have collected a name.
-          await _ensureNestExistsForVipRedemption();
-        }
-        if (!mounted) return;
-        _navigateForward();
-      } else {
-        setState(() {
-          _isRedeemingVip = false;
-          _vipError = "That code isn't valid or has already been fully used.";
-        });
-      }
-    } catch (e) {
-      debugPrint('VIP_CODE_REDEEM_ERROR: $e');
-      if (!mounted) return;
-      setState(() { _isRedeemingVip = false; _vipError = 'Something went wrong. Please try again.'; });
-    }
   }
 
   void _onSubscribeNow() async {
@@ -476,8 +297,11 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   // Sep 26 2026: rebuilt as a full-bleed photo hero, matching the approved
   // Pricing-Fullbleed Claude Design mockup D Von signed off on -- same
   // real Monthly/Yearly toggle, same $9.99/mo vs $99/yr copy, same IAP,
-  // VIP-redemption and additional-nest logic as before, just reskinned
-  // onto the photo instead of the plain card layout it replaces.
+  // additional-nest logic as before, just reskinned onto the photo instead
+  // of the plain card layout it replaces. (Sep 29 2026: the "Have a VIP
+  // code?" link/field that used to live at the bottom of this screen was
+  // removed per D Von's direct ask -- redundant with the VIP entry points
+  // already in the onboarding flow.)
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -538,16 +362,13 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
                   // history at commit 043c569), replacing it with a bare
                   // Spacer + unconstrained SingleChildScrollView. Without
                   // Expanded, the scroll view sizes itself to its own
-                  // content instead of the real remaining screen height, so
-                  // when tapping "Have a VIP code?" grows _buildContent()
-                  // (swapping the text link for a field + button), the
-                  // added height has nowhere to scroll into and gets
-                  // clipped off-screen -- D Von's direct report: the button
-                  // "disappears and nothing happens." Expanded restores a
-                  // real bounded height so it scrolls properly again;
-                  // Align(bottomCenter) keeps the content anchored to the
-                  // bottom of that space when it's shorter than the screen,
-                  // matching the original bottom-sheet-over-photo look.
+                  // content instead of the real remaining screen height,
+                  // which used to clip _buildContent() off-screen whenever
+                  // it grew taller than expected. Expanded restores a real
+                  // bounded height so it scrolls properly; Align(bottomCenter)
+                  // keeps the content anchored to the bottom of that space
+                  // when it's shorter than the screen, matching the original
+                  // bottom-sheet-over-photo look.
                   Expanded(
                     child: Align(
                       alignment: Alignment.bottomCenter,
@@ -653,71 +474,8 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           textAlign: TextAlign.center),
         const SizedBox(height: 14),
         _buildLegalLinks(),
-        const SizedBox(height: 12),
-        _buildVipCodeSection(),
       ],
     );
-  }
-
-  Widget _buildVipCodeSection() {
-    if (!_showVipField) {
-      return Center(
-        child: GestureDetector(
-          onTap: () => setState(() => _showVipField = true),
-          child: Text('Have a VIP code?',
-            style: GoogleFonts.manrope(fontSize: 12.5, fontWeight: FontWeight.w700,
-              color: _gold, decoration: TextDecoration.underline,
-              decorationColor: _gold)),
-        ),
-      );
-    }
-    return Column(children: [
-      Row(children: [
-        Expanded(
-          child: TextField(
-            controller: _vipCodeController,
-            textCapitalization: TextCapitalization.characters,
-            enabled: !_isRedeemingVip,
-            onSubmitted: (_) => _redeemVipCode(),
-            style: GoogleFonts.manrope(fontSize: 14, color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'Enter VIP code',
-              hintStyle: GoogleFonts.manrope(fontSize: 14, color: Colors.white.withValues(alpha: 0.5)),
-              filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.12),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.25))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.25))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.white, width: 1.5)),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        SizedBox(
-          height: 44,
-          child: ElevatedButton(
-            onPressed: _isRedeemingVip ? null : _redeemVipCode,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: _ink, elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 16)),
-            child: _isRedeemingVip
-              ? SizedBox(width: 16, height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: _ink))
-              : Text('Apply', style: GoogleFonts.manrope(fontSize: 14, fontWeight: FontWeight.w700)),
-          ),
-        ),
-      ]),
-      if (_vipError != null) ...[
-        const SizedBox(height: 8),
-        Text(_vipError!, style: GoogleFonts.manrope(fontSize: 12,
-          fontWeight: FontWeight.w500, color: const Color(0xFFFFAA8A))),
-      ],
-    ]);
   }
 
   Widget _buildLegalLinks() {
