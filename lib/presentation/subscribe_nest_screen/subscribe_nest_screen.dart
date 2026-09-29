@@ -181,6 +181,114 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     appNestNameNotifier.value = nestName;
   }
 
+  // Sep 28 2026: covers a VIP redemption on this screen for an account that
+  // turns out to have no nest at all yet -- see the call site's comment in
+  // _redeemVipCode for the full explanation of the stuck-Home-skeleton bug
+  // this fixes. Checks for an existing nest/membership first (unlike
+  // _createAdditionalNest, which is only called when one is already known
+  // not to exist) so this is safe to call unconditionally on every
+  // non-additional-nest VIP redemption without disturbing an account that
+  // already has a real nest.
+  Future<void> _ensureNestExistsForVipRedemption() async {
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null || !mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+
+    try {
+      // Already owns a nest?
+      final owned = await supabase
+          .from('nests')
+          .select('id, name')
+          .eq('created_by', userId)
+          .maybeSingle();
+      if (owned != null) {
+        final nestId = owned['id'] as String;
+        final nestName = owned['name'] as String? ?? '';
+        await prefs.setString('nest_id', nestId);
+        if (nestName.isNotEmpty) {
+          await prefs.setString('nest_name', nestName);
+          appNestNameNotifier.value = nestName;
+        }
+        return;
+      }
+
+      // Already a member of someone else's nest?
+      final membership = await supabase
+          .from('nest_members')
+          .select('nest_id, nests(name)')
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (membership != null) {
+        final nestId = membership['nest_id'] as String;
+        final nestRow = membership['nests'] as Map<String, dynamic>?;
+        final nestName = nestRow?['name'] as String? ?? '';
+        await prefs.setString('nest_id', nestId);
+        if (nestName.isNotEmpty) {
+          await prefs.setString('nest_name', nestName);
+          appNestNameNotifier.value = nestName;
+        }
+        return;
+      }
+    } catch (e) {
+      debugPrint('VIP_NEST_LOOKUP_ERROR: $e');
+      // Can't confirm either way -- don't risk creating a duplicate nest
+      // for someone who may already have one. Home's own _ensureNestId
+      // will retry this same lookup on arrival.
+      return;
+    }
+
+    // No existing nest or membership -- this VIP redemption never went
+    // through the normal onboarding steps that would have created one, so
+    // create it now. No "name your nest" prompt here (unlike
+    // _createAdditionalNest): this happens for an account that hasn't
+    // named anything yet, so fall back to whatever display name is cached
+    // locally, same default Home itself would show.
+    final preferredName = prefs.getString('preferred_name') ?? '';
+    final displayName = prefs.getString('display_name') ?? '';
+    final ownerName = preferredName.isNotEmpty ? preferredName : displayName;
+    final nestName = ownerName.isNotEmpty ? "$ownerName's Nest" : 'My Nest';
+
+    String? nestId;
+    for (int attempt = 0; attempt < 5 && nestId == null; attempt++) {
+      final inviteCode = 'NEST${(100000 + Random().nextInt(900000))}';
+      try {
+        final nestResponse = await supabase
+            .from('nests')
+            .insert({'name': nestName, 'created_by': userId, 'invite_code': inviteCode})
+            .select('id')
+            .single();
+        nestId = nestResponse['id'] as String;
+      } on PostgrestException catch (e) {
+        if (e.code == '23505') continue; // invite_code collision, retry
+        rethrow;
+      }
+    }
+    if (nestId == null) {
+      debugPrint('VIP_NEST_CREATE_ERROR: could not generate a unique invite code after 5 attempts');
+      return;
+    }
+
+    await supabase.from('nest_members').upsert(
+      {'nest_id': nestId, 'user_id': userId},
+      onConflict: 'nest_id,user_id',
+    );
+
+    // Attach this redemption's subscription row (still nest_id = NULL,
+    // written by the redeem_vip_code RPC just above) to the nest that just
+    // got created -- same pattern _createAdditionalNest uses for a
+    // purchase. Only touches a NULL row, so it can't clobber another nest.
+    await supabase.from('subscriptions')
+        .update({'nest_id': nestId})
+        .eq('user_id', userId)
+        .isFilter('nest_id', null);
+
+    await AuthService.clearStaleNestDataIfNestChanged(nestId);
+    await prefs.setString('nest_id', nestId);
+    await prefs.setString('nest_name', nestName);
+    appNestNameNotifier.value = nestName;
+  }
+
   // Actually records the purchase in Supabase so the rest of the app can
   // tell whether this person is currently entitled. Previously nothing
   // wrote this down anywhere -- purchasing and access were disconnected.
@@ -288,7 +396,32 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
       });
       if (!mounted) return;
       if (result == true) {
-        if (_isAdditionalNest) await _createAdditionalNest();
+        if (_isAdditionalNest) {
+          await _createAdditionalNest();
+        } else {
+          // Sep 28 2026: D Von's direct report -- redeeming a VIP code here
+          // landed on a stuck loading skeleton on Home. Root cause: this
+          // branch used to do nothing but navigate straight to Home for
+          // every non-additional-nest redemption, on the unstated
+          // assumption that an already-signed-in account always already
+          // has a nest by the time it can reach this screen. That's true
+          // for the common paths (an existing owner/member whose
+          // entitlement lapsed), but not guaranteed -- an account that's
+          // signed in and locally flagged as onboarded on THIS device can
+          // still have no real nest/membership row at all (e.g. a fresh
+          // sign-in on a new device/reinstall before this device's own
+          // onboarding ever ran, or any other gap between "signed in" and
+          // "actually has a nest"). Home's _isLoading starts true whenever
+          // appNestNameNotifier is empty and only ever resolves once a
+          // real nest is found -- with no nest to find, it never does.
+          // This mirrors _createAdditionalNest()'s own create-then-attach
+          // pattern, but checks for an existing nest first (unlike that
+          // method, which is only ever called when one is already known
+          // not to exist) and skips the "name your nest" prompt, since a
+          // VIP redemption on this screen never went through the normal
+          // onboarding steps that would have collected a name.
+          await _ensureNestExistsForVipRedemption();
+        }
         if (!mounted) return;
         _navigateForward();
       } else {
