@@ -167,6 +167,25 @@ class FamilyFeedScreen extends StatefulWidget {
 
 class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     with TickerProviderStateMixin {
+  // Sep 28 2026: field initializers run before a try/catch block can wrap
+  // them, so this has to be its own guarded static function rather than
+  // an inline `.map(MessageModel.fromMap).toList()` -- MessageModel.fromMap
+  // does several non-null casts, and _loadData()'s own async read of this
+  // exact cache already guards the identical call with try/catch for
+  // exactly that reason. Malformed cached data should fall back to an
+  // empty list (the live fetch will still correct it moments later, same
+  // as the empty-[] starting point this replaces), never crash the
+  // screen's very first build.
+  static List<MessageModel> _seedCachedMessages() {
+    try {
+      return appCachedMessagesNotifier.value
+          .map((m) => MessageModel.fromMap(m))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   // TODO: Replace with Riverpod/Bloc for production — feed state, user state
   final int _currentNavIndex = 0;
   bool _isSenior = appIsSeniorNotifier.value;
@@ -192,18 +211,28 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // brand-new device that's never set a nest name at all. _buildLoadingState()
   // still exists and still covers that one real first-time case correctly.
   bool _isLoading = appNestNameNotifier.value.isEmpty;
+  // Sep 28 2026: D Von's direct report, tracing back to Thread #31's
+  // confirmed-working build 258 -- the rest of Home (nest name, meds,
+  // avatar row, check-in cards) all paint synchronously from a
+  // cache-seeded notifier on the very first frame, but this one field
+  // used to start empty and wait on its own separate async fetch
+  // regardless, which is exactly what made the feed visibly lag 1-3
+  // seconds behind everything else on an ORDINARY warm return, not just
+  // a genuinely uncached first load. Same fix shape as _nestMembers/
+  // _seniorStatuses below: seeded synchronously from
+  // appCachedMessagesNotifier (app_state.dart), which resolveAppNotifiers
+  // FromPrefs() already decodes from the exact same nest-scoped cache
+  // this screen's own _loadData() reads later. See that notifier's own
+  // comment for the full explanation.
+  List<MessageModel> _messages = _seedCachedMessages();
   // Tracks the messages list specifically, separate from _isLoading above.
-  // Needed because _messages itself can't be seeded synchronously --
-  // SharedPreferences has no sync read API -- so even with _isLoading
-  // starting false, _messages is still genuinely [] for one microtask.
-  // Without this flag, the (_messages.isEmpty && _hasRealPost) branch a
-  // few hundred lines down would show FeedEmptyStateWidget (a "you have
-  // no messages, send one" prompt) during that real gap, to someone who
-  // actually has messages -- worse than the skeleton it replaces. Set to
-  // true at every point _isLoading already gets set false below, since
-  // those are exactly the points where _messages has been definitively
-  // resolved one way or another.
-  bool _messagesLoaded = false;
+  // Sep 28 2026: now starts true whenever the synchronous seed above
+  // already found real cached messages -- mirrors _isLoading's own
+  // "already known, don't show a placeholder for it" reasoning. Only
+  // starts false for a genuinely first-ever load of this nest's feed on
+  // this device (no local cache yet), same one real case _isLoading
+  // itself still legitimately covers.
+  bool _messagesLoaded = _messages.isNotEmpty;
   // Seeded from the already-resolved app-wide notifier instead of a
   // hardcoded false -- see messages_inbox_screen.dart for the full
   // explanation of the white-flash bug this fixes. This screen matters
@@ -418,7 +447,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     },
   ];
 
-  List<MessageModel> _messages = [];
   Set<String> _bookmarkedIds = {};
   // Aug 27 2026: real-time feed updates -- see initState/_subscribeToFeedRealtime.
   RealtimeChannel? _feedChannel;

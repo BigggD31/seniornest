@@ -213,6 +213,24 @@ final ValueNotifier<List<Map<String, dynamic>>> appNestMembersNotifier =
 final ValueNotifier<List<Map<String, dynamic>>> appSeniorStatusesNotifier =
     ValueNotifier<List<Map<String, dynamic>>>([]);
 
+/// Sep 28 2026: same synchronous-seed pattern as appNestMembersNotifier and
+/// appSeniorStatusesNotifier above, applied to Home's own message feed --
+/// see the matching field-declaration fix in family_feed_screen.dart for
+/// the full explanation. Root cause of D Von's "why doesn't the content
+/// come in all at once" report (Thread #31 established the whole rest of
+/// Home should paint together in one frame from cache, confirmed working
+/// at build 258): every other field on Home got this synchronous-seed
+/// treatment during the Sep 24 cache-first pass, but the message feed
+/// itself was left starting empty and waiting on its own separate async
+/// fetch -- exactly what made it visibly lag behind the rest of Home by
+/// 1-3 seconds on an ordinary warm return, not just a genuinely uncached
+/// first load. Holds raw decoded maps, not MessageModel (which lives in
+/// family_feed_screen.dart itself) -- importing that back into this file
+/// would be a circular import, so each screen that reads this converts to
+/// its own model shape.
+final ValueNotifier<List<Map<String, dynamic>>> appCachedMessagesNotifier =
+    ValueNotifier<List<Map<String, dynamic>>>([]);
+
 // ── Aug 31 2026: whole-app flash audit, prompted by D Von finding the "I'm
 // Good" button still flashing on a cold open even after Archive Nest Mode
 // itself worked correctly. Turned out to be the same hardcoded-false-
@@ -436,6 +454,24 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
       try {
         final List<dynamic> cachedList = jsonDecode(cachedMembersJson) as List<dynamic>;
         appNestMembersNotifier.value = cachedList
+            .map((m) => Map<String, dynamic>.from(m as Map))
+            .toList();
+      } catch (_) {}
+    }
+  }
+
+  // Sep 28 2026: same nest-scoped cache-first seed as appNestMembersNotifier
+  // just above, for Home's message feed -- see appCachedMessagesNotifier's
+  // own doc comment for the full "content doesn't all appear together"
+  // regression this closes. Reuses the exact same cache keys
+  // family_feed_screen.dart's own read of the message cache already uses.
+  final cachedMessagesNestId = prefs.getString('cached_real_messages_nest_id') ?? '';
+  if (cachedMessagesNestId.isNotEmpty && cachedMessagesNestId == currentNestId) {
+    final cachedMessagesJson = prefs.getString('cached_real_messages');
+    if (cachedMessagesJson != null && cachedMessagesJson.isNotEmpty) {
+      try {
+        final List<dynamic> cachedMessagesList = jsonDecode(cachedMessagesJson) as List<dynamic>;
+        appCachedMessagesNotifier.value = cachedMessagesList
             .map((m) => Map<String, dynamic>.from(m as Map))
             .toList();
       } catch (_) {}
