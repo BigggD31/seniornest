@@ -232,7 +232,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // starts false for a genuinely first-ever load of this nest's feed on
   // this device (no local cache yet), same one real case _isLoading
   // itself still legitimately covers.
-  bool _messagesLoaded = _messages.isNotEmpty;
+  bool _messagesLoaded = _seedCachedMessages().isNotEmpty;
   // Seeded from the already-resolved app-wide notifier instead of a
   // hardcoded false -- see messages_inbox_screen.dart for the full
   // explanation of the white-flash bug this fixes. This screen matters
