@@ -920,17 +920,21 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     // above somehow didn't catch it (a race between this and whatever
     // last wrote prefs, not yet root-caused) -- and if prefs itself
     // doesn't have it yet (a slow in-flight Supabase write from
-    // onboarding), give it a short bounded wait rather than navigating to
+    // onboarding), give it a bounded wait rather than navigating to
     // Home with a guaranteed-empty notifier and a guaranteed skeleton.
-    // Capped at 2.5s so a genuinely slow/broken connection still
-    // navigates rather than stalling here indefinitely -- Home's own
-    // fetch remains the real fallback for that rare case.
+    // Capped at 6s -- long enough to cover the ~5s real-world delay D Von
+    // actually measured (Sep 30 2026 report), so this wait should now
+    // fully absorb that gap on the branded screen instead of leaking any
+    // of it onto Home. Still capped, not unbounded, so a genuinely dead
+    // connection eventually gives up and navigates rather than stranding
+    // someone on the branded screen forever -- Home's own fetch remains
+    // the real fallback for that one rare, worse case.
     if (appNestNameNotifier.value.isEmpty) {
       var nestNameGuard = prefs.getString('nest_name') ?? '';
       if (nestNameGuard.isNotEmpty) {
         appNestNameNotifier.value = nestNameGuard;
       } else {
-        final guardDeadline = DateTime.now().add(const Duration(milliseconds: 2500));
+        final guardDeadline = DateTime.now().add(const Duration(milliseconds: 6000));
         while (nestNameGuard.isEmpty && DateTime.now().isBefore(guardDeadline)) {
           await Future.delayed(const Duration(milliseconds: 150));
           final freshPrefs = await SharedPreferences.getInstance();
