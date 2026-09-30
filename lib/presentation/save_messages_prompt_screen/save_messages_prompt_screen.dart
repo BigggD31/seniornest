@@ -909,6 +909,38 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     // gives this first-time entry the identical cache-first advantage
     // every later app open already has.
     await resolveAppNotifiersFromPrefs(prefs);
+    // Sep 30 2026: D Von's direct report -- the full-screen loading state
+    // (_buildLoadingState() in family_feed_screen.dart, gated purely on
+    // appNestNameNotifier being empty at Home's very first frame) was
+    // still showing for several seconds on a genuine first-ever entry,
+    // even though nest_name is written to prefs well before this point in
+    // both onboarding flows and resolveAppNotifiersFromPrefs just ran
+    // above. Belt-and-suspenders fix: read nest_name from prefs directly,
+    // right here, and force it onto the notifier if the resolve call
+    // above somehow didn't catch it (a race between this and whatever
+    // last wrote prefs, not yet root-caused) -- and if prefs itself
+    // doesn't have it yet (a slow in-flight Supabase write from
+    // onboarding), give it a short bounded wait rather than navigating to
+    // Home with a guaranteed-empty notifier and a guaranteed skeleton.
+    // Capped at 2.5s so a genuinely slow/broken connection still
+    // navigates rather than stalling here indefinitely -- Home's own
+    // fetch remains the real fallback for that rare case.
+    if (appNestNameNotifier.value.isEmpty) {
+      var nestNameGuard = prefs.getString('nest_name') ?? '';
+      if (nestNameGuard.isNotEmpty) {
+        appNestNameNotifier.value = nestNameGuard;
+      } else {
+        final guardDeadline = DateTime.now().add(const Duration(milliseconds: 2500));
+        while (nestNameGuard.isEmpty && DateTime.now().isBefore(guardDeadline)) {
+          await Future.delayed(const Duration(milliseconds: 150));
+          final freshPrefs = await SharedPreferences.getInstance();
+          nestNameGuard = freshPrefs.getString('nest_name') ?? '';
+        }
+        if (nestNameGuard.isNotEmpty) {
+          appNestNameNotifier.value = nestNameGuard;
+        }
+      }
+    }
     // Sep 21 2026: D Von's direct, correct push -- firing the precache
     // early and hoping it finished in time was never a real guarantee,
     // just a bet. The actual fix: don't navigate into Home until its
