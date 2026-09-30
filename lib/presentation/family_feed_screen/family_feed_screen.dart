@@ -2968,84 +2968,44 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // skeleton card, fewer of them, used only for the feed area specifically
   // while the rest of the screen (header, avatar row, check-in cards) is
   // already showing real content. See _messagesLoaded's declaration.
+  // Sep 30 2026: same change as _buildLoadingState() above -- a small
+  // spinner instead of skeleton cards, for the scoped case where the rest
+  // of Home (header, avatar row, check-in cards) is already real content
+  // and only the feed itself is still loading.
   Widget _buildFeedLoadingPlaceholder() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: List.generate(
-          2,
-          (_) => Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: _buildSkeletonCard(),
+      padding: const EdgeInsets.symmetric(vertical: 28),
+      child: Center(
+        child: SizedBox(
+          width: 26,
+          height: 26,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.6,
+            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF5DA399)),
+            backgroundColor: (_isDarkMode ? const Color(0xFF3D3428) : const Color(0xFFE8E0D0)),
           ),
         ),
       ),
     );
   }
 
+  // Sep 30 2026: replaced the 4-skeleton-card list with a plain centered
+  // spinner per D Von's direct ask -- a true cold sign-in (brand-new
+  // account/device, nothing cached yet) has no real content to preview,
+  // so the skeleton cards were just fake placeholder shapes sitting on
+  // screen for several seconds with nothing behind them. A clean loading
+  // indicator reads as "loading," not as broken/unfinished content.
   Widget _buildLoadingState() {
-    return ListView.builder(
+    return Center(
       key: const ValueKey('feedLoading'),
-      padding: const EdgeInsets.all(20),
-      itemCount: 4,
-      itemBuilder: (_, __) => Padding(
-        padding: const EdgeInsets.only(bottom: 14),
-        child: _buildSkeletonCard(),
-      ),
-    );
-  }
-
-  Widget _buildSkeletonCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        // Previously hardcoded to the light-mode colors only -- this had
-        // no dark-mode branching at all, unlike the real feed cards it's
-        // standing in for (message_card_widget.dart), which is why dark
-        // mode showed light/white loading cards on Home specifically.
-        // Same color pair used there for consistency.
-        color: _isDarkMode ? const Color(0xFF242018) : const Color(0xFFFAF7F2),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _isDarkMode ? const Color(0xFF3D3428) : const Color(0xFFE8E0D0),
-          width: 1.5,
+      child: SizedBox(
+        width: 32,
+        height: 32,
+        child: CircularProgressIndicator(
+          strokeWidth: 3,
+          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF5DA399)),
+          backgroundColor: (_isDarkMode ? const Color(0xFF3D3428) : const Color(0xFFE8E0D0)),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _shimmer(44, 44, 22),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _shimmer(120, 14, 7),
-                  const SizedBox(height: 6),
-                  _shimmer(80, 12, 6),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _shimmer(double.infinity, 16, 8),
-          const SizedBox(height: 8),
-          _shimmer(200, 14, 7),
-        ],
-      ),
-    );
-  }
-
-  Widget _shimmer(double w, double h, double r) {
-    return Container(
-      width: w,
-      height: h,
-      decoration: BoxDecoration(
-        // Same fix as the card background above -- was hardcoded to the
-        // light tan regardless of dark mode.
-        color: _isDarkMode ? const Color(0xFF3D3428) : const Color(0xFFE8E0D0),
-        borderRadius: BorderRadius.circular(r),
       ),
     );
   }
