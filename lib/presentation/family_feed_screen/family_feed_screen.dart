@@ -210,7 +210,18 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // -- the only case that still shows the full skeleton is a genuinely
   // brand-new device that's never set a nest name at all. _buildLoadingState()
   // still exists and still covers that one real first-time case correctly.
-  bool _isLoading = appNestNameNotifier.value.isEmpty;
+  // Oct 2 2026: D Von's direct, specific report -- re-logging in as a
+  // different person on the same device could briefly show the PREVIOUS
+  // person's avatar tray/messages before flipping to the real ones.
+  // appHomeDataConfirmedNotifier (app_state.dart) is false whenever
+  // resolveAppNotifiersFromPrefs couldn't confirm the cached avatar/
+  // message data actually belongs to the nest+person currently signed
+  // in -- folding it in here means Home waits the same extra beat on its
+  // existing spinner instead of ever painting unconfirmed (and
+  // potentially wrong-account) avatars or messages. See that notifier's
+  // own doc comment for the full root-cause trace.
+  bool _isLoading = appNestNameNotifier.value.isEmpty ||
+      !appHomeDataConfirmedNotifier.value;
   // Sep 28 2026: D Von's direct report, tracing back to Thread #31's
   // confirmed-working build 258 -- the rest of Home (nest name, meds,
   // avatar row, check-in cards) all paint synchronously from a

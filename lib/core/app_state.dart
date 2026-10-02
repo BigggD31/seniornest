@@ -231,6 +231,35 @@ final ValueNotifier<List<Map<String, dynamic>>> appSeniorStatusesNotifier =
 final ValueNotifier<List<Map<String, dynamic>>> appCachedMessagesNotifier =
     ValueNotifier<List<Map<String, dynamic>>>([]);
 
+/// Oct 2 2026: D Von's direct, specific report -- on an ordinary re-login
+/// as a different person on the same device, HIS avatar (and/or his old
+/// messages) would briefly appear in the avatar tray/feed before flipping
+/// to the real signed-in person's. Root cause, confirmed by reading
+/// resolveAppNotifiersFromPrefs below: appNestMembersNotifier and
+/// appCachedMessagesNotifier are only ever OVERWRITTEN when a scoped cache
+/// hit is found (same nest_id AND same user_id as whoever is cached) --
+/// when it's a miss (exactly the case on a genuine account switch, since
+/// the cache was correctly wiped), the resolver did nothing at all and
+/// silently left whatever the PREVIOUS account had painted into these two
+/// notifiers sitting there, unresolved, until Home's own live fetch
+/// eventually overwrote it a moment later. That gap between "cache miss"
+/// and "live fetch lands" is exactly the wrong-person flash.
+///
+/// This notifier is the fix for that gap without reintroducing the Aug 31
+/// regression (resetting everything to blank made EVERY login flash
+/// empty, not just the occasional wrong-account one -- reverted that day).
+/// It's false only for the two fields that actually have this gap (avatars,
+/// messages), not all 16 notifiers -- resolveAppNotifiersFromPrefs sets it
+/// true only when both scoped cache checks genuinely hit, and explicitly
+/// zeroes out appNestMembersNotifier/appCachedMessagesNotifier on a miss
+/// instead of leaving them untouched. family_feed_screen.dart folds this
+/// into its existing top-level loading gate (previously keyed only on
+/// nest name) so Home simply waits a beat longer on the same spinner it
+/// already shows, rather than ever painting a stale person's avatar or
+/// messages, or showing a half-populated page with a silently-blank
+/// avatar row sitting inside otherwise-real content.
+final ValueNotifier<bool> appHomeDataConfirmedNotifier = ValueNotifier<bool>(false);
+
 // ── Aug 31 2026: whole-app flash audit, prompted by D Von finding the "I'm
 // Good" button still flashing on a cold open even after Archive Nest Mode
 // itself worked correctly. Turned out to be the same hardcoded-false-
@@ -445,6 +474,10 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
   final cachedMembersNestId = prefs.getString('cached_nest_members_nest_id') ?? '';
   final cachedMembersUserId = prefs.getString('cached_nest_members_user_id') ?? '';
   final currentUserIdForMembersCache = Supabase.instance.client.auth.currentUser?.id ?? '';
+  // Oct 2 2026: this match is correct and unchanged -- the bug was always
+  // what happened on a MISS, not the match logic itself. See
+  // appHomeDataConfirmedNotifier's doc comment for the full story.
+  bool membersConfirmedForCurrentScope = false;
   if (cachedMembersNestId.isNotEmpty &&
       cachedMembersNestId == currentNestId &&
       cachedMembersUserId.isNotEmpty &&
@@ -456,8 +489,20 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
         appNestMembersNotifier.value = cachedList
             .map((m) => Map<String, dynamic>.from(m as Map))
             .toList();
+        membersConfirmedForCurrentScope = true;
       } catch (_) {}
     }
+  }
+  if (!membersConfirmedForCurrentScope) {
+    // Oct 2 2026: the actual fix -- previously this branch didn't exist,
+    // so a cache miss (a different nest, or a different person on this
+    // device) silently left whatever the PREVIOUS account's avatar list
+    // was sitting in this notifier, visible until Home's own live fetch
+    // overwrote it moments later. Zeroing it here means Home never paints
+    // someone else's avatars; appHomeDataConfirmedNotifier below (folded
+    // into Home's existing loading gate) covers the "don't show an empty
+    // avatar row either, just wait the extra beat" half of the fix.
+    appNestMembersNotifier.value = [];
   }
 
   // Sep 28 2026: same nest-scoped cache-first seed as appNestMembersNotifier
@@ -466,6 +511,7 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
   // regression this closes. Reuses the exact same cache keys
   // family_feed_screen.dart's own read of the message cache already uses.
   final cachedMessagesNestId = prefs.getString('cached_real_messages_nest_id') ?? '';
+  bool messagesConfirmedForCurrentScope = false;
   if (cachedMessagesNestId.isNotEmpty && cachedMessagesNestId == currentNestId) {
     final cachedMessagesJson = prefs.getString('cached_real_messages');
     if (cachedMessagesJson != null && cachedMessagesJson.isNotEmpty) {
@@ -474,9 +520,22 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
         appCachedMessagesNotifier.value = cachedMessagesList
             .map((m) => Map<String, dynamic>.from(m as Map))
             .toList();
+        messagesConfirmedForCurrentScope = true;
       } catch (_) {}
     }
   }
+  if (!messagesConfirmedForCurrentScope) {
+    // Oct 2 2026: same fix, same reasoning, as appNestMembersNotifier
+    // just above -- a cache miss used to leave the previous account's
+    // messages visible instead of clearing them.
+    appCachedMessagesNotifier.value = [];
+  }
+  // Oct 2 2026: true only when BOTH checks above genuinely matched the
+  // current nest+person -- false means "don't trust what's in these two
+  // notifiers yet," which family_feed_screen.dart folds into its existing
+  // top-level loading gate rather than ever painting them unconfirmed.
+  appHomeDataConfirmedNotifier.value =
+      membersConfirmedForCurrentScope && messagesConfirmedForCurrentScope;
 
   // Aug 31 2026: three new fields brought into this system, same reasoning
   // as everything above -- see each notifier's own doc comment for why.
