@@ -46,7 +46,6 @@ class DailyUpdatesSectionWidget extends StatefulWidget {
 
 class _DailyUpdatesSectionWidgetState
     extends State<DailyUpdatesSectionWidget> {
-  static const _prefsKey = 'daily_updates_collapsed_date';
   bool _isCollapsed = appDailyUpdatesCollapsedNotifier.value;
 
   String get _todayKey {
@@ -60,10 +59,12 @@ class _DailyUpdatesSectionWidgetState
     appDailyUpdatesCollapsedNotifier.value = newCollapsed;
     try {
       final prefs = await SharedPreferences.getInstance();
+      // Per-user key (see dailyUpdatesCollapsedPrefsKey in app_state.dart).
+      final prefsKey = dailyUpdatesCollapsedPrefsKey();
       if (newCollapsed) {
-        await prefs.setString(_prefsKey, _todayKey);
+        await prefs.setString(prefsKey, _todayKey);
       } else {
-        await prefs.remove(_prefsKey);
+        await prefs.remove(prefsKey);
       }
     } catch (_) {}
   }

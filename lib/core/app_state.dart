@@ -311,6 +311,19 @@ final ValueNotifier<bool> appInviteCodeSharedNotifier = ValueNotifier<bool>(true
 final ValueNotifier<bool> appDailyUpdatesCollapsedNotifier =
     ValueNotifier<bool>(false);
 
+/// Oct 4 2026: the Daily Updates collapsed-today flag used to be stored
+/// under one device-wide key, so collapsing it in one account and signing
+/// into another on the same phone carried that account's state over
+/// (confirmed on-device: Devon/Penny each saw whatever the other left it
+/// as). Now keyed on the signed-in user's id. Shared by app_state.dart's
+/// resolve step and daily_updates_section_widget.dart's toggle so the two
+/// can never disagree on the key. No signed-in user -> a distinct
+/// '_anon' key rather than the old shared one.
+String dailyUpdatesCollapsedPrefsKey() {
+  final userId = Supabase.instance.client.auth.currentUser?.id;
+  return 'daily_updates_collapsed_date_${userId ?? '_anon'}';
+}
+
 /// Sep 17 2026, same audit sweep: this senior's own real
 /// check-in/meds-reminder preferences (set via the Setup screen toggle)
 /// gate two pieces of real, functional UI on Home -- the floating "I'm
@@ -552,7 +565,7 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
 
   // Same reasoning as the Aug 31 batch above, caught same session.
   appDailyUpdatesCollapsedNotifier.value =
-      prefs.getString('daily_updates_collapsed_date') == todayDateString;
+      prefs.getString(dailyUpdatesCollapsedPrefsKey()) == todayDateString;
 
   appMyCheckinEnabledNotifier.value = prefs.getBool('daily_check_in') ?? true;
   appMyMedsRemindersEnabledNotifier.value =
