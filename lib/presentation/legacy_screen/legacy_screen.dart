@@ -979,21 +979,24 @@ class _LegacyScreenState extends State<LegacyScreen>
                           // Sep 2 2026: hidden once archived -- posting as
                           // the senior no longer makes sense once the nest
                           // is a memorial. Family's own posting is untouched.
+                          // Oct 5 2026: the sample explainer now sits at the
+                          // very top, above the hero button (see below).
+                          if (_stories.isNotEmpty &&
+                              _stories.every((s) => s['isSample'] == true))
+                            SliverToBoxAdapter(
+                              child: _buildLegacySampleBanner(isTablet),
+                            ),
                           if (_isSenior && !_isNestArchived)
                             SliverToBoxAdapter(
                               child: _buildSeniorWriteHero(isTablet),
                             ),
+                          // (Sample content explainer banner moved to the top, above.)
                           // Sample content explainer banner (either role, only while sample stories are showing)
                           // Aug 27 2026: was gated senior-only, but family
                           // members now also see sample stories when no
                           // real content exists yet (fixed same session) --
                           // without this banner they'd have no way to know
                           // these aren't their loved one's real stories.
-                          if (_stories.isNotEmpty &&
-                              _stories.every((s) => s['isSample'] == true))
-                            SliverToBoxAdapter(
-                              child: _buildLegacySampleBanner(isTablet),
-                            ),
                           // Family: read-only banner -- Sep 2 2026: Legacy
                           // is senior-only, always, archived or not.
                           // Family posting (both "Share a Memory" and

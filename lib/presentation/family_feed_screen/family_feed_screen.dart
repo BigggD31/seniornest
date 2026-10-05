@@ -2488,6 +2488,16 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                // Oct 5 2026: placeholder explainer sits at the very top of
+                // the page, above everything else, so nobody sees sample
+                // content before reading what it is. Shown exactly when
+                // every card on screen is a built-in sample (their ids all
+                // start with 'msg_'), never over real posts.
+                if (_messages.isNotEmpty &&
+                    _messages.every((m) => m.id.startsWith('msg_'))) ...[
+                  _buildSampleContentBanner(),
+                  const SizedBox(height: 14),
+                ],
                 // Nest avatar row — everyone in the Nest, tap to message them.
                 // Wrapped in the same fade+lift language as the rest of the
                 // app instead of abruptly popping into the layout once its
@@ -2653,14 +2663,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                   ),
                 const SizedBox(height: 20),
                 // Sample content explainer banner (shown once, while sample cards are visible)
-                // Oct 5 2026: tied to what is actually on screen -- shown
-                // exactly when every card is a built-in sample (their ids
-                // all start with 'msg_'), never over real posts.
-                if (_messages.isNotEmpty &&
-                    _messages.every((m) => m.id.startsWith('msg_'))) ...[
-                  _buildSampleContentBanner(),
-                  const SizedBox(height: 14),
-                ],
+                // (Sample-content banner now lives at the top of this list.)
                 // Feed header
                 _buildFeedHeader(),
                 const SizedBox(height: 12),
