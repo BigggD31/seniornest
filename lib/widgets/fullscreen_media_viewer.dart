@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
+import '../services/save_media_service.dart';
+
 /// Opens a full-screen image viewer.
 /// Supports landscape auto-rotation, close button (X top-right), and back gesture.
 void openFullscreenImage({
@@ -119,6 +121,12 @@ class _FullscreenImagePageState extends State<_FullscreenImagePage> {
                   ),
                 ),
               ),
+            ),
+            // Save to phone — top-left
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 12,
+              left: 16,
+              child: _SaveButton(url: widget.imageUrl, isVideo: false),
             ),
             // Close button — top-right
             Positioned(
@@ -253,6 +261,12 @@ class _FullscreenVideoPageState extends State<_FullscreenVideoPage> {
                     ),
                   ),
                 ),
+                // Save to phone — top-left
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 12,
+                  left: 16,
+                  child: _SaveButton(url: widget.videoUrl, isVideo: true),
+                ),
                 // Close button — top-right
                 Positioned(
                   top: MediaQuery.of(context).padding.top + 12,
@@ -326,6 +340,73 @@ class _CloseButton extends StatelessWidget {
           border: Border.all(color: Colors.white24, width: 1),
         ),
         child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
+      ),
+    );
+  }
+}
+
+
+// ── Save to phone button ───────────────────────────────────────────────────
+
+class _SaveButton extends StatefulWidget {
+  const _SaveButton({required this.url, required this.isVideo});
+
+  final String url;
+  final bool isVideo;
+
+  @override
+  State<_SaveButton> createState() => _SaveButtonState();
+}
+
+class _SaveButtonState extends State<_SaveButton> {
+  bool _busy = false;
+
+  Future<void> _save() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final result = await SaveMediaService.saveToPhotos(
+      widget.url,
+      isVideo: widget.isVideo,
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    final what = widget.isVideo ? 'video' : 'photo';
+    final message = switch (result) {
+      SaveMediaResult.saved => 'Saved to your Photos',
+      SaveMediaResult.denied =>
+        'Allow SeniorNest to add to Photos in Settings to save this $what',
+      SaveMediaResult.failed => 'Could not save this $what. Please try again.',
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _save,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.black.withAlpha(160),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white24, width: 1),
+        ),
+        child: _busy
+            ? const Padding(
+                padding: EdgeInsets.all(11),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.download_rounded, color: Colors.white, size: 22),
       ),
     );
   }

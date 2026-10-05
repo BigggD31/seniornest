@@ -420,12 +420,16 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text('YOUR FIRST 3 DAYS',
+        // Additional-nest purchases are a straight paid add-on: the person is
+        // already using the app, so no free-trial wording anywhere here.
+        Text(_isAdditionalNest ? 'ADD ANOTHER NEST' : 'YOUR FIRST 3 DAYS',
           textAlign: TextAlign.center,
           style: GoogleFonts.nunitoSans(fontSize: 11.5,
             fontWeight: FontWeight.w800, letterSpacing: 1.2, color: _gold)),
         const SizedBox(height: 8),
-        Text("Welcome to your family's private nest.",
+        Text(_isAdditionalNest
+            ? 'Create another private nest.'
+            : "Welcome to your family's private nest.",
           textAlign: TextAlign.center,
           style: GoogleFonts.manrope(fontSize: 25,
             fontWeight: FontWeight.w800, color: Colors.white, height: 1.18,
@@ -460,7 +464,8 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
               ? const SizedBox(width: 22, height: 22,
                   child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
               : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text('Start My 3-Day Free Trial', style: GoogleFonts.manrope(
+                  Text(_isAdditionalNest ? 'Add This Nest' : 'Start My 3-Day Free Trial',
+                    style: GoogleFonts.manrope(
                       fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
                   const SizedBox(width: 8),
                   const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
@@ -468,7 +473,9 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           ),
         ),
         const SizedBox(height: 10),
-        Text('No payment required right now · Cancel anytime',
+        Text(_isAdditionalNest
+            ? 'Billed through your Apple ID · Cancel anytime'
+            : 'No payment required right now · Cancel anytime',
           style: GoogleFonts.manrope(fontSize: 11,
             fontWeight: FontWeight.w400, color: Colors.white.withValues(alpha: 0.65)),
           textAlign: TextAlign.center),
@@ -518,15 +525,31 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
       const SizedBox(height: 12),
       AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
-        child: _isYearly
-          ? _buildPriceLine(key: const ValueKey('yearly'),
-              price: r'$99', period: '/ year',
-              subtitle: 'Billed annually — just \$8.25/month')
-          : _buildPriceLine(key: const ValueKey('monthly'),
-              price: r'$9.99', period: '/ month',
-              subtitle: 'Billed monthly, cancel anytime'),
+        child: _isAdditionalNest
+          // Additional-nest prices come straight from the store listing, not
+          // hardcoded here, so this can never show a number that differs
+          // from what Apple will actually charge.
+          ? _buildPriceLine(key: ValueKey(_isYearly ? 'add-yearly' : 'add-monthly'),
+              price: _additionalNestPrice(),
+              period: _isYearly ? '/ year' : '/ month',
+              subtitle: _isYearly
+                  ? 'Billed annually, cancel anytime'
+                  : 'Billed monthly, cancel anytime')
+          : _isYearly
+            ? _buildPriceLine(key: const ValueKey('yearly'),
+                price: r'$99', period: '/ year',
+                subtitle: 'Billed annually — just \$8.25/month')
+            : _buildPriceLine(key: const ValueKey('monthly'),
+                price: r'$9.99', period: '/ month',
+                subtitle: 'Billed monthly, cancel anytime'),
       ),
     ]);
+  }
+
+  String _additionalNestPrice() {
+    final id = _isYearly ? _additionalNestYearlyProductId : _additionalNestMonthlyProductId;
+    final product = _products.where((p) => p.id == id).firstOrNull;
+    return product?.price ?? '';
   }
 
   Widget _buildToggleOption({required String label, required bool isSelected,

@@ -10,7 +10,7 @@ import 'share_service_web.dart'
     as web_helper;
 
 class ShareService {
-  static const String _appUrl = 'https://seniornest6932.builtwithrocket.new';
+  static const String _appUrl = 'https://apps.apple.com/us/app/seniornest-family-connection/id6763690515';
 
   /// Share invite code — native sheet on mobile, web modal on web.
   static void shareInviteCode(
@@ -31,28 +31,6 @@ class ShareService {
       );
     } else {
       Share.share(shareText, subject: 'Join our SeniorNest Family!');
-    }
-  }
-
-  /// Share a legacy story — native sheet on mobile, web modal on web.
-  static void shareStory(
-    BuildContext context, {
-    required String title,
-    required String body,
-    bool isDarkMode = false,
-  }) {
-    final shareText = '$title\n\n$body\n\nShared from SeniorNest ❤️\n$_appUrl';
-
-    if (kIsWeb) {
-      _showWebModal(
-        context,
-        shareText: shareText,
-        inviteCode: null,
-        isDarkMode: isDarkMode,
-        subject: title,
-      );
-    } else {
-      Share.share(shareText, subject: title);
     }
   }
 

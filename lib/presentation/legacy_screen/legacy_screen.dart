@@ -16,7 +16,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/app_navigation.dart';
 import '../../services/activity_badge_service.dart';
 import '../../widgets/linkified_text.dart';
-import '../../widgets/share_preview_widget.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
 import '../../widgets/collapsible_date_group_header.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
@@ -1615,13 +1614,6 @@ class _LegacyScreenState extends State<LegacyScreen>
       onBookmark: () => _toggleStoryBookmark(story),
       canDelete: _canDeleteStory(story),
       onDelete: () => _deleteStory(story['id'] as String),
-      onShare: () => SharePreviewWidget.show(
-        context,
-        title: story['title'] as String,
-        body: story['excerpt'] as String,
-        imageUrl: story['imageUrl'] as String?,
-        isDarkMode: _isDarkMode,
-      ),
       onTap: () => _showStoryDetail(story), //
     );
   }
@@ -1857,34 +1849,6 @@ class _LegacyScreenState extends State<LegacyScreen>
                             ],
                           ),
                           const Spacer(),
-                          // Share icon (icon-only, gold) — matches Home/Favs style
-                          GestureDetector(
-                            onTap: () => SharePreviewWidget.show(
-                              context,
-                              title: story['title'] as String,
-                              body: story['excerpt'] as String,
-                              imageUrl: story['imageUrl'] as String?,
-                              isDarkMode: _isDarkMode,
-                            ),
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFD4AA00).withAlpha(18),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: const Color(0xFFD4AA00).withAlpha(50),
-                                  width: 1,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.ios_share_rounded,
-                                size: 15,
-                                color: Color(0xFFD4AA00),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
                           // Bookmark button — Sep 26 2026: D Von's direct
                           // report that checking/unchecking felt less
                           // smooth than the heart button right next to it.
@@ -3102,33 +3066,6 @@ class _StoryDetailSheet extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: () => SharePreviewWidget.show(
-                    context,
-                    title: story['title'] as String,
-                    body: story['excerpt'] as String,
-                    imageUrl: story['imageUrl'] as String?,
-                    isDarkMode: isDarkMode,
-                  ),
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD4AA00).withAlpha(18),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: const Color(0xFFD4AA00).withAlpha(60),
-                        width: 1,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.ios_share_rounded,
-                      size: 16,
-                      color: Color(0xFFD4AA00),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: Icon(
@@ -4582,7 +4519,6 @@ class _LegacyStoryCard extends StatefulWidget {
     required this.displayName,
     required this.onHeart,
     required this.onBookmark,
-    required this.onShare,
     this.canDelete = false,
     this.onDelete,
     this.onTap,
@@ -4596,7 +4532,6 @@ class _LegacyStoryCard extends StatefulWidget {
   final String displayName;
   final VoidCallback onHeart;
   final VoidCallback onBookmark;
-  final VoidCallback onShare;
   final bool canDelete;
   final VoidCallback? onDelete;
   final VoidCallback? onTap;
@@ -5031,21 +4966,6 @@ class _LegacyStoryCardState extends State<_LegacyStoryCard> {
                             ),
                           ),
                           const Spacer(),
-                          // Share icon (icon-only, gold) — matches Home/Favs style
-                          GestureDetector(
-                            onTap: widget.onShare,
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFD4AA00).withAlpha(18),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFFD4AA00).withAlpha(50), width: 1),
-                              ),
-                              child: const Icon(Icons.ios_share_rounded, size: 15, color: Color(0xFFD4AA00)),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
                           // Sep 26 2026: same IconButton + AnimatedSwitcher
                           // fix as the story card's bookmark button above --
                           // this popup had the identical bare-GestureDetector,
