@@ -324,6 +324,17 @@ String dailyUpdatesCollapsedPrefsKey() {
   return 'daily_updates_collapsed_date_${userId ?? '_anon'}';
 }
 
+/// Oct 5 2026: same collapse-for-today behavior as Daily Updates above, for
+/// the Birthdays & Anniversaries card on Home. Collapsing saves today's
+/// date; it reopens automatically the next day. Per-user key from the start.
+final ValueNotifier<bool> appCelebrationsCollapsedNotifier =
+    ValueNotifier<bool>(false);
+
+String celebrationsCollapsedPrefsKey() {
+  final userId = Supabase.instance.client.auth.currentUser?.id;
+  return 'celebrations_collapsed_date_${userId ?? '_anon'}';
+}
+
 /// Sep 17 2026, same audit sweep: this senior's own real
 /// check-in/meds-reminder preferences (set via the Setup screen toggle)
 /// gate two pieces of real, functional UI on Home -- the floating "I'm
@@ -566,6 +577,8 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
   // Same reasoning as the Aug 31 batch above, caught same session.
   appDailyUpdatesCollapsedNotifier.value =
       prefs.getString(dailyUpdatesCollapsedPrefsKey()) == todayDateString;
+  appCelebrationsCollapsedNotifier.value =
+      prefs.getString(celebrationsCollapsedPrefsKey()) == todayDateString;
 
   appMyCheckinEnabledNotifier.value = prefs.getBool('daily_check_in') ?? true;
   appMyMedsRemindersEnabledNotifier.value =

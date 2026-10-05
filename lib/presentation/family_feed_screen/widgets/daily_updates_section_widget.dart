@@ -33,10 +33,20 @@ class DailyUpdatesSectionWidget extends StatefulWidget {
   final bool isDarkMode;
   final Widget child;
 
+  /// Oct 5 2026: made reusable so the Birthdays & Anniversaries card gets
+  /// the identical collapse-for-today behavior. Defaults keep Daily
+  /// Updates exactly as it was.
+  final String title;
+  final ValueNotifier<bool>? collapsedNotifier;
+  final String Function()? prefsKeyBuilder;
+
   const DailyUpdatesSectionWidget({
     super.key,
     required this.isDarkMode,
     required this.child,
+    this.title = 'Daily Updates',
+    this.collapsedNotifier,
+    this.prefsKeyBuilder,
   });
 
   @override
@@ -46,7 +56,12 @@ class DailyUpdatesSectionWidget extends StatefulWidget {
 
 class _DailyUpdatesSectionWidgetState
     extends State<DailyUpdatesSectionWidget> {
-  bool _isCollapsed = appDailyUpdatesCollapsedNotifier.value;
+  ValueNotifier<bool> get _notifier =>
+      widget.collapsedNotifier ?? appDailyUpdatesCollapsedNotifier;
+  String _prefsKey() =>
+      (widget.prefsKeyBuilder ?? dailyUpdatesCollapsedPrefsKey)();
+
+  late bool _isCollapsed = _notifier.value;
 
   String get _todayKey {
     final now = DateTime.now();
@@ -56,11 +71,11 @@ class _DailyUpdatesSectionWidgetState
   Future<void> _toggle() async {
     final newCollapsed = !_isCollapsed;
     setState(() => _isCollapsed = newCollapsed);
-    appDailyUpdatesCollapsedNotifier.value = newCollapsed;
+    _notifier.value = newCollapsed;
     try {
       final prefs = await SharedPreferences.getInstance();
       // Per-user key (see dailyUpdatesCollapsedPrefsKey in app_state.dart).
-      final prefsKey = dailyUpdatesCollapsedPrefsKey();
+      final prefsKey = _prefsKey();
       if (newCollapsed) {
         await prefs.setString(prefsKey, _todayKey);
       } else {
@@ -85,7 +100,7 @@ class _DailyUpdatesSectionWidgetState
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Daily Updates',
+                  widget.title,
                   style: GoogleFonts.poppins(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,

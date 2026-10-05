@@ -408,6 +408,7 @@ class AuthService {
     'cached_real_messages', 'cached_real_messages_nest_id',
     'cached_checkin_senior_name', 'cached_checkin_senior_id', 'cached_checkin_nest_id',
     'cached_legacy_senior_names',
+    'cached_legacy_stories', 'cached_legacy_stories_user_id', 'cached_legacy_stories_nest_id',
     'invite_code_shared',
     'cached_is_nest_archived',
     'has_real_post', 'has_sent_messages', 'has_sent_stories',

@@ -23,6 +23,84 @@ class NestAvatarRowWidget extends StatelessWidget {
   final bool isDarkMode;
   final void Function(Map<String, dynamic> member) onMemberTap;
 
+  /// Tap on an avatar opens a medium-sized card over the page (not
+  /// full-screen, so small uploads don't look pixelated) with the person's
+  /// name and a Message button. Tapping outside the card closes it and
+  /// leaves the page exactly as it was.
+  void _showEnlarged(BuildContext context, Map<String, dynamic> member) {
+    final name = member['name'] as String? ?? '';
+    final avatarUrl = member['avatarUrl'] as String? ?? '';
+    final cardBg = isDarkMode ? const Color(0xFF242018) : Colors.white;
+    final textColor =
+        isDarkMode ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        backgroundColor: cardBg,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ProfileAvatarWidget(
+                avatarUrl: avatarUrl,
+                displayName: name,
+                size: 200,
+                borderColor: const Color(0xFF5DA399),
+                borderWidth: 3,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                name,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    onMemberTap(member);
+                  },
+                  icon: const Icon(Icons.chat_bubble_outline_rounded,
+                      size: 18, color: Colors.white),
+                  label: Text(
+                    name.isEmpty ? 'Message' : 'Message $name',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF5DA399),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (members.isEmpty) return const SizedBox.shrink();
@@ -40,7 +118,7 @@ class NestAvatarRowWidget extends StatelessWidget {
           final avatarUrl = member['avatarUrl'] as String? ?? '';
 
           return GestureDetector(
-            onTap: () => onMemberTap(member),
+            onTap: () => _showEnlarged(context, member),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

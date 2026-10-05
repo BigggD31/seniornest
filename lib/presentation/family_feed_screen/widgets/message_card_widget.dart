@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../family_feed_screen.dart';
 import '../../../widgets/custom_image_widget.dart';
 import '../../../widgets/fullscreen_media_viewer.dart';
+import '../../../widgets/save_audio_button.dart';
 import '../../../widgets/linkified_text.dart';
 import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
@@ -1249,6 +1250,8 @@ class _VoiceNotePlayerState extends State<_VoiceNotePlayer>
               ],
             ),
           ),
+          // Save a private copy of this recording to the phone.
+          SaveAudioButton(url: widget.audioUrl),
         ],
       ),
     );

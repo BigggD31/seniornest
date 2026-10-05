@@ -71,18 +71,40 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           // regardless of dedup, or StoreKit keeps redelivering it), but
           // skip everything else if this exact purchase was already
           // fully processed once.
+          // Additional-nest screen only: StoreKit replays purchases it
+          // already knows about (restored, or a renewal it hadn't delivered
+          // yet) as soon as this screen starts listening. Those were
+          // already paid for earlier and must NOT create a new Nest -- only
+          // a purchase the person just started here, for an additional-nest
+          // product, counts. (First-time signup is unchanged: restoring a
+          // prior purchase there is exactly what should happen.)
+          if (_isAdditionalNest) {
+            final isAdditionalProduct =
+                purchase.productID == _additionalNestMonthlyProductId ||
+                purchase.productID == _additionalNestYearlyProductId;
+            if (purchase.status == PurchaseStatus.restored ||
+                !_userStartedPurchase ||
+                !isAdditionalProduct) {
+              if (mounted) setState(() => _isPurchasing = false);
+              continue;
+            }
+          }
           final purchaseId = purchase.purchaseID;
           if (purchaseId != null) {
             if (_processedPurchaseIds.contains(purchaseId)) continue;
             _processedPurchaseIds.add(purchaseId);
           }
           await _recordSubscription(purchase.productID, purchase.purchaseID);
-          if (_isAdditionalNest) await _createAdditionalNest();
+          if (_isAdditionalNest) {
+            _userStartedPurchase = false;
+            await _createAdditionalNest();
+          }
           if (mounted) {
             setState(() => _isPurchasing = false);
             _navigateForward();
           }
         } else if (purchase.status == PurchaseStatus.error) {
+          _userStartedPurchase = false;
           if (mounted) setState(() => _isPurchasing = false);
         } else if (purchase.status == PurchaseStatus.pending) {
           if (mounted) setState(() => _isPurchasing = true);
@@ -96,6 +118,10 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   // nest, as opposed to a first-time signup. Read lazily via ModalRoute
   // (same pattern _navigateForward already uses) rather than cached in
   // initState, since route arguments aren't reliably available that early.
+  // True only between the person tapping the subscribe button and that
+  // purchase finishing -- see the replay guard in the purchase listener.
+  bool _userStartedPurchase = false;
+
   bool get _isAdditionalNest {
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     return args?['additionalNest'] == true;
@@ -267,6 +293,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     final product = _products.where((p) => p.id == productId).firstOrNull;
 
     if (product != null && _iapAvailable) {
+      _userStartedPurchase = true;
       setState(() => _isPurchasing = true);
       final purchaseParam = PurchaseParam(productDetails: product);
       await _iap.buyNonConsumable(purchaseParam: purchaseParam);
@@ -280,6 +307,13 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {};
     final returnRoute = args['returnRoute'] as String? ?? AppRoutes.familyFeedScreen;
     final returnArgs = args['returnArgs'] as Map<String, dynamic>? ?? {};
+    if (args['additionalNest'] == true) {
+      // A brand-new Nest: destroy the previous Nest's Home (still alive
+      // underneath this screen) so none of its content can show through.
+      Navigator.pushNamedAndRemoveUntil(context, returnRoute, (route) => false,
+          arguments: {...returnArgs, 'startAtStep': 1});
+      return;
+    }
     Navigator.pushReplacementNamed(context, returnRoute,
         arguments: {...returnArgs, 'startAtStep': 1});
   }

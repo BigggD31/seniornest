@@ -376,7 +376,9 @@ class _SaveButtonState extends State<_SaveButton> {
       SaveMediaResult.denied =>
         'Allow SeniorNest to add to Photos in Settings to save this $what',
       SaveMediaResult.failed => 'Could not save this $what. Please try again.',
+      SaveMediaResult.cancelled => '',
     };
+    if (message.isEmpty) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),

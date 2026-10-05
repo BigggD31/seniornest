@@ -13,6 +13,7 @@ import '../../widgets/collapsible_date_group_header.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
+import '../../widgets/save_audio_button.dart';
 import '../../core/app_state.dart';
 
 class FavsScreen extends StatefulWidget {
@@ -108,11 +109,17 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
     try {
       final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
       if (bookmarkUserId != null) {
-        final rows = await Supabase.instance.client
-            .from('user_favourites')
-            .select('item_data')
-            .eq('user_id', bookmarkUserId)
-            .order('created_at', ascending: false);
+        // Favs are per-Nest: only this Nest's bookmarks show here, so a
+        // brand-new Nest starts with the placeholder state.
+        final favsNestId = prefs.getString('nest_id') ?? '';
+        final rows = favsNestId.isEmpty
+            ? <dynamic>[]
+            : await Supabase.instance.client
+                .from('user_favourites')
+                .select('item_data')
+                .eq('user_id', bookmarkUserId)
+                .eq('nest_id', favsNestId)
+                .order('created_at', ascending: false);
         items = (rows as List<dynamic>)
             .map((e) => Map<String, dynamic>.from(e['item_data'] as Map))
             .toList();
@@ -332,12 +339,17 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
           const Spacer(),
           const Text('🔖', style: TextStyle(fontSize: 26)),
           const SizedBox(width: 8),
-          ProfileAvatarWidget(
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            // Tapping your own avatar opens Setup (tab 5).
+            onTap: () => appActiveTabNotifier.value = 5,
+            child: ProfileAvatarWidget(
             profileData: _profileData,
             displayName: _displayName,
             size: 40,
             borderColor: const Color(0xFF5DA399),
             borderWidth: 2,
+          ),
           ),
         ],
       ),
@@ -1612,6 +1624,8 @@ class _FavsAudioPlayerState extends State<_FavsAudioPlayer> {
               ],
             ),
           ),
+          // Save a private copy of this recording to the phone.
+          SaveAudioButton(url: widget.audioUrl),
         ],
       ),
     );

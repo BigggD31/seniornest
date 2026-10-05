@@ -471,6 +471,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       duration: const Duration(milliseconds: 260),
     );
     _loadData();
+    // Keeps Home's bookmark icons in step with Favs/Legacy in real time --
+    // see bookmarkEventNotifier in app_state.dart.
+    bookmarkEventNotifier.addListener(_onBookmarkEventChanged);
     _loadRemovedMemberIds();
     _subscribeToFeedRealtime();
     _checkPendingSuccessionForOwner();
@@ -1441,10 +1444,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     try {
       final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
       if (bookmarkUserId != null) {
-        final rows = await Supabase.instance.client
-            .from('user_favourites')
-            .select('item_id')
-            .eq('user_id', bookmarkUserId);
+        final bookmarkPrefs = await SharedPreferences.getInstance();
+        final bookmarkNestId = bookmarkPrefs.getString('nest_id') ?? '';
+        // Bookmarks belong to one Nest each (user_favourites.nest_id), so a
+        // different Nest never shows this Nest's saved items as bookmarked.
+        final rows = bookmarkNestId.isEmpty
+            ? <dynamic>[]
+            : await Supabase.instance.client
+                .from('user_favourites')
+                .select('item_id')
+                .eq('user_id', bookmarkUserId)
+                .eq('nest_id', bookmarkNestId);
         if (mounted) {
           setState(() {
             _bookmarkedIds = (rows as List<dynamic>)
@@ -2067,6 +2077,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           .order('created_at', ascending: false)
           .limit(50);
 
+      // Oct 5 2026: the active Nest can change while this fetch is in
+      // flight (create-a-Nest / Nest switcher). A fetch that started for the
+      // PREVIOUS Nest must never paint or cache its posts over the new one.
+      if ((prefs.getString('nest_id') ?? '') != nestId) return;
+
       final localPreferredName = prefs.getString('preferred_name') ?? '';
       final localFirstName = prefs.getString('display_name') ?? '';
       final localName = localPreferredName.isNotEmpty ? localPreferredName : localFirstName;
@@ -2183,6 +2198,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         );
       }).toList();
 
+      // Re-check after the hearts/profile awaits above, same reason.
+      if ((prefs.getString('nest_id') ?? '') != nestId) return;
+
       if (loaded.isNotEmpty) {
         await prefs.setString(
           'cached_real_messages',
@@ -2290,11 +2308,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         'entry_type': category.toLowerCase(),
       };
       try {
+        final addPrefs = await SharedPreferences.getInstance();
         await Supabase.instance.client.from('user_favourites').upsert({
           'user_id': bookmarkUserId,
           'item_id': id,
           'item_data': item,
+          'nest_id': addPrefs.getString('nest_id'),
         });
+        // Tell Favs (and Legacy) right away so the bookmark appears there
+        // instantly -- see bookmarkEventNotifier in app_state.dart.
+        bookmarkEventNotifier.value =
+            BookmarkEvent(itemId: id, isBookmarked: true, itemData: item);
       } catch (_) {
         // Aug 21 2026: found during a general audit -- this used to fail
         // completely silently. The optimistic setState above already
@@ -2328,6 +2352,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             .delete()
             .eq('user_id', bookmarkUserId)
             .eq('item_id', id);
+        bookmarkEventNotifier.value =
+            BookmarkEvent(itemId: id, isBookmarked: false);
       } catch (_) {
         // Same fix as above, mirrored for the unbookmark direction.
         if (mounted) {
@@ -2362,8 +2388,23 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     appActiveTabNotifier.value = index;
   }
 
+  void _onBookmarkEventChanged() {
+    final event = bookmarkEventNotifier.value;
+    if (event == null || !mounted) return;
+    final has = _bookmarkedIds.contains(event.itemId);
+    if (event.isBookmarked == has) return;
+    setState(() {
+      if (event.isBookmarked) {
+        _bookmarkedIds.add(event.itemId);
+      } else {
+        _bookmarkedIds.remove(event.itemId);
+      }
+    });
+  }
+
   @override
   void dispose() {
+    bookmarkEventNotifier.removeListener(_onBookmarkEventChanged);
     _homeSeenDelayTimer?.cancel();
     ActivityBadgeService.homeCount.removeListener(_onHomeCountChanged);
     _realtimeRefreshDebounce?.cancel();
@@ -2396,7 +2437,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                   onNotificationTap: () {
                     Navigator.pushNamed(context, AppRoutes.notificationsScreen);
                   },
-                  onProfileTap: () {},
+                  onProfileTap: () => appActiveTabNotifier.value = 5,
                 ),
                 // Content
                 Expanded(child: _buildBody(isTablet)),
@@ -2586,10 +2627,16 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 // Celebrations card (all users, only if events within 30 days)
                 if (_todayCelebrations.isNotEmpty ||
                     _upcomingCelebrations.isNotEmpty) ...[
-                  CelebrationsCardWidget(
+                  DailyUpdatesSectionWidget(
                     isDarkMode: _isDarkMode,
-                    todayEvents: _todayCelebrations,
-                    upcomingEvents: _upcomingCelebrations,
+                    title: 'Birthdays & Anniversaries',
+                    collapsedNotifier: appCelebrationsCollapsedNotifier,
+                    prefsKeyBuilder: celebrationsCollapsedPrefsKey,
+                    child: CelebrationsCardWidget(
+                      isDarkMode: _isDarkMode,
+                      todayEvents: _todayCelebrations,
+                      upcomingEvents: _upcomingCelebrations,
+                    ),
                   ),
                   const SizedBox(height: 14),
                 ],
@@ -3040,9 +3087,23 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     }
   }
 
+  // Guards against repeat taps while the nest list is still being fetched --
+  // each extra tap used to queue another switcher on top of the first.
+  bool _nestSwitcherOpening = false;
+
   void _showNestSwitcher() async {
-    final myNests = await _fetchMyNests();
-    final prefs = await SharedPreferences.getInstance();
+    if (_nestSwitcherOpening) return;
+    _nestSwitcherOpening = true;
+    List<Map<String, dynamic>> myNests;
+    SharedPreferences prefs;
+    try {
+      myNests = await _fetchMyNests();
+      prefs = await SharedPreferences.getInstance();
+    } finally {
+      // Released as soon as the list is ready; the dialog itself is
+      // barrier-modal, so it can't be opened twice once it is showing.
+      _nestSwitcherOpening = false;
+    }
     final activeNestId = prefs.getString('nest_id') ?? '';
     if (!mounted) return;
     showGeneralDialog(
@@ -3167,9 +3228,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                                     // active nest_id from prefs, including
                                     // the realtime subscription -- safer
                                     // than hot-swapping state in place.
+                                    // Remove every older screen too, so no
+                                    // previous-Nest Home stays alive
+                                    // underneath holding stale content.
                                     if (mounted) {
-                                      Navigator.pushReplacementNamed(
-                                        context, AppRoutes.familyFeedScreen);
+                                      Navigator.pushNamedAndRemoveUntil(
+                                        context, AppRoutes.familyFeedScreen,
+                                        (route) => false);
                                     }
                                   },
                                 ),

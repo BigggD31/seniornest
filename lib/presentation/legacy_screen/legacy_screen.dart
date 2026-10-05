@@ -17,6 +17,7 @@ import '../../widgets/app_navigation.dart';
 import '../../services/activity_badge_service.dart';
 import '../../widgets/linkified_text.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
+import '../../widgets/save_audio_button.dart';
 import '../../widgets/collapsible_date_group_header.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../core/app_state.dart';
@@ -339,8 +340,17 @@ class _LegacyScreenState extends State<LegacyScreen>
     // the cache.
     final currentUserId = Supabase.instance.client.auth.currentUser?.id ?? '';
     final cachedStoriesUserId = prefs.getString('cached_legacy_stories_user_id') ?? '';
+    // The cached list is only trusted when it was saved for THIS account AND
+    // THIS Nest. A cache with no Nest tag, or a different one, is a MISS --
+    // otherwise a different Nest briefly (or permanently) shows the
+    // previous Nest's stories.
+    final cachedStoriesNestId = prefs.getString('cached_legacy_stories_nest_id') ?? '';
+    final activeNestIdForCache = prefs.getString('nest_id') ?? '';
     List<Map<String, dynamic>> initialStories = [];
-    if (cachedStoriesUserId.isNotEmpty && cachedStoriesUserId == currentUserId) {
+    if (cachedStoriesUserId.isNotEmpty &&
+        cachedStoriesUserId == currentUserId &&
+        cachedStoriesNestId.isNotEmpty &&
+        cachedStoriesNestId == activeNestIdForCache) {
       final cachedStoriesJson = prefs.getString('cached_legacy_stories');
       if (cachedStoriesJson != null && cachedStoriesJson.isNotEmpty) {
         try {
@@ -597,6 +607,14 @@ class _LegacyScreenState extends State<LegacyScreen>
           setState(() {
             if (realStories.isNotEmpty) {
               _stories = realStories;
+            } else {
+              // This Nest has no stories yet: show the placeholder
+              // examples, never leftovers from a different Nest.
+              _stories = _mockStories.map((s) {
+                final m = Map<String, dynamic>.from(s);
+                m['isBookmarked'] = bookmarkedIds.contains(m['id'] as String);
+                return m;
+              }).toList();
             }
             _seniorName = resolvedSeniorName;
             if (resolvedSeniorNames.isNotEmpty) _seniorNames = resolvedSeniorNames;
@@ -611,6 +629,7 @@ class _LegacyScreenState extends State<LegacyScreen>
           _setupAnimations();
           await prefs.setString('cached_legacy_stories', jsonEncode(realStories));
           await prefs.setString('cached_legacy_stories_user_id', userId);
+          await prefs.setString('cached_legacy_stories_nest_id', nestId);
         }
 
         // Aug 21 2026: real fix for Suggest a Question, which used to be
@@ -855,10 +874,12 @@ class _LegacyScreenState extends State<LegacyScreen>
       try {
         final bookmarkUserId = Supabase.instance.client.auth.currentUser?.id;
         if (bookmarkUserId != null) {
+          final favNestPrefs = await SharedPreferences.getInstance();
           await Supabase.instance.client.from('user_favourites').upsert({
             'user_id': bookmarkUserId,
             'item_id': id,
             'item_data': item,
+            'nest_id': favNestPrefs.getString('nest_id'),
           });
           // Sep 28 2026: tell Favs about this without it needing to reload --
           // see bookmarkEventNotifier's comment in app_state.dart.
@@ -1230,12 +1251,17 @@ class _LegacyScreenState extends State<LegacyScreen>
             ],
           ),
           const Spacer(),
-          ProfileAvatarWidget(
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            // Tapping your own avatar opens Setup (tab 5).
+            onTap: () => appActiveTabNotifier.value = 5,
+            child: ProfileAvatarWidget(
             profileData: _profileData,
             displayName: _displayName,
             size: 40,
             borderColor: const Color(0xFF5DA399),
             borderWidth: 2,
+          ),
           ),
         ],
       ),
@@ -4432,6 +4458,8 @@ class _LegacyAudioPlayerState extends State<_LegacyAudioPlayer> {
               ],
             ),
           ),
+          // Save a private copy of this recording to the phone.
+          SaveAudioButton(url: widget.audioUrl),
         ],
       ),
     );

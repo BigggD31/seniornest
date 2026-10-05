@@ -886,12 +886,17 @@ class _SafetyScreenState extends State<SafetyScreen>
             ),
           ),
           const SizedBox(width: 8),
-          ProfileAvatarWidget(
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            // Tapping your own avatar opens Setup (tab 5).
+            onTap: () => appActiveTabNotifier.value = 5,
+            child: ProfileAvatarWidget(
             profileData: _profileData,
             displayName: _displayName,
             size: 40,
             borderColor: const Color(0xFF5DA399),
             borderWidth: 2,
+          ),
           ),
         ],
       ),
