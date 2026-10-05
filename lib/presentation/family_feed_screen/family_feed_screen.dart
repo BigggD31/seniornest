@@ -2653,7 +2653,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                   ),
                 const SizedBox(height: 20),
                 // Sample content explainer banner (shown once, while sample cards are visible)
-                if (!_hasRealPost) ...[
+                // Oct 5 2026: tied to what is actually on screen -- shown
+                // exactly when every card is a built-in sample (their ids
+                // all start with 'msg_'), never over real posts.
+                if (_messages.isNotEmpty &&
+                    _messages.every((m) => m.id.startsWith('msg_'))) ...[
                   _buildSampleContentBanner(),
                   const SizedBox(height: 14),
                 ],
