@@ -6,7 +6,6 @@ import 'package:just_audio/just_audio.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../family_feed_screen.dart';
 import '../../../widgets/custom_image_widget.dart';
-import '../../../widgets/share_preview_widget.dart';
 import '../../../widgets/fullscreen_media_viewer.dart';
 import '../../../widgets/linkified_text.dart';
 import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
@@ -731,36 +730,6 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                   ),
                 ),
                 const Spacer(),
-                // Share icon
-                GestureDetector(
-                  onTap: () => SharePreviewWidget.show(
-                    context,
-                    title: '${msg.senderName} shared a moment',
-                    body: msg.content.isNotEmpty
-                        ? msg.content
-                        : '${msg.senderName} sent a ${msg.type.name}',
-                    imageUrl: msg.imageUrl.isNotEmpty ? msg.imageUrl : null,
-                    isDarkMode: isDark,
-                  ),
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD4AA00).withAlpha(18),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: const Color(0xFFD4AA00).withAlpha(50),
-                        width: 1,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.ios_share_rounded,
-                      size: 15,
-                      color: Color(0xFFD4AA00),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
                 // Bookmark button — toggles filled/outline, calls onBookmark
                 GestureDetector(
                   onTap: widget.onBookmark,
@@ -1433,36 +1402,6 @@ class _MessagePreviewSheet extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                // Share button
-                GestureDetector(
-                  onTap: () => SharePreviewWidget.show(
-                    context,
-                    title: '${msg.senderName} shared a moment',
-                    body: msg.content.isNotEmpty
-                        ? msg.content
-                        : '${msg.senderName} sent a ${msg.type.name}',
-                    imageUrl: msg.imageUrl.isNotEmpty ? msg.imageUrl : null,
-                    isDarkMode: isDarkMode,
-                  ),
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD4AA00).withAlpha(18),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: const Color(0xFFD4AA00).withAlpha(60),
-                        width: 1,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.ios_share_rounded,
-                      size: 16,
-                      color: Color(0xFFD4AA00),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
                 // Close button — top-right
                 GestureDetector(
                   onTap: () => Navigator.pop(context),

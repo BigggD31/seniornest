@@ -76,7 +76,8 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
             if (_processedPurchaseIds.contains(purchaseId)) continue;
             _processedPurchaseIds.add(purchaseId);
           }
-          await _recordSubscription(purchase.productID, purchase.purchaseID);
+          await _recordSubscription(purchase.productID, purchase.purchaseID,
+              isRestore: purchase.status == PurchaseStatus.restored);
           if (_isAdditionalNest) await _createAdditionalNest();
           if (mounted) {
             setState(() => _isPurchasing = false);
@@ -185,21 +186,28 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   // retroactively once the nest is actually created. For someone creating
   // an *additional* nest from an existing account, the nest already exists
   // by the time they land here, so nestId will be passed in directly.
-  Future<void> _recordSubscription(String productId, String? transactionId, {String? nestId}) async {
+  Future<void> _recordSubscription(String productId, String? transactionId,
+      {String? nestId, bool isRestore = false}) async {
     try {
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
       if (userId == null) return;
       final now = DateTime.now();
-      // Soft expiry estimate used between launches; re-verified against
-      // Apple via restorePurchases() each time the app opens (see main.dart).
+      // PROVISIONAL expiry only. The phone cannot know whether Apple
+      // started a 3-day trial or charged right away, so it never guesses a
+      // long window. A new purchase gets 3 days of access here; the real
+      // paid-through date is written by the server when Apple reports it
+      // (App Store Server Notifications -> apple-subscription-webhook edge
+      // function), and always wins. A later expiry already on the row is
+      // never shortened, and a "restored" event never extends anything.
       // Lifetime/promo entitlements never expire.
       DateTime? expiresAt;
       String status = 'active';
-      if (productId == _yearlyProductId || productId == _additionalNestYearlyProductId) {
-        expiresAt = now.add(const Duration(days: 365));
-      } else if (productId == _monthlyProductId || productId == _additionalNestMonthlyProductId) {
-        expiresAt = now.add(const Duration(days: 30));
+      if (productId == _yearlyProductId ||
+          productId == _additionalNestYearlyProductId ||
+          productId == _monthlyProductId ||
+          productId == _additionalNestMonthlyProductId) {
+        expiresAt = now.add(const Duration(days: 3));
       } else {
         // promo / lifetime-style entitlement
         expiresAt = null;
@@ -220,14 +228,29 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
       // upsert wouldn't reliably catch a retry/double-tap when nestId is null
       // (the first-time-signup case). Mirrors the same pattern used in the
       // redeem_vip_code() DB function for the same reason.
-      var query = supabase.from('subscriptions').select('id').eq('user_id', userId);
+      var query = supabase.from('subscriptions').select('id, expires_at, status').eq('user_id', userId);
       query = nestId == null ? query.isFilter('nest_id', null) : query.eq('nest_id', nestId);
       final existing = await query.maybeSingle();
       if (existing != null) {
+        // A restored purchase must never touch an existing row: the server
+        // already holds Apple's real dates.
+        if (isRestore) return;
+        // Never shorten a later expiry (server-verified or lifetime) that is
+        // already on the row.
+        if (existing['status'] == 'lifetime') return;
+        final existingExpiry = DateTime.tryParse('${existing['expires_at'] ?? ''}');
+        if (existingExpiry != null && expiresAt != null && existingExpiry.isAfter(expiresAt)) {
+          row.remove('expires_at');
+        }
         await supabase.from('subscriptions').update(row).eq('id', existing['id'] as String);
       } else {
         await supabase.from('subscriptions').insert(row);
       }
+      // Pull in Apple's verified dates if Apple's notification already
+      // reached the server before this write. Harmless no-op otherwise.
+      try {
+        await supabase.rpc('reconcile_my_subscription');
+      } catch (_) {}
     } catch (e) {
       debugPrint('SUBSCRIPTION_RECORD_ERROR: $e');
     }
@@ -420,12 +443,16 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text('YOUR FIRST 3 DAYS',
+        // Additional-nest purchases are a straight paid add-on: the person is
+        // already using the app, so no free-trial wording anywhere here.
+        Text(_isAdditionalNest ? 'ADD ANOTHER NEST' : 'YOUR FIRST 3 DAYS',
           textAlign: TextAlign.center,
           style: GoogleFonts.nunitoSans(fontSize: 11.5,
             fontWeight: FontWeight.w800, letterSpacing: 1.2, color: _gold)),
         const SizedBox(height: 8),
-        Text("Welcome to your family's private nest.",
+        Text(_isAdditionalNest
+            ? 'Create another private nest.'
+            : "Welcome to your family's private nest.",
           textAlign: TextAlign.center,
           style: GoogleFonts.manrope(fontSize: 25,
             fontWeight: FontWeight.w800, color: Colors.white, height: 1.18,
@@ -460,7 +487,8 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
               ? const SizedBox(width: 22, height: 22,
                   child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
               : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text('Start My 3-Day Free Trial', style: GoogleFonts.manrope(
+                  Text(_isAdditionalNest ? 'Add This Nest' : 'Start My 3-Day Free Trial',
+                    style: GoogleFonts.manrope(
                       fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
                   const SizedBox(width: 8),
                   const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
@@ -468,7 +496,9 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           ),
         ),
         const SizedBox(height: 10),
-        Text('No payment required right now · Cancel anytime',
+        Text(_isAdditionalNest
+            ? 'Billed through your Apple ID · Cancel anytime'
+            : 'No payment required right now · Cancel anytime',
           style: GoogleFonts.manrope(fontSize: 11,
             fontWeight: FontWeight.w400, color: Colors.white.withValues(alpha: 0.65)),
           textAlign: TextAlign.center),
@@ -518,15 +548,31 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
       const SizedBox(height: 12),
       AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
-        child: _isYearly
-          ? _buildPriceLine(key: const ValueKey('yearly'),
-              price: r'$99', period: '/ year',
-              subtitle: 'Billed annually — just \$8.25/month')
-          : _buildPriceLine(key: const ValueKey('monthly'),
-              price: r'$9.99', period: '/ month',
-              subtitle: 'Billed monthly, cancel anytime'),
+        child: _isAdditionalNest
+          // Additional-nest prices come straight from the store listing, not
+          // hardcoded here, so this can never show a number that differs
+          // from what Apple will actually charge.
+          ? _buildPriceLine(key: ValueKey(_isYearly ? 'add-yearly' : 'add-monthly'),
+              price: _additionalNestPrice(),
+              period: _isYearly ? '/ year' : '/ month',
+              subtitle: _isYearly
+                  ? 'Billed annually, cancel anytime'
+                  : 'Billed monthly, cancel anytime')
+          : _isYearly
+            ? _buildPriceLine(key: const ValueKey('yearly'),
+                price: r'$99', period: '/ year',
+                subtitle: 'Billed annually — just \$8.25/month')
+            : _buildPriceLine(key: const ValueKey('monthly'),
+                price: r'$9.99', period: '/ month',
+                subtitle: 'Billed monthly, cancel anytime'),
       ),
     ]);
+  }
+
+  String _additionalNestPrice() {
+    final id = _isYearly ? _additionalNestYearlyProductId : _additionalNestMonthlyProductId;
+    final product = _products.where((p) => p.id == id).firstOrNull;
+    return product?.price ?? '';
   }
 
   Widget _buildToggleOption({required String label, required bool isSelected,
