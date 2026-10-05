@@ -1037,9 +1037,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       }
     }
 
+    // Oct 5 2026: remember which Nest these celebrations were fetched for, so
+    // they are dropped if the active Nest changed while the fetch was running.
+    final celebrationsFetchedFor = prefs.getString('nest_id') ?? '';
     try {
       final supabase = Supabase.instance.client;
-      final celebrationsNestId = prefs.getString('nest_id') ?? '';
+      final celebrationsNestId = celebrationsFetchedFor;
       if (celebrationsNestId.isNotEmpty) {
         final memberRows = await supabase
             .from('nest_members')
@@ -1308,8 +1311,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         // loaded (even if genuinely empty) otherwise.
         _messagesLoaded = !staleCacheGap;
       }
-      _todayCelebrations = todayEvents;
-      _upcomingCelebrations = upcomingEvents;
+      final celebrationsStillCurrent =
+          (prefs.getString('nest_id') ?? '') == celebrationsFetchedFor;
+      _todayCelebrations = celebrationsStillCurrent ? todayEvents : [];
+      _upcomingCelebrations = celebrationsStillCurrent ? upcomingEvents : [];
       if (initialNestMembers.isNotEmpty) {
         _nestMembers = initialNestMembers;
       }
@@ -2635,8 +2640,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                   const SizedBox(height: 14),
                 ],
                 // Celebrations card (all users, only if events within 30 days)
-                if (_todayCelebrations.isNotEmpty ||
-                    _upcomingCelebrations.isNotEmpty) ...[
+                // Oct 5 2026: placeholders last until a Nest has real content --
+                // a brand-new Nest shows no real Birthdays & Anniversaries
+                // card until its first real post.
+                if ((_todayCelebrations.isNotEmpty ||
+                        _upcomingCelebrations.isNotEmpty) &&
+                    _messages.any((m) => !m.id.startsWith('msg_'))) ...[
                   DailyUpdatesSectionWidget(
                     isDarkMode: _isDarkMode,
                     title: 'Birthdays & Anniversaries',

@@ -90,6 +90,7 @@ class _SafetyScreenState extends State<SafetyScreen>
   @override
   void initState() {
     super.initState();
+    appProfilePhotoVersionNotifier.addListener(_reloadProfilePhoto);
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -459,6 +460,18 @@ class _SafetyScreenState extends State<SafetyScreen>
     }
   }
 
+  // Oct 5 2026: re-reads the avatar the moment it is changed anywhere in the
+  // app (Setup), instead of waiting for the next cold start.
+  Future<void> _reloadProfilePhoto() async {
+    final prefs = await SharedPreferences.getInstance();
+    final json = prefs.getString(kProfilePhotoKey);
+    if (json == null || !mounted) return;
+    try {
+      final data = jsonDecode(json) as Map<String, dynamic>;
+      setState(() => _profileData = data);
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _entranceController.dispose();
@@ -467,6 +480,7 @@ class _SafetyScreenState extends State<SafetyScreen>
     if (_statusChannel != null) {
       Supabase.instance.client.removeChannel(_statusChannel!);
     }
+    appProfilePhotoVersionNotifier.removeListener(_reloadProfilePhoto);
     super.dispose();
   }
 

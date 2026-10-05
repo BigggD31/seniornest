@@ -68,6 +68,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    appProfilePhotoVersionNotifier.addListener(_reloadProfilePhoto);
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -141,10 +142,23 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
     _entranceController.forward();
   }
 
+  // Oct 5 2026: re-reads the avatar the moment it is changed anywhere in the
+  // app (Setup), instead of waiting for the next cold start.
+  Future<void> _reloadProfilePhoto() async {
+    final prefs = await SharedPreferences.getInstance();
+    final json = prefs.getString(kProfilePhotoKey);
+    if (json == null || !mounted) return;
+    try {
+      final data = jsonDecode(json) as Map<String, dynamic>;
+      setState(() => _profileData = data);
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     bookmarkEventNotifier.removeListener(_onBookmarkEventChanged);
     _entranceController.dispose();
+    appProfilePhotoVersionNotifier.removeListener(_reloadProfilePhoto);
     super.dispose();
   }
 

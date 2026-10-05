@@ -64,6 +64,10 @@ final ValueNotifier<BookmarkEvent?> bookmarkEventNotifier =
 /// synchronously, the same way dark mode already works. Screens that
 /// fetch a live, possibly-renamed value from Supabase should update this
 /// notifier too, so every other screen picks up the change immediately.
+/// Oct 5 2026: bumped whenever the person changes their avatar, so every tab
+/// (each loads the avatar once) can re-read it immediately.
+final ValueNotifier<int> appProfilePhotoVersionNotifier = ValueNotifier<int>(0);
+
 final ValueNotifier<String> appNestNameNotifier = ValueNotifier<String>('');
 
 /// Global returning-user notifier -- resolved once in main.dart's

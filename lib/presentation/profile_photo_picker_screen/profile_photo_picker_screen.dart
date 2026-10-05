@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +8,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/app_state.dart';
 import '../../widgets/custom_image_widget.dart';
+import 'avatar_crop_screen.dart';
 
 /// Key used to persist the profile photo choice across the app.
 /// Value is a JSON string: {"type": "emoji"|"photo", "value": "<emoji char>"|"<base64 bytes>"}
@@ -96,12 +99,24 @@ class _ProfilePhotoPickerScreenState extends State<ProfilePhotoPickerScreen>
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 400,
-        maxHeight: 400,
-        imageQuality: 80,
+        // Larger than the final avatar so there is room to zoom in while
+        // cropping; the crop screen produces the small final image.
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 90,
       );
       if (image != null && mounted) {
-        final bytes = await image.readAsBytes();
+        final pickedBytes = await image.readAsBytes();
+        if (!mounted) return;
+        final Uint8List? bytes = await Navigator.push<Uint8List>(
+          context,
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => AvatarCropScreen(imageBytes: pickedBytes),
+          ),
+        );
+        // Cancelled on the crop screen: back to the picker, nothing saved.
+        if (bytes == null || !mounted) return;
         final base64Str = base64Encode(bytes);
         await _saveAndReturn({'type': 'photo', 'value': base64Str});
       }
@@ -134,6 +149,7 @@ class _ProfilePhotoPickerScreenState extends State<ProfilePhotoPickerScreen>
   Future<void> _saveAndReturn(Map<String, String> data) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(kProfilePhotoKey, jsonEncode(data));
+    appProfilePhotoVersionNotifier.value++;
     final pickerUserId = Supabase.instance.client.auth.currentUser?.id;
     if (pickerUserId != null) {
       await prefs.setString(kProfilePhotoOwnerKey, pickerUserId);

@@ -145,6 +145,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    appProfilePhotoVersionNotifier.addListener(_reloadProfilePhoto);
     AudioSession.instance.then((session) async {
       await session.configure(AudioSessionConfiguration(
         avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
@@ -271,6 +272,18 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     _entranceController.forward();
   }
 
+  // Oct 5 2026: re-reads the avatar the moment it is changed anywhere in the
+  // app (Setup), instead of waiting for the next cold start.
+  Future<void> _reloadProfilePhoto() async {
+    final prefs = await SharedPreferences.getInstance();
+    final json = prefs.getString(kProfilePhotoKey);
+    if (json == null || !mounted) return;
+    try {
+      final data = jsonDecode(json) as Map<String, dynamic>;
+      setState(() => _profileData = data);
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _voiceTimer?.cancel();
@@ -285,6 +298,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     _voiceCaptionController.dispose();
     _videoCaptionController.dispose();
     _textFocusNode.dispose();
+    appProfilePhotoVersionNotifier.removeListener(_reloadProfilePhoto);
     super.dispose();
   }
 

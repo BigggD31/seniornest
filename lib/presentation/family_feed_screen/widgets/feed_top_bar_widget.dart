@@ -34,6 +34,13 @@ class _FeedTopBarWidgetState extends State<FeedTopBarWidget> {
   void initState() {
     super.initState();
     _loadProfileData();
+    appProfilePhotoVersionNotifier.addListener(_loadProfileData);
+  }
+
+  @override
+  void dispose() {
+    appProfilePhotoVersionNotifier.removeListener(_loadProfileData);
+    super.dispose();
   }
 
   Future<void> _loadProfileData() async {
