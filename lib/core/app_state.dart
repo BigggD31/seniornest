@@ -264,6 +264,11 @@ final ValueNotifier<List<Map<String, dynamic>>> appCachedMessagesNotifier =
 /// avatar row sitting inside otherwise-real content.
 final ValueNotifier<bool> appHomeDataConfirmedNotifier = ValueNotifier<bool>(false);
 
+/// Oct 6 2026: true while Home is still on its first-load spinner. The tab
+/// shell covers the screen with the branded logo screen during that time
+/// (capped by a timeout) instead of showing a bare spinner.
+final ValueNotifier<bool> appHomeLoadingNotifier = ValueNotifier<bool>(true);
+
 // ── Aug 31 2026: whole-app flash audit, prompted by D Von finding the "I'm
 // Good" button still flashing on a cold open even after Archive Nest Mode
 // itself worked correctly. Turned out to be the same hardcoded-false-

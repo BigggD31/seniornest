@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import '../../widgets/branded_transition_screen.dart';
 
 import '../../core/app_state.dart';
 import '../family_feed_screen/family_feed_screen.dart';
@@ -46,16 +50,64 @@ class _MainTabShellState extends State<MainTabShell> {
     SetupScreen(),
   ];
 
+  // Oct 6 2026: while Home is still on its first-load spinner, show the
+  // branded logo screen over everything instead. A timeout guarantees it can
+  // never get stuck if a load hangs.
+  bool _holdTimedOut = false;
+  Timer? _holdTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _holdTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted) setState(() => _holdTimedOut = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: appActiveTabNotifier,
-      builder: (context, activeIndex, _) {
-        return IndexedStack(
-          index: activeIndex,
-          children: _tabs,
-        );
-      },
+    return Stack(
+      children: [
+        ValueListenableBuilder<int>(
+          valueListenable: appActiveTabNotifier,
+          builder: (context, activeIndex, _) {
+            return IndexedStack(
+              index: activeIndex,
+              children: _tabs,
+            );
+          },
+        ),
+        Positioned.fill(
+          child: ValueListenableBuilder<bool>(
+            valueListenable: appHomeLoadingNotifier,
+            builder: (context, homeLoading, _) {
+              return ValueListenableBuilder<int>(
+                valueListenable: appActiveTabNotifier,
+                builder: (context, activeIndex, _) {
+                  final hold =
+                      homeLoading && activeIndex == 0 && !_holdTimedOut;
+                  return IgnorePointer(
+                    ignoring: !hold,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: hold
+                          ? const BrandedTransitionScreen(
+                              key: ValueKey('homeHold'))
+                          : const SizedBox.shrink(key: ValueKey('homeShown')),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

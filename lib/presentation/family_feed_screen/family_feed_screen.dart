@@ -1608,7 +1608,25 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           });
         }
       }
-      if (seniors.isEmpty) return;
+      if (seniors.isEmpty) {
+        // Oct 6 2026: this Nest has no seniors (e.g. a brand-new Nest) --
+        // clear anything left over from a previously viewed Nest instead of
+        // leaving its Daily Updates on screen.
+        if (mounted && (_seniorStatuses.isNotEmpty || _seniorUserId.isNotEmpty)) {
+          setState(() {
+            _seniorStatuses = [];
+            _seniorUserId = '';
+            _seniorName = '';
+            _seniorCheckedInToday = false;
+            _seniorCheckinTime = null;
+            _seniorMedsTakenToday = false;
+            _seniorMedsTakenTime = null;
+          });
+        }
+        appSeniorStatusesNotifier.value = [];
+        appSeniorUserIdNotifier.value = '';
+        return;
+      }
 
       // Check-in + meds status for every senior found, all concurrently --
       // same daily_checkins/daily_medications tables and RLS as before,
@@ -2529,6 +2547,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // time the user taps into Home from bottom nav, any transition here
     // was replaying on every visit, which is what caused the "double
     // flash" / jitter. Home now just appears immediately, fully formed.
+    // Tell the tab shell whether to keep the branded logo screen up.
+    final loadingNow = _isLoading;
+    if (appHomeLoadingNotifier.value != loadingNow) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        appHomeLoadingNotifier.value = loadingNow;
+      });
+    }
     return _isLoading ? _buildLoadingState() : _buildFeedContent(isTablet);
   }
 

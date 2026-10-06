@@ -407,7 +407,7 @@ class AuthService {
     'cached_nest_members', 'cached_nest_members_nest_id', 'cached_nest_members_user_id',
     'cached_real_messages', 'cached_real_messages_nest_id',
     'cached_checkin_senior_name', 'cached_checkin_senior_id', 'cached_checkin_nest_id',
-    'cached_legacy_senior_names',
+    'cached_legacy_senior_names', 'cached_senior_statuses',
     'cached_legacy_stories', 'cached_legacy_stories_user_id', 'cached_legacy_stories_nest_id',
     'invite_code_shared',
     'cached_is_nest_archived',
@@ -461,6 +461,11 @@ class AuthService {
     appIsVipMemberNotifier.value = false;
     appSeniorNameNotifier.value = '';
     appSeniorUserIdNotifier.value = '';
+    // Oct 6 2026: the previous Nest's seniors (and their check-in/meds
+    // status) must not carry into a new Nest's Daily Updates.
+    appSeniorStatusesNotifier.value = [];
+    appSeniorCheckedInTodayNotifier.value = false;
+    appSeniorMedsTakenTodayNotifier.value = false;
     appIsNestArchivedNotifier.value = false;
     appInviteCodeSharedNotifier.value = true;
     appHasSentMessagesNotifier.value = false;

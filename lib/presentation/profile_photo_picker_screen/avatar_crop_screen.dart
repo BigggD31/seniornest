@@ -58,16 +58,25 @@ class _AvatarCropScreenState extends State<AvatarCropScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final side = MediaQuery.of(context).size.width - 32;
+    // Oct 6 2026: on iPad the full width made the square bigger than the
+    // screen, hiding the Use button. Cap by height and an absolute maximum.
+    final media = MediaQuery.of(context);
+    final side = [media.size.width - 32, media.size.height * 0.5, 520.0]
+        .reduce((a, b) => a < b ? a : b);
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
+        leadingWidth: 96,
+        leading: TextButton.icon(
           onPressed: _saving ? null : () => Navigator.pop(context, null),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              size: 18, color: Colors.white),
+          label: Text('Back',
+              style: GoogleFonts.nunitoSans(
+                  color: Colors.white, fontWeight: FontWeight.w700)),
         ),
         title: Text(
           'Move and zoom',

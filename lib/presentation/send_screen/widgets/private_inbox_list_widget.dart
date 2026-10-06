@@ -33,112 +33,133 @@ class _PrivateInboxListWidgetState extends State<PrivateInboxListWidget> {
     _load();
   }
 
+  // Oct 6 2026: last result per Nest kept in memory so reopening My Messages
+  // paints instantly instead of showing a spinner, then refreshes quietly.
+  static final Map<String, List<Map<String, dynamic>>> _threadsCache = {};
+  static final Map<String, List<Map<String, dynamic>>> _membersCache = {};
+
+  Future<List<Map<String, dynamic>>> _fetchMembers(
+      String nestId, String myId) async {
+    try {
+      final memberRows = await _supabase
+          .from('nest_members')
+          .select('user_id, user_profiles(display_name, preferred_name, avatar_url, role)')
+          .eq('nest_id', nestId);
+      final loadedMembers = <Map<String, dynamic>>[];
+      for (final row in (memberRows as List<dynamic>)) {
+        final userId = row['user_id'] as String? ?? '';
+        if (userId.isEmpty || userId == myId) continue;
+        final profile = row['user_profiles'] as Map<String, dynamic>?;
+        final preferred = profile?['preferred_name'] as String? ?? '';
+        final display = profile?['display_name'] as String? ?? '';
+        final name = preferred.isNotEmpty ? preferred : display;
+        if (name.isEmpty) continue;
+        loadedMembers.add({
+          'id': userId,
+          'name': name,
+          'avatarUrl': profile?['avatar_url'] as String? ?? '',
+          'avatarLabel': '$name profile photo',
+          'role': profile?['role'] as String? ?? 'family',
+          'isSample': false,
+        });
+      }
+      return loadedMembers;
+    } catch (e) {
+      debugPrint('INBOX_NEST_MEMBERS_LOAD_ERROR: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchThreads(
+      String nestId, String myId) async {
+    // Only the active Nest's conversations (see Oct 6 2026 Nest scoping).
+    final rows = await _supabase
+        .from('private_messages')
+        .select()
+        .eq('nest_id', nestId)
+        .or('sender_id.eq.$myId,recipient_id.eq.$myId')
+        .order('created_at', ascending: false);
+
+    final Map<String, Map<String, dynamic>> latestByPartner = {};
+    final Map<String, int> unreadByPartner = {};
+    for (final row in rows) {
+      final isMine = row['sender_id'] == myId;
+      final partnerId = isMine ? row['recipient_id'] : row['sender_id'];
+      latestByPartner.putIfAbsent(partnerId, () => row);
+      if (!isMine && row['read_at'] == null) {
+        unreadByPartner[partnerId] = (unreadByPartner[partnerId] ?? 0) + 1;
+      }
+    }
+    if (latestByPartner.isEmpty) return [];
+
+    final partnerIds = latestByPartner.keys.toList();
+    final profiles = await _supabase
+        .from('user_profiles')
+        .select('id, display_name, preferred_name, avatar_url')
+        .inFilter('id', partnerIds);
+    final profileMap = {for (final p in profiles) p['id']: p};
+
+    return partnerIds.map((id) {
+      final profile = profileMap[id];
+      final name = (profile?['preferred_name'] as String?)?.isNotEmpty == true
+          ? profile!['preferred_name'] as String
+          : (profile?['display_name'] as String? ?? 'Nest Member');
+      return <String, dynamic>{
+        'partnerId': id,
+        'name': name,
+        'avatarUrl': profile?['avatar_url'] as String? ?? '',
+        'lastMessage': latestByPartner[id]?['content'] as String? ?? '',
+        'lastAt': latestByPartner[id]?['created_at'],
+        'unreadCount': unreadByPartner[id] ?? 0,
+      };
+    }).toList()
+      ..sort((a, b) => (b['lastAt'] as String).compareTo(a['lastAt'] as String));
+  }
+
   Future<void> _load() async {
     final myId = _supabase.auth.currentUser?.id;
     if (myId == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final nestId = prefs.getString('nest_id') ?? '';
-      if (nestId.isNotEmpty) {
-        final memberRows = await _supabase
-            .from('nest_members')
-            .select('user_id, user_profiles(display_name, preferred_name, avatar_url, role)')
-            .eq('nest_id', nestId);
-        final loadedMembers = <Map<String, dynamic>>[];
-        for (final row in (memberRows as List<dynamic>)) {
-          final userId = row['user_id'] as String? ?? '';
-          if (userId.isEmpty || userId == myId) continue;
-          final profile = row['user_profiles'] as Map<String, dynamic>?;
-          final preferred = profile?['preferred_name'] as String? ?? '';
-          final display = profile?['display_name'] as String? ?? '';
-          final name = preferred.isNotEmpty ? preferred : display;
-          if (name.isEmpty) continue;
-          loadedMembers.add({
-            'id': userId,
-            'name': name,
-            'avatarUrl': profile?['avatar_url'] as String? ?? '',
-            'avatarLabel': '$name profile photo',
-            'role': profile?['role'] as String? ?? 'family',
-            'isSample': false,
-          });
-        }
-        if (mounted) setState(() => _nestMembers = loadedMembers);
-      }
-    } catch (e) {
-      debugPrint('INBOX_NEST_MEMBERS_LOAD_ERROR: $e');
-    }
-    try {
-      // Oct 6 2026: conversations belong to ONE Nest. Only show the active
-      // Nest's messages so another Nest's chats never carry over.
-      final activeNestId =
-          (await SharedPreferences.getInstance()).getString('nest_id') ?? '';
-      if (activeNestId.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _threads = [];
-            _isLoading = false;
-          });
-        }
-        return;
-      }
-      final rows = await _supabase
-          .from('private_messages')
-          .select()
-          .eq('nest_id', activeNestId)
-          .or('sender_id.eq.$myId,recipient_id.eq.$myId')
-          .order('created_at', ascending: false);
-
-      final Map<String, Map<String, dynamic>> latestByPartner = {};
-      final Map<String, int> unreadByPartner = {};
-      for (final row in rows) {
-        final isMine = row['sender_id'] == myId;
-        final partnerId = isMine ? row['recipient_id'] : row['sender_id'];
-        latestByPartner.putIfAbsent(partnerId, () => row);
-        if (!isMine && row['read_at'] == null) {
-          unreadByPartner[partnerId] = (unreadByPartner[partnerId] ?? 0) + 1;
-        }
-      }
-
-      if (latestByPartner.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _threads = [];
-            _isLoading = false;
-          });
-        }
-        return;
-      }
-
-      final partnerIds = latestByPartner.keys.toList();
-      final profiles = await _supabase
-          .from('user_profiles')
-          .select('id, display_name, preferred_name, avatar_url')
-          .inFilter('id', partnerIds);
-
-      final profileMap = {for (final p in profiles) p['id']: p};
-
-      final threads = partnerIds.map((id) {
-        final profile = profileMap[id];
-        final name = (profile?['preferred_name'] as String?)?.isNotEmpty == true
-            ? profile!['preferred_name'] as String
-            : (profile?['display_name'] as String? ?? 'Nest Member');
-        return {
-          'partnerId': id,
-          'name': name,
-          'avatarUrl': profile?['avatar_url'] as String? ?? '',
-          'lastMessage': latestByPartner[id]?['content'] as String? ?? '',
-          'lastAt': latestByPartner[id]?['created_at'],
-          'unreadCount': unreadByPartner[id] ?? 0,
-        };
-      }).toList()
-        ..sort((a, b) => (b['lastAt'] as String).compareTo(a['lastAt'] as String));
-
+    final prefs = await SharedPreferences.getInstance();
+    final nestId = prefs.getString('nest_id') ?? '';
+    if (nestId.isEmpty) {
       if (mounted) {
         setState(() {
+          _threads = [];
+          _nestMembers = [];
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+    final cacheKey = '$myId|$nestId';
+    final cachedThreads = _threadsCache[cacheKey];
+    final cachedMembers = _membersCache[cacheKey];
+    if (cachedThreads != null && cachedMembers != null && mounted) {
+      setState(() {
+        _threads = cachedThreads;
+        _nestMembers = cachedMembers;
+        _isLoading = false;
+      });
+    }
+
+    try {
+      // Members and messages are independent -- fetch them together.
+      final results = await Future.wait([
+        _fetchMembers(nestId, myId),
+        _fetchThreads(nestId, myId),
+      ]);
+      // Ignore the result if the active Nest changed while loading.
+      if ((prefs.getString('nest_id') ?? '') != nestId) return;
+      final members = results[0];
+      final threads = results[1];
+      _membersCache[cacheKey] = members;
+      _threadsCache[cacheKey] = threads;
+      if (mounted) {
+        setState(() {
+          _nestMembers = members;
           _threads = threads;
           _isLoading = false;
         });

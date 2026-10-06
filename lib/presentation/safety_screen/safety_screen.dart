@@ -415,6 +415,12 @@ class _SafetyScreenState extends State<SafetyScreen>
             appSeniorNameNotifier.value = joinedName;
             await prefs.setString('cached_checkin_senior_name', joinedName);
           }
+        } else if (mounted && _seniorStatuses.isNotEmpty) {
+          // Oct 6 2026: no seniors in this Nest -- drop the previous Nest's.
+          setState(() {
+            _seniorStatuses = [];
+            if (!isSeniorRole) _seniorName = '';
+          });
         }
       }
     } catch (e) {
