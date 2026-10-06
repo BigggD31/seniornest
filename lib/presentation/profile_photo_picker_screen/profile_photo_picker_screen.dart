@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -22,6 +24,51 @@ const String kProfilePhotoKey = 'profile_photo_data';
 // than the user genuinely having no avatar, and wiping the cache on that
 // false signal was destroying freshly-picked avatars during onboarding.
 const String kProfilePhotoOwnerKey = 'profile_photo_owner_id';
+
+/// Oct 6 2026: the saved avatar is a small 320px image, which looks soft when
+/// blown up to re-crop. So the larger original the person picked is kept in a
+/// local file (this device only, per user) and used for "Adjust current photo".
+Future<File?> _avatarSourceFile() async {
+  try {
+    final uid = Supabase.instance.client.auth.currentUser?.id ?? 'anon';
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/avatar_source_$uid.jpg');
+  } catch (_) {
+    return null;
+  }
+}
+
+// Identifies which saved avatar the kept original belongs to, so an avatar
+// changed from another device never re-crops a stale original.
+String _avatarSig(String value) =>
+    '${value.length}:${value.substring(value.length > 48 ? value.length - 48 : 0)}';
+
+Future<void> _saveAvatarSource(Uint8List bytes, String savedValue) async {
+  try {
+    (await SharedPreferences.getInstance())
+        .setString('avatar_source_sig', _avatarSig(savedValue));
+    final f = await _avatarSourceFile();
+    if (f != null) await f.writeAsBytes(bytes, flush: true);
+  } catch (_) {}
+}
+
+Future<Uint8List?> _loadAvatarSource(String savedValue) async {
+  try {
+    final sig =
+        (await SharedPreferences.getInstance()).getString('avatar_source_sig');
+    if (sig != _avatarSig(savedValue)) return null;
+    final f = await _avatarSourceFile();
+    if (f != null && await f.exists()) return await f.readAsBytes();
+  } catch (_) {}
+  return null;
+}
+
+Future<void> _deleteAvatarSource() async {
+  try {
+    final f = await _avatarSourceFile();
+    if (f != null && await f.exists()) await f.delete();
+  } catch (_) {}
+}
 
 /// Saves the avatar locally and to Supabase, and signals every tab to refresh.
 Future<void> persistProfilePhoto(Map<String, String> data) async {
@@ -130,15 +177,20 @@ Future<Map<String, dynamic>?> openAvatarChooser(
   if (choice == null || !context.mounted) return null;
   if (choice == 'new') return openPicker();
 
+  // Prefer the larger original kept on this device; fall back to the saved one.
+  final Uint8List sourceBytes = (await _loadAvatarSource(current!['value'] as String? ?? '')) ??
+      currentBytes;
+  if (!context.mounted) return null;
   final Uint8List? cropped = await Navigator.push<Uint8List>(
     context,
     MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => AvatarCropScreen(imageBytes: currentBytes!),
+      builder: (_) => AvatarCropScreen(imageBytes: sourceBytes),
     ),
   );
   if (cropped == null) return null;
   final data = <String, String>{'type': 'photo', 'value': base64Encode(cropped)};
+  await _saveAvatarSource(sourceBytes, data['value']!);
   await persistProfilePhoto(data);
   return Map<String, dynamic>.from(data);
 }
@@ -238,6 +290,7 @@ class _ProfilePhotoPickerScreenState extends State<ProfilePhotoPickerScreen>
         // Cancelled on the crop screen: back to the picker, nothing saved.
         if (bytes == null || !mounted) return;
         final base64Str = base64Encode(bytes);
+        await _saveAvatarSource(pickedBytes, base64Str);
         await _saveAndReturn({'type': 'photo', 'value': base64Str});
       }
     } catch (e) {
@@ -263,6 +316,7 @@ class _ProfilePhotoPickerScreenState extends State<ProfilePhotoPickerScreen>
   }
 
   Future<void> _pickEmoji(String emoji) async {
+    await _deleteAvatarSource();
     await _saveAndReturn({'type': 'emoji', 'value': emoji});
   }
 

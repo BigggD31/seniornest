@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -30,7 +31,46 @@ class ShareService {
         subject: 'Join our SeniorNest Family!',
       );
     } else {
-      Share.share(shareText, subject: 'Join our SeniorNest Family!');
+      // Oct 6 2026: on iPad the share sheet is a popover and silently does
+      // nothing unless it is told where to anchor. Anchor it to the tapped
+      // widget, or the middle of the screen if that is not available.
+      Rect? origin;
+      try {
+        final box = context.findRenderObject() as RenderBox?;
+        if (box != null &&
+            box.hasSize &&
+            box.size.width > 0 &&
+            box.size.width < MediaQuery.of(context).size.width * 0.6) {
+          origin = box.localToGlobal(Offset.zero) & box.size;
+        }
+      } catch (_) {}
+      if (origin == null) {
+        final size = MediaQuery.of(context).size;
+        origin = Rect.fromCenter(
+          center: Offset(size.width / 2, size.height / 2),
+          width: 10,
+          height: 10,
+        );
+      }
+      () async {
+        try {
+          await Share.share(
+            shareText,
+            subject: 'Join our SeniorNest Family!',
+            sharePositionOrigin: origin,
+          );
+        } catch (_) {
+          // If the share sheet can't open for any reason, copy instead so the
+          // person is never left with a button that does nothing.
+          await Clipboard.setData(ClipboardData(text: shareText));
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text('Invite copied to your clipboard.')),
+            );
+          }
+        }
+      }();
     }
   }
 

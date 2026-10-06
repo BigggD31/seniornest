@@ -604,6 +604,22 @@ class _LegacyScreenState extends State<LegacyScreen>
           'isAnswerToQuestion': e['is_answer_to_question'] as bool? ?? false,
         }).toList();
 
+        // Oct 6 2026: placeholder stories are only "bookmarked" if they were
+        // bookmarked in THIS Nest (Favs is per-Nest), not in another one.
+        Set<String> mockBookmarkedHere = {};
+        if (realStories.isEmpty && nestId.isNotEmpty) {
+          try {
+            final mockRows = await supabase
+                .from('user_favourites')
+                .select('item_id')
+                .eq('user_id', userId)
+                .eq('nest_id', nestId)
+                .inFilter('item_id', ['s1', 's2', 's3', 's4']);
+            mockBookmarkedHere = (mockRows as List)
+                .map((r) => '${r['item_id']}')
+                .toSet();
+          } catch (_) {}
+        }
         if (mounted) {
           setState(() {
             if (realStories.isNotEmpty) {
@@ -613,7 +629,7 @@ class _LegacyScreenState extends State<LegacyScreen>
               // examples, never leftovers from a different Nest.
               _stories = _mockStories.map((s) {
                 final m = Map<String, dynamic>.from(s);
-                m['isBookmarked'] = bookmarkedIds.contains(m['id'] as String);
+                m['isBookmarked'] = mockBookmarkedHere.contains(m['id'] as String);
                 return m;
               }).toList();
             }
@@ -794,6 +810,16 @@ class _LegacyScreenState extends State<LegacyScreen>
       _stories.removeWhere((s) => s['id'] == storyId);
     });
     _syncDeletedStoryToCache(storyId);
+    // Oct 6 2026: a deleted story must not linger in this person's Favs.
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid != null) {
+      Supabase.instance.client
+          .from('user_favourites')
+          .delete()
+          .eq('user_id', uid)
+          .eq('item_id', storyId)
+          .then((_) {}, onError: (Object _) {});
+    }
   }
 
   Future<void> _syncDeletedStoryToCache(String storyId) async {

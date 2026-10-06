@@ -159,12 +159,41 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     await prefs.setBool('first_load', true);
     await prefs.setBool('has_onboarded', true);
 
-    // Small delay to ensure Supabase auth session is fully established
-    await Future.delayed(const Duration(milliseconds: 500));
+    // Small delay to ensure Supabase auth session is fully established.
+    // Oct 6 2026: skipped when the session is already there (the normal
+    // case) -- it was a fixed half second on every sign-in.
+    if (Supabase.instance.client.auth.currentSession == null) {
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
 
     // Always update profile first regardless of whether nest exists
     final supabaseClient = Supabase.instance.client;
     final checkUserId = userId ?? supabaseClient.auth.currentUser?.id;
+    // Oct 6 2026: sign-in speed. The membership lookup (used further down)
+    // and the Home photo precache do not depend on the profile sync, so they
+    // start NOW and overlap with it instead of running one after another.
+    Future<List<Map<String, dynamic>>>? membershipFuture;
+    Future<void>? earlyPrecache;
+    if (checkUserId != null) {
+      // Wrapped in an async function so it is ONE real request that can be
+      // awaited twice (a bare query builder would re-send on every await).
+      final Future<List<Map<String, dynamic>>> mf = (() async {
+        final rows = await supabaseClient
+            .from('nest_members')
+            .select('nest_id, joined_at, nests(name, invite_code, created_by)')
+            .eq('user_id', checkUserId)
+            .order('joined_at', ascending: true)
+            .limit(1);
+        return List<Map<String, dynamic>>.from(rows);
+      })();
+      mf.ignore();
+      membershipFuture = mf;
+      earlyPrecache = mf.then<void>((rows) async {
+        if (rows.isNotEmpty) {
+          await precacheNestImages(rows.first['nest_id'] as String);
+        }
+      }).catchError((_) {});
+    }
     if (checkUserId != null) {
       try {
         // For returning users: read from Supabase first to get real data
@@ -407,7 +436,17 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             // Upsert (not update) — the profile row may not exist yet for a
             // brand new signup now that the auto-create trigger is removed.
             // An update() on a nonexistent row silently affects zero rows.
-            await supabaseClient.from('user_profiles').upsert(updateData);
+            if (existingProfile != null && avatarToPush == null) {
+              // Oct 6 2026: nothing below reads this write back, so for an
+              // existing profile don't make sign-in wait on it.
+              supabaseClient.from('user_profiles').upsert(updateData).then(
+                (_) {},
+                onError: (Object e) =>
+                    print('PROFILE_UPSERT_BACKGROUND_ERROR: $e'),
+              );
+            } else {
+              await supabaseClient.from('user_profiles').upsert(updateData);
+            }
             print('NEST_DEBUG: profile upserted at top of _navigateToHome${avatarToPush != null ? ' (including self-heal avatar push)' : ''}');
           }
         }
@@ -447,12 +486,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
         // cache-first instant paint every other entry point already
         // gets. Same join main.dart's _tryRestoreServerMembership already
         // uses for the equivalent cold-start case.
-        final existingMemberships = await supabaseClient
-            .from('nest_members')
-            .select('nest_id, joined_at, nests(name, invite_code, created_by)')
-            .eq('user_id', checkUserId)
-            .order('joined_at', ascending: true)
-            .limit(1);
+        final existingMemberships = await membershipFuture!;
         if (existingMemberships.isNotEmpty) {
           final existingNestId = existingMemberships.first['nest_id'] as String;
           await prefs.setString('nest_id', existingNestId);
@@ -487,7 +521,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           // path: don't show Home until its current photos are ready,
           // capped at 3 seconds so a slow connection never hangs anyone.
           try {
-            await precacheNestImages(existingNestId)
+            await (earlyPrecache ?? precacheNestImages(existingNestId))
                 .timeout(const Duration(seconds: 3));
           } catch (_) {}
           if (mounted) {

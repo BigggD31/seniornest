@@ -124,6 +124,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
         items = (rows as List<dynamic>)
             .map((e) => Map<String, dynamic>.from(e['item_data'] as Map))
             .toList();
+        items = await _pruneStaleFavs(items, favsNestId, bookmarkUserId);
       }
     } catch (_) {}
 
@@ -178,7 +179,109 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
   List<Map<String, dynamic>> get _filteredItems {
     if (_selectedCategory == 0) return _bookmarkedItems;
     final cat = _categories[_selectedCategory];
-    return _bookmarkedItems.where((item) => item['category'] == cat).toList();
+    return _bookmarkedItems.where((item) => _matchesCategory(item, cat)).toList();
+  }
+
+  // Oct 6 2026: a Legacy story that is a video/audio recording also belongs
+  // under the Video/Audio tabs, not only under Legacy (it used to appear under
+  // All and Legacy but vanish from Video/Audio).
+  bool _matchesCategory(Map<String, dynamic> item, String cat) {
+    final itemCat = item['category'];
+    if (itemCat == cat) return true;
+    if (itemCat == 'Legacy') {
+      final et = item['entry_type'];
+      if (cat == 'Video' && et == 'video') return true;
+      if (cat == 'Audio' && et == 'audio') return true;
+    }
+    return false;
+  }
+
+  static final RegExp _favUuid = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
+  /// Oct 6 2026: drops saved items that no longer have anything behind them:
+  /// stories that were deleted, and bookmarked PLACEHOLDER stories/messages in
+  /// a Nest that has since received real content (placeholders are supposed to
+  /// disappear). Also removes this person's stale rows from the database.
+  Future<List<Map<String, dynamic>>> _pruneStaleFavs(
+    List<Map<String, dynamic>> items,
+    String nestId,
+    String userId,
+  ) async {
+    if (items.isEmpty || nestId.isEmpty) return items;
+    try {
+      final supabase = Supabase.instance.client;
+      final realStoryIds = items
+          .where((i) =>
+              i['sourceType'] == 'story' && _favUuid.hasMatch('${i['id']}'))
+          .map((i) => '${i['id']}')
+          .toList();
+      final existing = <String>{};
+      if (realStoryIds.isNotEmpty) {
+        final rows = await supabase
+            .from('legacy_entries')
+            .select('id')
+            .inFilter('id', realStoryIds);
+        for (final r in (rows as List)) {
+          existing.add('${r['id']}');
+        }
+      }
+      final hasSampleStory = items.any((i) =>
+          i['sourceType'] == 'story' && !_favUuid.hasMatch('${i['id']}'));
+      bool nestHasStories = false;
+      if (hasSampleStory) {
+        final r = await supabase
+            .from('legacy_entries')
+            .select('id')
+            .eq('nest_id', nestId)
+            .limit(1);
+        nestHasStories = (r as List).isNotEmpty;
+      }
+      final hasSampleMsg = items.any((i) => '${i['id']}'.startsWith('msg_'));
+      bool nestHasPosts = false;
+      if (hasSampleMsg) {
+        final r = await supabase
+            .from('feed_posts')
+            .select('id')
+            .eq('nest_id', nestId)
+            .limit(1);
+        nestHasPosts = (r as List).isNotEmpty;
+      }
+
+      final keep = <Map<String, dynamic>>[];
+      final dropIds = <String>[];
+      for (final i in items) {
+        final id = '${i['id']}';
+        bool drop = false;
+        if (i['sourceType'] == 'story') {
+          if (_favUuid.hasMatch(id)) {
+            drop = !existing.contains(id);
+          } else {
+            drop = nestHasStories;
+          }
+        } else if (id.startsWith('msg_')) {
+          drop = nestHasPosts;
+        }
+        if (drop) {
+          dropIds.add(id);
+        } else {
+          keep.add(i);
+        }
+      }
+      if (dropIds.isNotEmpty) {
+        supabase
+            .from('user_favourites')
+            .delete()
+            .eq('user_id', userId)
+            .eq('nest_id', nestId)
+            .inFilter('item_id', dropIds)
+            .then((_) {}, onError: (Object _) {});
+      }
+      return keep;
+    } catch (_) {
+      return items;
+    }
   }
 
   // Sep 24 2026: no longer navigates -- see the matching comment in
@@ -383,7 +486,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
           final count = index == 0
               ? _bookmarkedItems.length
               : _bookmarkedItems
-                    .where((item) => item['category'] == _categories[index])
+                    .where((item) => _matchesCategory(item, _categories[index]))
                     .length;
           return GestureDetector(
             onTap: () {
@@ -595,7 +698,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
       children: categoryIndices.map((catIndex) {
         final catName = _categories[catIndex];
         final catItems = _bookmarkedItems
-            .where((item) => item['category'] == catName)
+            .where((item) => _matchesCategory(item, catName))
             .toList();
         final catColor = _categoryColors[catIndex];
         final catIcon = _categoryIcons[catIndex];
