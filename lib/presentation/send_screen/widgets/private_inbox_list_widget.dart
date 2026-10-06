@@ -72,9 +72,23 @@ class _PrivateInboxListWidgetState extends State<PrivateInboxListWidget> {
       debugPrint('INBOX_NEST_MEMBERS_LOAD_ERROR: $e');
     }
     try {
+      // Oct 6 2026: conversations belong to ONE Nest. Only show the active
+      // Nest's messages so another Nest's chats never carry over.
+      final activeNestId =
+          (await SharedPreferences.getInstance()).getString('nest_id') ?? '';
+      if (activeNestId.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _threads = [];
+            _isLoading = false;
+          });
+        }
+        return;
+      }
       final rows = await _supabase
           .from('private_messages')
           .select()
+          .eq('nest_id', activeNestId)
           .or('sender_id.eq.$myId,recipient_id.eq.$myId')
           .order('created_at', ascending: false);
 

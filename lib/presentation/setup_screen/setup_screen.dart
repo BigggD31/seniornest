@@ -1275,13 +1275,10 @@ class _SetupScreenState extends State<SetupScreen>
   }
 
   Future<void> _openProfilePhotoPicker() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ProfilePhotoPickerScreen()),
-    );
+    final result = await openAvatarChooser(context, _profileData);
     if (result != null && mounted) {
       setState(() {
-        _profileData = result as Map<String, dynamic>;
+        _profileData = result;
       });
     }
   }
@@ -3137,12 +3134,9 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   }
 
   Future<void> _openAvatarPicker() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ProfilePhotoPickerScreen()),
-    );
+    final result = await openAvatarChooser(context, _profileData);
     if (result != null && mounted) {
-      setState(() => _profileData = result as Map<String, dynamic>);
+      setState(() => _profileData = result);
       widget.onAvatarChanged?.call(_profileData);
     }
   }

@@ -23,6 +23,120 @@ const String kProfilePhotoKey = 'profile_photo_data';
 // false signal was destroying freshly-picked avatars during onboarding.
 const String kProfilePhotoOwnerKey = 'profile_photo_owner_id';
 
+/// Saves the avatar locally and to Supabase, and signals every tab to refresh.
+Future<void> persistProfilePhoto(Map<String, String> data) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(kProfilePhotoKey, jsonEncode(data));
+  appProfilePhotoVersionNotifier.value++;
+  final pickerUserId = Supabase.instance.client.auth.currentUser?.id;
+  if (pickerUserId != null) {
+    await prefs.setString(kProfilePhotoOwnerKey, pickerUserId);
+  }
+
+  // Save to Supabase so photo survives sign-out and restores on sign-in
+  try {
+    final supabaseClient = Supabase.instance.client;
+    final currentUser = supabaseClient.auth.currentUser;
+    final userId = currentUser?.id;
+    if (userId != null) {
+      // Use upsert (not update) so this can never silently no-op if the
+      // profile row hasn't been created yet by the signup trigger or the
+      // onboarding upsert — that race left avatar_url permanently null
+      // for accounts that picked an avatar early in onboarding.
+      // email is a NOT NULL column, so it must be included whenever this
+      // might be the row's first insert.
+      //
+      // Confirmed via live Supabase logs (Aug 3, 2026) that an empty
+      // email here causes a hard NOT NULL failure on first insert -- not
+      // a hypothetical. Retry once after a short delay if it's empty
+      // instead of silently omitting the field and losing the whole
+      // upsert (and the avatar with it).
+      String userEmail = currentUser?.email ?? '';
+      if (userEmail.isEmpty) {
+        await Future.delayed(const Duration(milliseconds: 400));
+        userEmail = supabaseClient.auth.currentUser?.email ?? '';
+      }
+      if (userEmail.isEmpty) {
+        print('PROFILE_PHOTO_ERROR: no email available for user $userId after retry -- avatar upsert skipped to avoid NOT NULL violation. Avatar remains local-only until next successful sign-in sync.');
+      } else {
+        await supabaseClient.from('user_profiles').upsert({
+          'id': userId,
+          'email': userEmail,
+          'avatar_url': jsonEncode(data),
+        });
+        print('PROFILE_PHOTO: saved to Supabase for user $userId');
+      }
+    }
+  } catch (e, st) {
+    print('PROFILE_PHOTO_ERROR: Supabase save error = $e');
+    print('PROFILE_PHOTO_ERROR stack = $st');
+  }
+}
+
+/// Oct 6 2026: tapping your avatar in Setup. If the current avatar is a
+/// photo, offer "Adjust current photo" (re-crop it) or "Choose a new photo".
+/// Emoji / no avatar goes straight to the picker. Returns the new profile
+/// data map, or null if nothing changed.
+Future<Map<String, dynamic>?> openAvatarChooser(
+  BuildContext context,
+  Map<String, dynamic>? current,
+) async {
+  Future<Map<String, dynamic>?> openPicker() {
+    return Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(builder: (_) => const ProfilePhotoPickerScreen()),
+    );
+  }
+
+  Uint8List? currentBytes;
+  if (current != null && current['type'] == 'photo') {
+    try {
+      currentBytes = base64Decode(current['value'] as String? ?? '');
+      if (currentBytes.isEmpty) currentBytes = null;
+    } catch (_) {
+      currentBytes = null;
+    }
+  }
+  if (currentBytes == null) return openPicker();
+
+  final choice = await showModalBottomSheet<String>(
+    context: context,
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.crop_rounded),
+            title: Text('Adjust current photo',
+                style: GoogleFonts.nunitoSans(fontWeight: FontWeight.w700)),
+            onTap: () => Navigator.pop(ctx, 'adjust'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_rounded),
+            title: Text('Choose a new photo',
+                style: GoogleFonts.nunitoSans(fontWeight: FontWeight.w700)),
+            onTap: () => Navigator.pop(ctx, 'new'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (choice == null || !context.mounted) return null;
+  if (choice == 'new') return openPicker();
+
+  final Uint8List? cropped = await Navigator.push<Uint8List>(
+    context,
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => AvatarCropScreen(imageBytes: currentBytes!),
+    ),
+  );
+  if (cropped == null) return null;
+  final data = <String, String>{'type': 'photo', 'value': base64Encode(cropped)};
+  await persistProfilePhoto(data);
+  return Map<String, dynamic>.from(data);
+}
+
 class ProfilePhotoPickerScreen extends StatefulWidget {
   const ProfilePhotoPickerScreen({super.key});
 
@@ -147,53 +261,7 @@ class _ProfilePhotoPickerScreenState extends State<ProfilePhotoPickerScreen>
   }
 
   Future<void> _saveAndReturn(Map<String, String> data) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(kProfilePhotoKey, jsonEncode(data));
-    appProfilePhotoVersionNotifier.value++;
-    final pickerUserId = Supabase.instance.client.auth.currentUser?.id;
-    if (pickerUserId != null) {
-      await prefs.setString(kProfilePhotoOwnerKey, pickerUserId);
-    }
-
-    // Save to Supabase so photo survives sign-out and restores on sign-in
-    try {
-      final supabaseClient = Supabase.instance.client;
-      final currentUser = supabaseClient.auth.currentUser;
-      final userId = currentUser?.id;
-      if (userId != null) {
-        // Use upsert (not update) so this can never silently no-op if the
-        // profile row hasn't been created yet by the signup trigger or the
-        // onboarding upsert — that race left avatar_url permanently null
-        // for accounts that picked an avatar early in onboarding.
-        // email is a NOT NULL column, so it must be included whenever this
-        // might be the row's first insert.
-        //
-        // Confirmed via live Supabase logs (Aug 3, 2026) that an empty
-        // email here causes a hard NOT NULL failure on first insert -- not
-        // a hypothetical. Retry once after a short delay if it's empty
-        // instead of silently omitting the field and losing the whole
-        // upsert (and the avatar with it).
-        String userEmail = currentUser?.email ?? '';
-        if (userEmail.isEmpty) {
-          await Future.delayed(const Duration(milliseconds: 400));
-          userEmail = supabaseClient.auth.currentUser?.email ?? '';
-        }
-        if (userEmail.isEmpty) {
-          print('PROFILE_PHOTO_ERROR: no email available for user $userId after retry -- avatar upsert skipped to avoid NOT NULL violation. Avatar remains local-only until next successful sign-in sync.');
-        } else {
-          await supabaseClient.from('user_profiles').upsert({
-            'id': userId,
-            'email': userEmail,
-            'avatar_url': jsonEncode(data),
-          });
-          print('PROFILE_PHOTO: saved to Supabase for user $userId');
-        }
-      }
-    } catch (e, st) {
-      print('PROFILE_PHOTO_ERROR: Supabase save error = $e');
-      print('PROFILE_PHOTO_ERROR stack = $st');
-    }
-
+    await persistProfilePhoto(data);
     if (mounted) Navigator.pop(context, data);
   }
 

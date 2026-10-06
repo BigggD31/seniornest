@@ -50,9 +50,12 @@ class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
     }
 
     try {
+      // Oct 6 2026: only the active Nest's conversations.
+      final activeNestId = prefs.getString('nest_id') ?? '';
       final rows = await _supabase
           .from('private_messages')
           .select()
+          .eq('nest_id', activeNestId)
           .or('sender_id.eq.$myId,recipient_id.eq.$myId')
           .order('created_at', ascending: false);
 

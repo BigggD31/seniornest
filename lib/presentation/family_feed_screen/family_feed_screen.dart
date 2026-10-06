@@ -926,11 +926,58 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     }
   }
 
+  /// Runs a query so that a failure becomes a [_QueryFailed] value instead of
+  /// an unhandled error (queries are started early and awaited later).
+  Future<Object?> _safeQuery(Future<dynamic> f) => f
+      .then<Object?>((v) => v as Object?)
+      .catchError((Object _) => const _QueryFailed());
+
   Future<void> _loadData() async {
     // Fetch and save nest_id from Supabase if not already saved
     await _ensureNestId();
     // TODO: Replace with Supabase realtime subscription for production
     final prefs = await SharedPreferences.getInstance();
+    // Oct 6 2026: after sign-in every cache is empty, and these independent
+    // queries used to run one after another (~6-8 round trips in a row, 4-6 s
+    // before Home appeared). Start them all NOW so they overlap; each is
+    // awaited where it was originally used, so behaviour is unchanged.
+    final earlyNestId = prefs.getString('nest_id') ?? '';
+    final earlyUserId = Supabase.instance.client.auth.currentUser?.id;
+    final earlyCacheMatches =
+        (prefs.getString('cached_real_messages_nest_id') ?? '') == earlyNestId &&
+            (prefs.getString('cached_real_messages') ?? '').isNotEmpty;
+    // The real feed fetch also starts immediately (it was previously started
+    // only after the nest-name and celebrations queries finished).
+    final loadFeedFuture = _loadFeedFromSupabase();
+    final Future<Object?>? nestRowFuture = earlyNestId.isEmpty
+        ? null
+        : _safeQuery(Supabase.instance.client
+            .from('nests')
+            .select('name, is_archived')
+            .eq('id', earlyNestId)
+            .maybeSingle());
+    final Future<Object?>? celebrationsFuture = earlyNestId.isEmpty
+        ? null
+        : _safeQuery(Supabase.instance.client
+            .from('nest_members')
+            .select(
+                'user_profiles(display_name, preferred_name, birthday, anniversary, avatar_url)')
+            .eq('nest_id', earlyNestId));
+    final Future<Object?>? existenceFuture =
+        (earlyNestId.isEmpty || earlyCacheMatches)
+            ? null
+            : _safeQuery(Supabase.instance.client
+                .from('feed_posts')
+                .select('id')
+                .eq('nest_id', earlyNestId)
+                .limit(1));
+    final Future<Object?>? ownerFuture = earlyUserId == null
+        ? null
+        : _safeQuery(Supabase.instance.client
+            .from('nests')
+            .select('id')
+            .eq('created_by', earlyUserId)
+            .maybeSingle());
     final role = prefs.getString('user_role') ?? 'senior';
     final firstName = prefs.getString('display_name') ?? '';
     final preferredNameVal = prefs.getString('preferred_name') ?? '';
@@ -946,12 +993,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // from the very first build -- no early setState needed here anymore.
     try {
       final nestIdForName = prefs.getString('nest_id') ?? '';
-      if (nestIdForName.isNotEmpty) {
-        final nestRow = await Supabase.instance.client
-            .from('nests')
-            .select('name, is_archived')
-            .eq('id', nestIdForName)
-            .maybeSingle();
+      if (nestIdForName.isNotEmpty && nestRowFuture != null) {
+        final nestRowResult = await nestRowFuture;
+        if (nestRowResult is _QueryFailed) {
+          throw Exception('nest row query failed');
+        }
+        final nestRow = nestRowResult as Map<String, dynamic>?;
         final remoteName = nestRow?['name'] as String?;
         if (remoteName != null && remoteName.isNotEmpty) {
           nestName = remoteName;
@@ -1041,15 +1088,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // they are dropped if the active Nest changed while the fetch was running.
     final celebrationsFetchedFor = prefs.getString('nest_id') ?? '';
     try {
-      final supabase = Supabase.instance.client;
       final celebrationsNestId = celebrationsFetchedFor;
       if (celebrationsNestId.isNotEmpty) {
-        final memberRows = await supabase
-            .from('nest_members')
-            .select(
-                'user_profiles(display_name, preferred_name, birthday, anniversary, avatar_url)')
-            .eq('nest_id', celebrationsNestId);
-        for (final row in (memberRows as List<dynamic>)) {
+        final memberRowsResult =
+            celebrationsFuture == null ? null : await celebrationsFuture;
+        if (memberRowsResult is _QueryFailed) {
+          throw Exception('celebrations query failed');
+        }
+        final memberRows = (memberRowsResult as List<dynamic>?) ?? <dynamic>[];
+        for (final row in memberRows) {
           final memberProfile = row['user_profiles'] as Map<String, dynamic>?;
           if (memberProfile == null) continue;
           final memberPreferred = memberProfile['preferred_name'] as String? ?? '';
@@ -1093,7 +1140,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // becomes whichever of the two is slower, not both added together.
     // Nothing else changes: this Future gets consumed at its original
     // call site further down, not invoked a second time.
-    final loadFeedFuture = _loadFeedFromSupabase();
     // Prefer real cached messages over generic demo placeholders — avoids
     // showing mismatched content that then flashes/swaps once the network loads.
     final _currentNestIdForCache = prefs.getString('nest_id') ?? '';
@@ -1125,12 +1171,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       nestHasRealContent = true;
     } else if (_currentNestIdForCache.isNotEmpty) {
       try {
-        final existing = await Supabase.instance.client
-            .from('feed_posts')
-            .select('id')
-            .eq('nest_id', _currentNestIdForCache)
-            .limit(1);
-        nestHasRealContent = (existing as List).isNotEmpty;
+        final existingResult = existenceFuture != null
+            ? await existenceFuture
+            : await Supabase.instance.client
+                .from('feed_posts')
+                .select('id')
+                .eq('nest_id', _currentNestIdForCache)
+                .limit(1);
+        if (existingResult is _QueryFailed) {
+          throw Exception('existence query failed');
+        }
+        nestHasRealContent = (existingResult as List).isNotEmpty;
       } catch (_) {
         // Can't reach the server to check -- fall back to this device's
         // own history rather than risk showing sample content over a
@@ -1394,14 +1445,19 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // ever been written (that key is only ever set by setup_screen.dart)
     // -- so this needs a genuine live check here, not just "prefer the
     // cache," since there may be no cache yet to prefer.
+    // Oct 6 2026: the other three independent loads start here, before the
+    // owner check is awaited, so they overlap with it.
+    final checkinFuture = _loadCheckinStatus();
+    final membersFuture = _loadNestMembers();
+    final bookmarksFuture = _loadBookmarks();
     try {
       final currentAuthUserId = Supabase.instance.client.auth.currentUser?.id;
-      if (currentAuthUserId != null) {
-        final ownedNest = await Supabase.instance.client
-            .from('nests')
-            .select('id')
-            .eq('created_by', currentAuthUserId)
-            .maybeSingle();
+      if (currentAuthUserId != null && ownerFuture != null) {
+        final ownedResult = await ownerFuture;
+        if (ownedResult is _QueryFailed) {
+          throw Exception('owner query failed');
+        }
+        final ownedNest = ownedResult as Map<String, dynamic>?;
         final confirmedIsNestOwner = ownedNest != null;
         if (mounted) {
           setState(() => _isNestOwner = confirmedIsNestOwner);
@@ -1439,9 +1495,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // row (loaded last) visibly pop in after everything else.
     await Future.wait([
       loadFeedFuture,
-      _loadCheckinStatus(),
-      _loadNestMembers(),
-      _loadBookmarks(),
+      checkinFuture,
+      membersFuture,
+      bookmarksFuture,
     ]);
   }
 
@@ -3409,3 +3465,8 @@ class _HomeListEntry {
   final String? groupKey;
 }
 
+
+/// Marker returned by _safeQuery when a query threw.
+class _QueryFailed {
+  const _QueryFailed();
+}

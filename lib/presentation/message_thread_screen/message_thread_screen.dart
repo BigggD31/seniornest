@@ -112,9 +112,11 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
 
   Future<void> _loadMessages() async {
     if (_myUserId == null) return;
+    // Oct 6 2026: a conversation belongs to one Nest only.
     final rows = await _supabase
         .from('private_messages')
         .select()
+        .eq('nest_id', _nestId ?? '')
         .or(
           'and(sender_id.eq.$_myUserId,recipient_id.eq.${widget.recipientId}),'
           'and(sender_id.eq.${widget.recipientId},recipient_id.eq.$_myUserId)',
