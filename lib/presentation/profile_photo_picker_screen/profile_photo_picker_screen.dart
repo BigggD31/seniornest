@@ -600,6 +600,28 @@ class ProfileAvatarWidget extends StatelessWidget {
     }
   }
 
+  // Oct 6 2026: avatars blinked on every rebuild (e.g. tapping bookmark)
+  // because base64Decode produced a brand-new byte list each time, so Flutter
+  // saw a "different" image and reloaded it. Reusing the same bytes for the
+  // same photo text lets Flutter keep the already-decoded picture. Keyed on
+  // the photo content itself, so a changed avatar still updates immediately.
+  static final Map<String, Uint8List> _photoBytesCache = {};
+
+  static Uint8List? _decodePhotoCached(String value) {
+    final hit = _photoBytesCache[value];
+    if (hit != null) return hit;
+    try {
+      final bytes = base64Decode(value);
+      if (_photoBytesCache.length >= 64) {
+        _photoBytesCache.remove(_photoBytesCache.keys.first);
+      }
+      _photoBytesCache[value] = bytes;
+      return bytes;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final resolved = profileData ?? _safeDecode(avatarUrl);
@@ -618,10 +640,7 @@ class ProfileAvatarWidget extends StatelessWidget {
         ),
       );
     } else if (type == 'photo' && value != null && value.isNotEmpty) {
-      Uint8List? bytes;
-      try {
-        bytes = base64Decode(value);
-      } catch (_) {}
+      final Uint8List? bytes = _decodePhotoCached(value);
       inner = bytes != null
           ? ClipOval(
               child: Image.memory(
@@ -629,6 +648,9 @@ class ProfileAvatarWidget extends StatelessWidget {
                 width: size,
                 height: size,
                 fit: BoxFit.cover,
+                // Oct 6 2026: keep showing the old frame while a new one
+                // decodes, so a rebuild can never flash an empty avatar.
+                gaplessPlayback: true,
               ),
             )
           : _buildInitials();
