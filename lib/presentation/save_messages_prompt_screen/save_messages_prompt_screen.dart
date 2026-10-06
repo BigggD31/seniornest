@@ -159,8 +159,13 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     await prefs.setBool('first_load', true);
     await prefs.setBool('has_onboarded', true);
 
-    // Small delay to ensure Supabase auth session is fully established
-    await Future.delayed(const Duration(milliseconds: 500));
+    // Small delay to ensure Supabase auth session is fully established.
+    // Oct 6 2026: only wait if the session genuinely is not there yet --
+    // after a normal sign-in it already is, and the fixed pause was just
+    // 0.5 s added to every sign-in.
+    if (Supabase.instance.client.auth.currentSession == null) {
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
 
     // Always update profile first regardless of whether nest exists
     final supabaseClient = Supabase.instance.client;
@@ -198,12 +203,10 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             ? prefs.getString(draftPreferredNameKey)!
             : (prefs.getString('preferred_name') ?? '');
         print('ROLE_DEBUG: (top of _navigateToHome) prefs.getString(user_role) = ${prefs.getString('user_role')}, checkUserId=$checkUserId');
-        try {
-          await supabaseClient.from('temp_debug_logs').insert({
-            'tag': 'ROLE_DEBUG_TOP',
-            'message': 'user_role=${prefs.getString('user_role')} checkUserId=$checkUserId',
-          });
-        } catch (_) {}
+        // Oct 6 2026: removed the awaited 'ROLE_DEBUG_TOP' insert into
+        // temp_debug_logs that used to sit here. It was leftover debugging,
+        // did nothing for the user, and made every sign-in wait one extra
+        // database round trip (8.6 s in the slowest logged run).
         String relationshipType = prefs.getString('relationship') ?? '';
         // Aug 25 2026: build-204 root cause fix. These three flags control
         // whether name/preferredName/role are allowed into the updateData
