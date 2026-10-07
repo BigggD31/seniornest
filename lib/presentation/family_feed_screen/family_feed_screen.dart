@@ -487,7 +487,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // Home, so a message received mid-session behaves the same way.
     _scheduleHomeSeenClear();
     ActivityBadgeService.homeCount.addListener(_onHomeCountChanged);
+    // Oct 7 2026: load the Nest list quietly, a few seconds after Home is
+    // up (not during the sign-in burst), so tapping the Nest name opens
+    // the switcher instantly instead of waiting on a server round trip.
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted) _myNestsFuture ??= _fetchMyNests();
+    });
   }
+
+  Future<List<Map<String, dynamic>>>? _myNestsFuture;
 
   Timer? _homeSeenDelayTimer;
 
@@ -3145,7 +3153,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     List<Map<String, dynamic>> myNests;
     SharedPreferences prefs;
     try {
-      myNests = await _fetchMyNests();
+      // Use the list loaded in the background if there is one (instant);
+      // otherwise fetch now. Either way, start a fresh fetch for the next
+      // open so the list never goes stale for long.
+      final pending = _myNestsFuture ?? _fetchMyNests();
+      _myNestsFuture = _fetchMyNests();
+      myNests = await pending;
       prefs = await SharedPreferences.getInstance();
     } finally {
       // Released as soon as the list is ready; the dialog itself is

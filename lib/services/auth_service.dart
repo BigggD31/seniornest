@@ -471,6 +471,13 @@ class AuthService {
     appHasSentMessagesNotifier.value = false;
     appHasRealPostNotifier.value = false;
     appHasSentStoriesNotifier.value = false;
+    // Oct 7 2026: the avatar row and "From Your Family" posts are seeded
+    // from these two in-memory lists. Their saved copies were wiped above,
+    // but the in-memory copies were not -- so a brand-new or switched-to
+    // Nest painted the PREVIOUS Nest's members and posts until the app
+    // was closed and reopened.
+    appNestMembersNotifier.value = [];
+    appCachedMessagesNotifier.value = [];
   }
 
   /// Detects a genuine account switch on this device and wipes every
