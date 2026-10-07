@@ -303,7 +303,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               }
             ]
           : <Map<String, dynamic>>[]);
-  bool _inviteCodeShared = appInviteCodeSharedNotifier.value; // tracks if family owner has shared invite code
   bool _isGuest = appIsGuestNotifier.value;
   bool _isNestOwner = appIsNestOwnerNotifier.value;
   // Author IDs of anyone removed from this nest -- used only to gate the
@@ -971,11 +970,18 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 .select('id')
                 .eq('nest_id', earlyNestId)
                 .limit(1));
-    final Future<Object?>? ownerFuture = earlyUserId == null
+    // Oct 6 2026: "am I the owner" must be about the Nest being VIEWED, not
+    // any Nest this person happens to own. It used to ask only
+    // created_by = me, so someone who owns their own Nest was treated as an
+    // owner while a plain Member of another one (owner-only buttons and the
+    // invite reminder showed for them). Same test Setup already uses. With no
+    // known active Nest the check is skipped and the existing value is kept.
+    final Future<Object?>? ownerFuture = (earlyUserId == null || earlyNestId.isEmpty)
         ? null
         : _safeQuery(Supabase.instance.client
             .from('nests')
             .select('id')
+            .eq('id', earlyNestId)
             .eq('created_by', earlyUserId)
             .maybeSingle());
     final role = prefs.getString('user_role') ?? 'senior';
@@ -1299,7 +1305,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       // real content, purely because THIS device had never personally
       // posted before.
       _hasRealPost = nestHasRealContent;
-      _inviteCodeShared = inviteCodeShared;
       _isGuest = isGuest;
       // Aug 19 2026: this used to be reset to !joinedViaInvite here, right
       // after being correctly initialized from appIsNestOwnerNotifier.value
@@ -2715,11 +2720,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                   ),
                   const SizedBox(height: 14),
                 ],
-                // Invite reminder (family nest owner only, if code not yet shared)
-                if (!_isSenior && _isNestOwner && !_inviteCodeShared) ...[
-                  _buildInviteReminderBanner(),
-                  const SizedBox(height: 14),
-                ],
+                // Oct 6 2026: the "Share your invite code" reminder was removed
+                // from Home on purpose -- the invite code lives only in
+                // Setup, for the Nest Owner.
                 // Celebrations card (all users, only if events within 30 days)
                 // Oct 5 2026: placeholders last until a Nest has real content --
                 // a brand-new Nest shows no real Birthdays & Anniversaries
@@ -2907,58 +2910,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildInviteReminderBanner() {
-    return GestureDetector(
-      onTap: () {
-        appActiveTabNotifier.value = 5;
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFD4AA5E).withAlpha(20),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: const Color(0xFFD4AA5E).withAlpha(60),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.vpn_key_rounded,
-              color: Color(0xFFD4AA5E),
-              size: 16,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Share your invite code so family can join the nest',
-                style: GoogleFonts.nunitoSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: _isDarkMode
-                      ? const Color(0xFFB8A888)
-                      : const Color(0xFF6B5E4E),
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Share →',
-              style: GoogleFonts.nunitoSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFFD4AA5E),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
