@@ -1,18 +1,14 @@
-// DRAFT -- NOT DEPLOYED. Needs: verify_jwt = false (Apple sends no Supabase
-// token), and these secrets set in Supabase:
-//   APPLE_BUNDLE_ID        e.g. com.devonmurphy.seniornest
-//   APPLE_APP_ID           numeric Apple ID from App Store Connect > App Information
-//   APPLE_ROOT_CA_G3_B64   base64 of AppleRootCA-G3.cer (from apple.com/certificateauthority)
+// Apple App Store Server Notifications V2 webhook. verify_jwt = false (Apple sends no Supabase token).
+// Secrets required: APPLE_BUNDLE_ID, APPLE_APP_ID, APPLE_ROOT_CA_G3_B64.
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided automatically.
 //
-// Receives App Store Server Notifications V2. Every payload is a signed JWS;
-// it is only trusted after its certificate chain verifies up to Apple's root.
-// Unverified requests are rejected and change nothing.
+// Every payload is a signed JWS; it is only trusted after its certificate
+// chain verifies up to the pinned Apple Root CA G3 (see verify.ts). Oct 7 2026:
+// replaced @apple/app-store-server-library, which fails on Supabase's Deno
+// runtime (crypto.X509Certificate.toString is not implemented there).
+import { Buffer } from "node:buffer";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import {
-  Environment,
-  SignedDataVerifier,
-} from "npm:@apple/app-store-server-library@1";
+import { verifyAppleJws } from "./verify.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -21,18 +17,9 @@ const supabase = createClient(
 
 const bundleId = Deno.env.get("APPLE_BUNDLE_ID")!;
 const appAppleId = Number(Deno.env.get("APPLE_APP_ID"));
-const rootCa = Buffer.from(Deno.env.get("APPLE_ROOT_CA_G3_B64")!, "base64");
-
-function verifierFor(env: Environment) {
-  // Sandbox (TestFlight) notifications have no appAppleId requirement.
-  return new SignedDataVerifier(
-    [rootCa],
-    true,
-    env,
-    bundleId,
-    env === Environment.PRODUCTION ? appAppleId : undefined,
-  );
-}
+const rootCa = new Uint8Array(
+  Buffer.from(Deno.env.get("APPLE_ROOT_CA_G3_B64")!, "base64"),
+);
 
 // Notification types that mean "access ends now / is gone".
 const ENDED = new Set(["EXPIRED", "GRACE_PERIOD_EXPIRED", "REVOKE", "REFUND"]);
@@ -43,22 +30,21 @@ Deno.serve(async (req) => {
     const { signedPayload } = await req.json();
     if (!signedPayload) return new Response("bad request", { status: 400 });
 
-    // Try Production first, then Sandbox (TestFlight sends Sandbox).
-    let note;
-    let env = Environment.PRODUCTION;
-    try {
-      note = await verifierFor(Environment.PRODUCTION)
-        .verifyAndDecodeNotification(signedPayload);
-    } catch (_) {
-      env = Environment.SANDBOX;
-      note = await verifierFor(Environment.SANDBOX)
-        .verifyAndDecodeNotification(signedPayload);
+    const note = await verifyAppleJws(signedPayload, rootCa);
+
+    const data = note.data;
+    if (!data) return new Response("ok", { status: 200 }); // nothing to apply
+    if (data.bundleId !== bundleId) throw new Error("wrong bundle id");
+    const env = String(data.environment); // "Sandbox" | "Production"
+    if (env === "Production" && Number(data.appAppleId) !== appAppleId) {
+      throw new Error("wrong app id");
     }
 
-    const signedTx = note.data?.signedTransactionInfo;
+    const signedTx = data.signedTransactionInfo;
     if (!signedTx) return new Response("ok", { status: 200 }); // e.g. TEST ping
 
-    const tx = await verifierFor(env).verifyAndDecodeTransaction(signedTx);
+    const tx = await verifyAppleJws(signedTx, rootCa);
+    if (tx.bundleId !== bundleId) throw new Error("wrong bundle id (tx)");
     const originalId = tx.originalTransactionId;
     if (!originalId) return new Response("ok", { status: 200 });
 
@@ -84,19 +70,22 @@ Deno.serve(async (req) => {
       return new Response("ok", { status: 200 });
     }
 
-    await supabase.from("apple_subscription_state").upsert({
-      original_transaction_id: originalId,
-      product_id: tx.productId,
-      expires_at: expiresAt,
-      status,
-      environment: env,
-      last_notification_type: type,
-      last_notification_uuid: note.notificationUUID,
-      updated_at: new Date().toISOString(),
-    });
+    const { error: upsertError } = await supabase
+      .from("apple_subscription_state")
+      .upsert({
+        original_transaction_id: originalId,
+        product_id: tx.productId,
+        expires_at: expiresAt,
+        status,
+        environment: env,
+        last_notification_type: type,
+        last_notification_uuid: note.notificationUUID,
+        updated_at: new Date().toISOString(),
+      });
+    if (upsertError) throw upsertError;
 
     // Apply to the app's own subscription rows (never touches lifetime/VIP).
-    await supabase
+    const { error: updateError } = await supabase
       .from("subscriptions")
       .update({
         original_transaction_id: originalId,
@@ -106,7 +95,9 @@ Deno.serve(async (req) => {
       })
       .neq("status", "lifetime")
       .or(`original_transaction_id.eq.${originalId},transaction_id.eq.${originalId}`);
+    if (updateError) throw updateError;
 
+    console.log(`apple-subscription-webhook ok: ${type} ${env} ${tx.productId} -> ${status}`);
     return new Response("ok", { status: 200 });
   } catch (e) {
     console.error("apple-subscription-webhook error:", e);
