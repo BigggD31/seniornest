@@ -2526,9 +2526,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                   nestName: _nestName,
                   isDarkMode: _isDarkMode,
                   onNestTap: _showNestSwitcher,
-                  onNotificationTap: () {
-                    Navigator.pushNamed(context, AppRoutes.notificationsScreen);
-                  },
                   onProfileTap: () => appActiveTabNotifier.value = 5,
                 ),
                 // Content

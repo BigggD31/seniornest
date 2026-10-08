@@ -12,14 +12,12 @@ class FeedTopBarWidget extends StatefulWidget {
     required this.nestName,
     required this.isDarkMode,
     required this.onNestTap,
-    required this.onNotificationTap,
     required this.onProfileTap,
   });
 
   final String nestName;
   final bool isDarkMode;
   final VoidCallback onNestTap;
-  final VoidCallback onNotificationTap;
   final VoidCallback onProfileTap;
 
   @override
@@ -136,15 +134,10 @@ class _FeedTopBarWidgetState extends State<FeedTopBarWidget> {
               ),
             ),
           ),
+          // Oct 8 2026: the notification bell was removed before launch -- it
+          // opened a permanently empty screen and its badge was hard-coded
+          // to 0. New-activity badges live on the Home/Legacy tabs instead.
           const SizedBox(width: 12),
-          // Notification button
-          _TopBarIconButton(
-            icon: Icons.notifications_outlined,
-            isDarkMode: widget.isDarkMode,
-            onTap: widget.onNotificationTap,
-            badgeCount: 0, // TODO: wire to real notification count once notifications feature is built
-          ),
-          const SizedBox(width: 8),
           // Profile avatar — shows user's chosen photo/emoji or initials.
           // While _displayName is still loading (fresh state each time this
           // screen is rebuilt via bottom-nav pushReplacementNamed), show a
@@ -175,78 +168,6 @@ class _FeedTopBarWidgetState extends State<FeedTopBarWidget> {
                     borderWidth: 2,
                   ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TopBarIconButton extends StatelessWidget {
-  const _TopBarIconButton({
-    required this.icon,
-    required this.isDarkMode,
-    required this.onTap,
-    this.badgeCount = 0,
-  });
-
-  final IconData icon;
-  final bool isDarkMode;
-  final VoidCallback onTap;
-  final int badgeCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isDarkMode
-                  ? const Color(0xFF242018)
-                  : const Color(0xFFF5F0E8),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isDarkMode
-                    ? const Color(0xFF3D3428)
-                    : const Color(0xFFE8E0D0),
-                width: 1.5,
-              ),
-            ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: isDarkMode
-                  ? const Color(0xFFB8A888)
-                  : const Color(0xFF6B5E4E),
-            ),
-          ),
-          if (badgeCount > 0)
-            Positioned(
-              top: -2,
-              right: -2,
-              child: Container(
-                width: 18,
-                height: 18,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFD4AA00),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    '$badgeCount',
-                    style: GoogleFonts.nunitoSans(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );

@@ -35,7 +35,7 @@ class AuthService {
         // Web: use Supabase OAuth redirect
         await _client.auth.signInWithOAuth(
           OAuthProvider.google,
-          redirectTo: 'https://seniornest6932.builtwithrocket.new',
+          redirectTo: 'https://seniornest.app',
         );
         // OAuth redirect — result handled by auth state listener
         return AuthResult.success(null);
@@ -91,7 +91,7 @@ class AuthService {
       if (kIsWeb) {
         await _client.auth.signInWithOAuth(
           OAuthProvider.apple,
-          redirectTo: 'https://seniornest6932.builtwithrocket.new',
+          redirectTo: 'https://seniornest.app',
         );
         return AuthResult.success(null);
       }
