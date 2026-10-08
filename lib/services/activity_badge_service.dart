@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/app_state.dart';
 
 /// Sep 16 2026: "Show What's New" feature -- badge counts on the Home and
 /// Legacy bottom-nav tabs for content that's landed since this person last
@@ -33,6 +35,8 @@ class ActivityBadgeService {
   static DateTime? _legacyLastSeen;
   static String? _nestId;
   static bool _initialized = false;
+  static Timer? _periodicRefresh;
+  static VoidCallback? _tabListener;
 
   /// Call once per signed-in session -- same two call sites as
   /// PushService.registerDeviceToken() (main.dart cold start,
@@ -74,6 +78,15 @@ class ActivityBadgeService {
       _initialized = true;
       await _refreshCounts();
       _subscribeRealtime();
+      // Oct 8 2026: tabs are never rebuilt (they live in one IndexedStack), so
+      // counts must be re-checked on every tab switch and once a minute --
+      // private messages have no live feed to trigger a refresh on their own.
+      _tabListener ??= () => _refreshCounts();
+      appActiveTabNotifier.removeListener(_tabListener!);
+      appActiveTabNotifier.addListener(_tabListener!);
+      _periodicRefresh?.cancel();
+      _periodicRefresh =
+          Timer.periodic(const Duration(seconds: 60), (_) => _refreshCounts());
     } catch (e) {
       debugPrint('ACTIVITY_BADGE_SERVICE init error: $e');
     }
@@ -245,6 +258,11 @@ class ActivityBadgeService {
   static void reset() {
     _channel?.unsubscribe();
     _channel = null;
+    _periodicRefresh?.cancel();
+    _periodicRefresh = null;
+    if (_tabListener != null) {
+      appActiveTabNotifier.removeListener(_tabListener!);
+    }
     _initialized = false;
     _homeLastSeen = null;
     _legacyLastSeen = null;

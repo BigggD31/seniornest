@@ -10,6 +10,7 @@ import '../../widgets/linkified_text.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../widgets/keyboard_done_bar.dart';
 import '../../core/app_state.dart';
+import '../../services/push_service.dart';
 
 /// Private 1:1 conversation between the current user and [recipientId].
 /// Reads/writes public.private_messages (RLS: sender/recipient only).
@@ -189,6 +190,8 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         'message_type': 'text',
         'content': text,
       });
+      PushService.notifyPrivateMessage(
+          recipientId: widget.recipientId, senderId: _myUserId!, text: text);
       await _loadMessages();
     } catch (e) {
       if (mounted) {

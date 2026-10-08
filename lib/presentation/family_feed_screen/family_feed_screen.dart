@@ -487,6 +487,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // Home, so a message received mid-session behaves the same way.
     _scheduleHomeSeenClear();
     ActivityBadgeService.homeCount.addListener(_onHomeCountChanged);
+    appActiveTabNotifier.addListener(_onActiveTabChangedForBadge);
     // Oct 7 2026: load the Nest list quietly, a few seconds after Home is
     // up (not during the sign-in burst), so tapping the Nest name opens
     // the switcher instantly instead of waiting on a server round trip.
@@ -499,11 +500,25 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
   Timer? _homeSeenDelayTimer;
 
+  // Oct 8 2026: tabs live in MainTabShell's IndexedStack, so this screen stays
+  // alive while another tab is showing. The number must stay put until the
+  // person is actually looking at Home, then clear after the delay below.
+  void _onActiveTabChangedForBadge() {
+    if (appActiveTabNotifier.value == 0 &&
+        ActivityBadgeService.homeCount.value > 0) {
+      _scheduleHomeSeenClear();
+    } else {
+      _homeSeenDelayTimer?.cancel();
+    }
+  }
+
   void _scheduleHomeSeenClear() {
     _homeSeenDelayTimer?.cancel();
+    if (appActiveTabNotifier.value != 0) return;
     // Oct 8 2026: 3s -> 15s. On a fresh sign-in the feed can take 6-8s to
     // appear, so 3s meant the number was gone before anyone could see it.
     _homeSeenDelayTimer = Timer(const Duration(seconds: 15), () {
+      if (appActiveTabNotifier.value != 0) return;
       ActivityBadgeService.markHomeSeen();
     });
   }
@@ -2501,6 +2516,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     bookmarkEventNotifier.removeListener(_onBookmarkEventChanged);
     _homeSeenDelayTimer?.cancel();
     ActivityBadgeService.homeCount.removeListener(_onHomeCountChanged);
+    appActiveTabNotifier.removeListener(_onActiveTabChangedForBadge);
     _realtimeRefreshDebounce?.cancel();
     _feedChannel?.unsubscribe();
     _listEntranceController.dispose();

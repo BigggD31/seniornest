@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../widgets/app_navigation.dart';
 import '../../services/activity_badge_service.dart';
+import '../../services/push_service.dart';
 import '../../widgets/linkified_text.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
 import '../../widgets/save_audio_button.dart';
@@ -245,6 +246,7 @@ class _LegacyScreenState extends State<LegacyScreen>
     // already on this tab.
     _scheduleLegacySeenClear();
     ActivityBadgeService.legacyCount.addListener(_onLegacyCountChanged);
+    appActiveTabNotifier.addListener(_onActiveTabChangedForBadge);
     // Sep 28 2026: see bookmarkEventNotifier's comment in app_state.dart --
     // keeps this screen's bookmark icons in sync with the Favs tab without
     // needing a manual reload.
@@ -263,10 +265,23 @@ class _LegacyScreenState extends State<LegacyScreen>
 
   Timer? _legacySeenDelayTimer;
 
+  // Oct 8 2026: same rule as Home -- the number stays until Legacy (tab 2)
+  // is actually the visible tab, then clears after the delay.
+  void _onActiveTabChangedForBadge() {
+    if (appActiveTabNotifier.value == 2 &&
+        ActivityBadgeService.legacyCount.value > 0) {
+      _scheduleLegacySeenClear();
+    } else {
+      _legacySeenDelayTimer?.cancel();
+    }
+  }
+
   void _scheduleLegacySeenClear() {
     _legacySeenDelayTimer?.cancel();
+    if (appActiveTabNotifier.value != 2) return;
     // Oct 8 2026: 3s -> 15s, same reason as Home.
     _legacySeenDelayTimer = Timer(const Duration(seconds: 15), () {
+      if (appActiveTabNotifier.value != 2) return;
       ActivityBadgeService.markLegacySeen();
     });
   }
@@ -712,6 +727,7 @@ class _LegacyScreenState extends State<LegacyScreen>
   void dispose() {
     _legacySeenDelayTimer?.cancel();
     ActivityBadgeService.legacyCount.removeListener(_onLegacyCountChanged);
+    appActiveTabNotifier.removeListener(_onActiveTabChangedForBadge);
     bookmarkEventNotifier.removeListener(_onBookmarkEventChanged);
     _entranceController.dispose();
     appProfilePhotoVersionNotifier.removeListener(_reloadProfilePhoto);
@@ -2542,6 +2558,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
         });
         await prefs.setBool('has_sent_stories', true);
         appHasSentStoriesNotifier.value = true;
+        PushService.notifyLegacyPosted(nestId: nestId, senderId: userId, storyTitle: title);
         print('LEGACY: story saved successfully');
       }
     } catch (e) {
@@ -3459,6 +3476,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
         });
         await prefs.setBool('has_sent_stories', true);
         appHasSentStoriesNotifier.value = true;
+        PushService.notifyLegacyPosted(nestId: nestId, senderId: userId, storyTitle: title);
       }
     } catch (e) {
       print('LEGACY AUDIO SEND ERROR: $e');
@@ -4074,6 +4092,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
         });
         await prefs.setBool('has_sent_stories', true);
         appHasSentStoriesNotifier.value = true;
+        PushService.notifyLegacyPosted(nestId: nestId, senderId: userId, storyTitle: title);
       }
     } catch (e) {
       print('LEGACY VIDEO SEND ERROR: $e');

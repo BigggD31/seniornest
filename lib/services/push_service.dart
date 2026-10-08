@@ -163,6 +163,74 @@ class PushService {
     }
   }
 
+  static Future<String> _nameFor(String userId) async {
+    try {
+      final row = await Supabase.instance.client
+          .from('user_profiles')
+          .select('preferred_name, display_name')
+          .eq('id', userId)
+          .maybeSingle();
+      final preferred = (row?['preferred_name'] as String?)?.trim() ?? '';
+      if (preferred.isNotEmpty) return preferred;
+      final display = (row?['display_name'] as String?)?.trim() ?? '';
+      if (display.isNotEmpty) return display;
+    } catch (_) {}
+    return 'Someone';
+  }
+
+  /// Oct 8 2026: push for a new private (direct) message. Fire-and-forget.
+  static Future<void> notifyPrivateMessage({
+    required String recipientId,
+    required String senderId,
+    required String text,
+  }) async {
+    try {
+      final name = await _nameFor(senderId);
+      final preview = text.length > 80 ? '${text.substring(0, 80)}...' : text;
+      await notify(
+        userIds: [recipientId],
+        title: 'New message from $name',
+        body: preview,
+        category: 'message',
+      );
+    } catch (e) {
+      debugPrint('PUSH_SERVICE notifyPrivateMessage error: $e');
+    }
+  }
+
+  /// Oct 8 2026: push to everyone else in the Nest when a Legacy story is
+  /// posted. Fire-and-forget.
+  static Future<void> notifyLegacyPosted({
+    required String nestId,
+    required String senderId,
+    required String storyTitle,
+  }) async {
+    if (nestId.isEmpty) return;
+    try {
+      final members = await Supabase.instance.client
+          .from('nest_members')
+          .select('user_id')
+          .eq('nest_id', nestId);
+      final ids = (members as List<dynamic>)
+          .map((m) => m['user_id'] as String?)
+          .whereType<String>()
+          .where((id) => id != senderId)
+          .toList();
+      if (ids.isEmpty) return;
+      final name = await _nameFor(senderId);
+      await notify(
+        userIds: ids,
+        title: '$name shared a new Legacy story',
+        body: storyTitle.length > 80
+            ? '${storyTitle.substring(0, 80)}...'
+            : storyTitle,
+        category: 'message',
+      );
+    } catch (e) {
+      debugPrint('PUSH_SERVICE notifyLegacyPosted error: $e');
+    }
+  }
+
   /// Sends a real push to every device belonging to the given users.
   /// Category matters: 'sos' always sends regardless of preference
   /// (same principle as the existing emergency SMS fallback -- a real
