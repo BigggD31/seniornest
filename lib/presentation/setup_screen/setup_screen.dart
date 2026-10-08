@@ -46,6 +46,7 @@ class _SetupScreenState extends State<SetupScreen>
   bool _medsReminders = true;
   bool _dailyCheckIn = true;
   bool _notifyMessages = true;
+  bool _notifyActivity = true;
   bool _notifyCheckIn = true;
   // Sep 16 2026: "Show What's New" badge toggle -- see activity_badge_service.dart.
   bool _showActivityBadges = true;
@@ -174,6 +175,7 @@ class _SetupScreenState extends State<SetupScreen>
       _medsReminders = prefs.getBool('meds_reminders') ?? true;
       _dailyCheckIn = prefs.getBool('daily_check_in') ?? true;
       _notifyMessages = prefs.getBool('notify_messages') ?? true;
+      _notifyActivity = prefs.getBool('notify_activity') ?? true;
       _notifyCheckIn = prefs.getBool('notify_check_in') ?? true;
       _showActivityBadges = prefs.getBool('show_activity_badges') ?? true;
       _textSize = prefs.getString('text_size') ?? defaultSize;
@@ -1115,6 +1117,9 @@ class _SetupScreenState extends State<SetupScreen>
         case 'notify_check_in':
           _notifyCheckIn = value;
           break;
+        case 'notify_activity':
+          _notifyActivity = value;
+          break;
       }
     });
     // Sep 3 2026: notify_messages/notify_check_in specifically also need
@@ -1135,7 +1140,9 @@ class _SetupScreenState extends State<SetupScreen>
     // meds_reminders_enabled) since user_profiles already used those
     // names for the two we're now joining.
     String? profileColumn;
-    if (key == 'notify_messages' || key == 'notify_check_in') {
+    if (key == 'notify_messages' ||
+        key == 'notify_check_in' ||
+        key == 'notify_activity') {
       profileColumn = key;
     } else if (key == 'meds_reminders') {
       profileColumn = 'meds_reminders_enabled';
@@ -2010,6 +2017,12 @@ class _SetupScreenState extends State<SetupScreen>
               label: 'New Messages',
               value: _notifyMessages,
               onChanged: (v) => _togglePref('notify_messages', v),
+            ),
+            _buildToggleRow(
+              icon: Icons.favorite_border_rounded,
+              label: 'Hearts & Replies',
+              value: _notifyActivity,
+              onChanged: (v) => _togglePref('notify_activity', v),
             ),
             _buildToggleRow(
               icon: Icons.favorite_rounded,

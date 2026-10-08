@@ -252,7 +252,7 @@ class PushService {
         userIds: [authorId],
         title: '$name replied to your post',
         body: text.length > 80 ? '${text.substring(0, 80)}...' : text,
-        category: 'message',
+        category: 'activity',
         data: {'type': 'home'},
       );
     } catch (e) {
@@ -287,7 +287,7 @@ class PushService {
         userIds: [authorId],
         title: '$name loved your ${isLegacy ? 'story' : 'post'}',
         body: 'Tap to see it in SeniorNest.',
-        category: 'message',
+        category: 'activity',
         data: {'type': isLegacy ? 'legacy' : 'home'},
       );
     } catch (e) {
