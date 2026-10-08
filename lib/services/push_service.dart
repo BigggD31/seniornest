@@ -280,7 +280,9 @@ class PushService {
               .select('author_id')
               .eq('id', targetId)
               .maybeSingle();
-      final authorId = (isLegacy ? row?['user_id'] : row?['author_id']) as String?;
+      final dynamic rawAuthor =
+          row == null ? null : row[isLegacy ? 'user_id' : 'author_id'];
+      final String? authorId = rawAuthor is String ? rawAuthor : null;
       if (authorId == null || authorId == hearterId) return;
       final name = await _nameFor(hearterId);
       await notify(
