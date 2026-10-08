@@ -265,7 +265,8 @@ class _LegacyScreenState extends State<LegacyScreen>
 
   void _scheduleLegacySeenClear() {
     _legacySeenDelayTimer?.cancel();
-    _legacySeenDelayTimer = Timer(const Duration(seconds: 3), () {
+    // Oct 8 2026: 3s -> 15s, same reason as Home.
+    _legacySeenDelayTimer = Timer(const Duration(seconds: 15), () {
       ActivityBadgeService.markLegacySeen();
     });
   }

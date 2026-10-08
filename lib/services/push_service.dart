@@ -110,8 +110,16 @@ class PushService {
   }
 
   static Future<void> _logPushDebug(String message) async {
-    // Debug table writes removed before launch; console only.
     debugPrint('PUSH_DEBUG: $message');
+    // Oct 8 2026: restored (push registration outcomes only) -- zero device
+    // tokens were registered on build 281 and without this there is no way
+    // to see why. Remove again once push is confirmed working.
+    try {
+      await Supabase.instance.client.from('temp_debug_logs').insert({
+        'tag': 'PUSH_DEBUG',
+        'message': message,
+      });
+    } catch (_) {}
   }
 
   static Future<void> _saveToken(String userId, String token) async {

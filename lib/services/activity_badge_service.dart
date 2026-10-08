@@ -23,6 +23,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class ActivityBadgeService {
   static final ValueNotifier<int> homeCount = ValueNotifier<int>(0);
   static final ValueNotifier<int> legacyCount = ValueNotifier<int>(0);
+  // Oct 8 2026: unread private (direct) messages across all conversations in
+  // the current Nest. Unlike Home/Legacy this is read-state based (read_at),
+  // so it stays until the messages are actually opened -- no timer.
+  static final ValueNotifier<int> shareCount = ValueNotifier<int>(0);
 
   static RealtimeChannel? _channel;
   static DateTime? _homeLastSeen;
@@ -98,6 +102,7 @@ class ActivityBadgeService {
     if (!value) {
       homeCount.value = 0;
       legacyCount.value = 0;
+      shareCount.value = 0;
     } else {
       await _refreshCounts();
     }
@@ -119,6 +124,7 @@ class ActivityBadgeService {
     if (!(await badgesEnabled())) {
       homeCount.value = 0;
       legacyCount.value = 0;
+      shareCount.value = 0;
       return;
     }
     final userId = Supabase.instance.client.auth.currentUser?.id;
@@ -128,6 +134,13 @@ class ActivityBadgeService {
     // non-nullable String, never a nullable field or an `as Object` cast).
     final nestId = _nestId!;
     try {
+      final unreadDms = await Supabase.instance.client
+          .from('private_messages')
+          .select('id')
+          .eq('nest_id', nestId)
+          .eq('recipient_id', userId)
+          .isFilter('read_at', null);
+      shareCount.value = (unreadDms as List).length;
       if (_homeLastSeen != null) {
         final rows = await Supabase.instance.client
             .from('feed_posts')
@@ -238,5 +251,6 @@ class ActivityBadgeService {
     _nestId = null;
     homeCount.value = 0;
     legacyCount.value = 0;
+    shareCount.value = 0;
   }
 }

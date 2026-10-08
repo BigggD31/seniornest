@@ -113,12 +113,14 @@ class _AppNavigationState extends State<AppNavigation>
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: List.generate(_items.length, (index) {
                 final isActive = index == widget.currentIndex;
-                // index 0 = Home, index 2 = Legacy -- see _NavItem list below.
+                // index 0 = Home, 1 = Share, 2 = Legacy -- see _NavItem list below.
                 final badgeCount = index == 0
                     ? widget.homeBadgeCount
-                    : index == 2
-                        ? widget.legacyBadgeCount
-                        : null;
+                    : index == 1
+                        ? ActivityBadgeService.shareCount
+                        : index == 2
+                            ? widget.legacyBadgeCount
+                            : null;
                 return _NavItemWidget(
                   item: _items[index],
                   isActive: isActive,

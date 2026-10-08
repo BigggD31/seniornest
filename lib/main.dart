@@ -19,6 +19,7 @@ import './services/push_service.dart';
 import './services/activity_badge_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import './widgets/custom_error_widget.dart';
 import './widgets/branded_transition_screen.dart';
 import './presentation/splash_screen/splash_screen.dart';
@@ -41,6 +42,12 @@ void main() async {
   // never be blocked by push setup being incomplete.
   try {
     await Firebase.initializeApp();
+    // Oct 8 2026: without this, iOS shows NO banner while the app is open.
+    await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
   } catch (e) {
     debugPrint('Failed to initialize Firebase: $e');
     // Sep 12 2026: this catch was completely silent -- if Firebase init

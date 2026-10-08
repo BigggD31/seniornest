@@ -501,7 +501,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
 
   void _scheduleHomeSeenClear() {
     _homeSeenDelayTimer?.cancel();
-    _homeSeenDelayTimer = Timer(const Duration(seconds: 3), () {
+    // Oct 8 2026: 3s -> 15s. On a fresh sign-in the feed can take 6-8s to
+    // appear, so 3s meant the number was gone before anyone could see it.
+    _homeSeenDelayTimer = Timer(const Duration(seconds: 15), () {
       ActivityBadgeService.markHomeSeen();
     });
   }
