@@ -11,6 +11,7 @@ import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../widgets/keyboard_done_bar.dart';
 import '../../core/app_state.dart';
 import '../../services/push_service.dart';
+import '../../services/activity_badge_service.dart';
 
 /// Private 1:1 conversation between the current user and [recipientId].
 /// Reads/writes public.private_messages (RLS: sender/recipient only).
@@ -165,8 +166,11 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     if (unreadIds.isEmpty) return;
     await _supabase
         .from('private_messages')
-        .update({'read_at': DateTime.now().toIso8601String()})
+        .update({'read_at': DateTime.now().toUtc().toIso8601String()})
         .inFilter('id', unreadIds);
+    // Oct 8 2026: the Share tab's number is a separate count -- refresh it
+    // right away so it drops the moment these messages are marked read.
+    ActivityBadgeService.refreshCounts();
   }
 
   void _scrollToBottom() {
