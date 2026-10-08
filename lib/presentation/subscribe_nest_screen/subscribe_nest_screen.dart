@@ -94,6 +94,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
             if (_processedPurchaseIds.contains(purchaseId)) continue;
             _processedPurchaseIds.add(purchaseId);
           }
+          _restoreInFlight = false;
           await _recordSubscription(purchase.productID, purchase.purchaseID,
               isRestore: purchase.status == PurchaseStatus.restored);
           if (_isAdditionalNest) {
@@ -122,6 +123,37 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   // True only between the person tapping the subscribe button and that
   // purchase finishing -- see the replay guard in the purchase listener.
   bool _userStartedPurchase = false;
+
+  // Oct 8 2026: "Restore Purchases" (Apple requires a restore path for
+  // auto-renewing subscriptions). Asks StoreKit to re-deliver what this
+  // Apple ID already owns; the existing purchase listener handles whatever
+  // comes back (isRestore: true, so it never alters an existing row). If
+  // nothing comes back within a few seconds, tell the person.
+  bool _restoreInFlight = false;
+  Future<void> _onRestorePurchases() async {
+    if (_isPurchasing || _restoreInFlight) return;
+    setState(() {
+      _isPurchasing = true;
+      _restoreInFlight = true;
+    });
+    try {
+      await _iap.restorePurchases();
+    } catch (e) {
+      debugPrint('RESTORE_PURCHASES_ERROR: $e');
+    }
+    await Future.delayed(const Duration(seconds: 6));
+    if (!mounted) return;
+    // If a restored purchase arrived, the listener already navigated away.
+    if (_restoreInFlight) {
+      setState(() {
+        _isPurchasing = false;
+        _restoreInFlight = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("We couldn't find an earlier purchase on this Apple ID."),
+      ));
+    }
+  }
 
   bool get _isAdditionalNest {
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
@@ -533,6 +565,16 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
             fontWeight: FontWeight.w400, color: Colors.white.withValues(alpha: 0.65)),
           textAlign: TextAlign.center),
         const SizedBox(height: 14),
+        if (!_isAdditionalNest) ...[
+          GestureDetector(
+            onTap: _onRestorePurchases,
+            child: Text('Restore Purchases',
+              style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.85),
+                decoration: TextDecoration.underline)),
+          ),
+          const SizedBox(height: 10),
+        ],
         _buildLegalLinks(),
       ],
     );
