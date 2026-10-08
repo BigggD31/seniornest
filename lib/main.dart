@@ -55,12 +55,6 @@ void main() async {
     // pattern in save_messages_prompt_screen.dart) so the next real
     // device test tells us definitively whether this is where it's
     // breaking, instead of guessing again.
-    try {
-      await Supabase.instance.client.from('temp_debug_logs').insert({
-        'tag': 'PUSH_DEBUG_FIREBASE_INIT',
-        'message': 'Firebase.initializeApp() threw: $e',
-      });
-    } catch (_) {}
   }
 
   // Load persisted text size before first frame

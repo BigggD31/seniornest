@@ -641,12 +641,6 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           // theorizing. Remove once confirmed.
           final rawUserRole = prefs.getString('user_role');
           print('ROLE_DEBUG: prefs.getString(user_role) = $rawUserRole (effectiveUserId=$effectiveUserId)');
-          try {
-            await supabase.from('temp_debug_logs').insert({
-              'tag': 'ROLE_DEBUG_NESTCREATE',
-              'message': 'rawUserRole=$rawUserRole effectiveUserId=$effectiveUserId',
-            });
-          } catch (_) {}
           final role = rawUserRole ?? 'senior';
           final userEmail = supabase.auth.currentUser?.email ?? '';
           final relationshipType = prefs.getString('relationship') ?? '';

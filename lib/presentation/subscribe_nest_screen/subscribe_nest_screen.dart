@@ -94,7 +94,8 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
             if (_processedPurchaseIds.contains(purchaseId)) continue;
             _processedPurchaseIds.add(purchaseId);
           }
-          await _recordSubscription(purchase.productID, purchase.purchaseID);
+          await _recordSubscription(purchase.productID, purchase.purchaseID,
+              isRestore: purchase.status == PurchaseStatus.restored);
           if (_isAdditionalNest) {
             _userStartedPurchase = false;
             await _createAdditionalNest();
@@ -211,21 +212,26 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   // retroactively once the nest is actually created. For someone creating
   // an *additional* nest from an existing account, the nest already exists
   // by the time they land here, so nestId will be passed in directly.
-  Future<void> _recordSubscription(String productId, String? transactionId, {String? nestId}) async {
+  Future<void> _recordSubscription(String productId, String? transactionId, {String? nestId, bool isRestore = false}) async {
     try {
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
       if (userId == null) return;
       final now = DateTime.now();
-      // Soft expiry estimate used between launches; re-verified against
-      // Apple via restorePurchases() each time the app opens (see main.dart).
-      // Lifetime/promo entitlements never expire.
+      // PROVISIONAL expiry only. The phone cannot know whether Apple started
+      // a 3-day trial or charged right away, so it never guesses a long
+      // window. A new purchase gets 3 days of access here; the real
+      // paid-through date is written by the server when Apple reports it
+      // (apple-subscription-webhook) and always wins. A later expiry already
+      // on the row is never shortened, and a "restored" event never extends
+      // anything. Lifetime/promo entitlements never expire.
       DateTime? expiresAt;
       String status = 'active';
-      if (productId == _yearlyProductId || productId == _additionalNestYearlyProductId) {
-        expiresAt = now.add(const Duration(days: 365));
-      } else if (productId == _monthlyProductId || productId == _additionalNestMonthlyProductId) {
-        expiresAt = now.add(const Duration(days: 30));
+      if (productId == _yearlyProductId ||
+          productId == _additionalNestYearlyProductId ||
+          productId == _monthlyProductId ||
+          productId == _additionalNestMonthlyProductId) {
+        expiresAt = now.add(const Duration(days: 3));
       } else {
         // promo / lifetime-style entitlement
         expiresAt = null;
@@ -246,14 +252,27 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
       // upsert wouldn't reliably catch a retry/double-tap when nestId is null
       // (the first-time-signup case). Mirrors the same pattern used in the
       // redeem_vip_code() DB function for the same reason.
-      var query = supabase.from('subscriptions').select('id').eq('user_id', userId);
+      var query = supabase.from('subscriptions').select('id, expires_at, status').eq('user_id', userId);
       query = nestId == null ? query.isFilter('nest_id', null) : query.eq('nest_id', nestId);
       final existing = await query.maybeSingle();
       if (existing != null) {
+        // A restored purchase must never touch an existing row: the server
+        // already holds Apple's real dates.
+        if (isRestore) return;
+        if (existing['status'] == 'lifetime') return;
+        final existingExpiry = DateTime.tryParse('${existing['expires_at'] ?? ''}');
+        if (existingExpiry != null && expiresAt != null && existingExpiry.isAfter(expiresAt)) {
+          row.remove('expires_at');
+        }
         await supabase.from('subscriptions').update(row).eq('id', existing['id'] as String);
       } else {
         await supabase.from('subscriptions').insert(row);
       }
+      // Pull in Apple's verified dates if Apple's notification already
+      // reached the server. Harmless no-op otherwise.
+      try {
+        await supabase.rpc('reconcile_my_subscription');
+      } catch (_) {}
     } catch (e) {
       debugPrint('SUBSCRIPTION_RECORD_ERROR: $e');
     }
@@ -553,7 +572,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           _buildToggleOption(label: 'Monthly', isSelected: !_isYearly,
             onTap: () => setState(() => _isYearly = false)),
           _buildToggleOption(label: 'Yearly', isSelected: _isYearly,
-            onTap: () => setState(() => _isYearly = true), badge: 'Save 15%'),
+            onTap: () => setState(() => _isYearly = true), badge: 'Save 17%'),
         ]),
       ),
       const SizedBox(height: 12),

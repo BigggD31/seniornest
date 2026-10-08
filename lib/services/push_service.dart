@@ -110,12 +110,8 @@ class PushService {
   }
 
   static Future<void> _logPushDebug(String message) async {
-    try {
-      await Supabase.instance.client.from('temp_debug_logs').insert({
-        'tag': 'PUSH_DEBUG',
-        'message': message,
-      });
-    } catch (_) {}
+    // Debug table writes removed before launch; console only.
+    debugPrint('PUSH_DEBUG: $message');
   }
 
   static Future<void> _saveToken(String userId, String token) async {
