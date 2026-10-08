@@ -138,14 +138,17 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         .from('private_messages')
         .stream(primaryKey: ['id'])
         .eq('nest_id', _nestId ?? '')
-        .order('created_at')
+        // Oct 8 2026: stream().order() defaults to DESCENDING, which flipped the
+        // thread newest-first the moment the live feed first reported in.
+        .order('created_at', ascending: true)
         .listen((rows) {
           final relevant = rows.where((r) {
             final s = r['sender_id'];
             final rcv = r['recipient_id'];
             return (s == _myUserId && rcv == widget.recipientId) ||
                 (s == widget.recipientId && rcv == _myUserId);
-          }).toList();
+          }).toList()
+            ..sort((a, b) => '${a['created_at']}'.compareTo('${b['created_at']}'));
           if (!mounted) return;
           setState(() => _messages = relevant);
           _markIncomingAsRead();
