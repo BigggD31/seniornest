@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_state.dart';
@@ -37,6 +38,16 @@ class ActivityBadgeService {
   static bool _initialized = false;
   static Timer? _periodicRefresh;
   static VoidCallback? _tabListener;
+  static VoidCallback? _iconListener;
+  static const MethodChannel _badgeChannel = MethodChannel('seniornest/badge');
+
+  /// Oct 8 2026: app-icon number = sum of the three in-app tab numbers.
+  /// iOS only (no-op elsewhere; errors swallowed).
+  static void _syncIconBadge() {
+    if (kIsWeb) return;
+    final total = homeCount.value + legacyCount.value + shareCount.value;
+    _badgeChannel.invokeMethod('setBadge', total).catchError((_) {});
+  }
 
   /// Call once per signed-in session -- same two call sites as
   /// PushService.registerDeviceToken() (main.dart cold start,
@@ -76,6 +87,12 @@ class ActivityBadgeService {
       }
 
       _initialized = true;
+      if (_iconListener == null) {
+        _iconListener = _syncIconBadge;
+        homeCount.addListener(_iconListener!);
+        legacyCount.addListener(_iconListener!);
+        shareCount.addListener(_iconListener!);
+      }
       await _refreshCounts();
       _subscribeRealtime();
       // Oct 8 2026: tabs are never rebuilt (they live in one IndexedStack), so
@@ -175,6 +192,9 @@ class ActivityBadgeService {
     } catch (e) {
       debugPrint('ACTIVITY_BADGE_SERVICE refresh error: $e');
     }
+    // Always re-sync: ValueNotifier skips notifying on an unchanged value, but
+    // the icon may still hold a stale number from a push received while closed.
+    _syncIconBadge();
   }
 
   // Unfiltered-by-nest_id on the query itself is deliberately avoided here
@@ -270,5 +290,6 @@ class ActivityBadgeService {
     homeCount.value = 0;
     legacyCount.value = 0;
     shareCount.value = 0;
+    _syncIconBadge();
   }
 }

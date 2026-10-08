@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import FirebaseMessaging
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -45,6 +46,28 @@ import FirebaseMessaging
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // Oct 8 2026: lets Dart set the app-icon badge number so it matches the
+    // in-app tab numbers (ActivityBadgeService). Server pushes carry the same
+    // number in aps.badge for when the app is closed.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SeniorNestBadge") {
+      let channel = FlutterMethodChannel(
+        name: "seniornest/badge", binaryMessenger: registrar.messenger())
+      channel.setMethodCallHandler { call, result in
+        if call.method == "setBadge" {
+          let n = (call.arguments as? Int) ?? 0
+          DispatchQueue.main.async {
+            if #available(iOS 16.0, *) {
+              UNUserNotificationCenter.current().setBadgeCount(n) { _ in }
+            } else {
+              UIApplication.shared.applicationIconBadgeNumber = n
+            }
+          }
+          result(nil)
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
+      }
+    }
   }
 
   override func application(
