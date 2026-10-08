@@ -25,6 +25,25 @@ import './widgets/branded_transition_screen.dart';
 import './presentation/splash_screen/splash_screen.dart';
 import './presentation/splash_screen/branded_intro_screen.dart';
 
+// Home = 0, Share = 1, Legacy = 2, Safety = 3.
+void _openTabFromPush(RemoteMessage message) {
+  if (Supabase.instance.client.auth.currentUser == null) return;
+  switch (message.data['type']) {
+    case 'home':
+      appActiveTabNotifier.value = 0;
+      break;
+    case 'dm':
+      appActiveTabNotifier.value = 1;
+      break;
+    case 'legacy':
+      appActiveTabNotifier.value = 2;
+      break;
+    case 'safety':
+      appActiveTabNotifier.value = 3;
+      break;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -48,6 +67,14 @@ void main() async {
       badge: true,
       sound: true,
     );
+    // Oct 8 2026: tapping a push opens the matching tab (type is set in
+    // PushService / the send sites). Warm start = onMessageOpenedApp; cold
+    // start = getInitialMessage, delayed so the app has settled on Home first.
+    FirebaseMessaging.onMessageOpenedApp.listen(_openTabFromPush);
+    final initialPush = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialPush != null) {
+      Future.delayed(const Duration(seconds: 4), () => _openTabFromPush(initialPush));
+    }
   } catch (e) {
     debugPrint('Failed to initialize Firebase: $e');
     // Sep 12 2026: this catch was completely silent -- if Firebase init

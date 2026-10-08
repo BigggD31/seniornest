@@ -192,6 +192,7 @@ class PushService {
         title: 'New message from $name',
         body: preview,
         category: 'message',
+        data: {'type': 'dm'},
       );
     } catch (e) {
       debugPrint('PUSH_SERVICE notifyPrivateMessage error: $e');
@@ -225,9 +226,72 @@ class PushService {
             ? '${storyTitle.substring(0, 80)}...'
             : storyTitle,
         category: 'message',
+        data: {'type': 'legacy'},
       );
     } catch (e) {
       debugPrint('PUSH_SERVICE notifyLegacyPosted error: $e');
+    }
+  }
+
+  /// Oct 8 2026: tell a post's author someone replied to it. Fire-and-forget.
+  static Future<void> notifyReply({
+    required String parentPostId,
+    required String replierId,
+    required String text,
+  }) async {
+    try {
+      final parent = await Supabase.instance.client
+          .from('feed_posts')
+          .select('author_id')
+          .eq('id', parentPostId)
+          .maybeSingle();
+      final authorId = parent?['author_id'] as String?;
+      if (authorId == null || authorId == replierId) return;
+      final name = await _nameFor(replierId);
+      await notify(
+        userIds: [authorId],
+        title: '$name replied to your post',
+        body: text.length > 80 ? '${text.substring(0, 80)}...' : text,
+        category: 'message',
+        data: {'type': 'home'},
+      );
+    } catch (e) {
+      debugPrint('PUSH_SERVICE notifyReply error: $e');
+    }
+  }
+
+  /// Oct 8 2026: tell the author of a Home post ('feed') or Legacy story
+  /// ('legacy') that someone hearted it. Fire-and-forget; only call on a
+  /// new heart, never an un-heart.
+  static Future<void> notifyHeart({
+    required bool isLegacy,
+    required String targetId,
+    required String hearterId,
+  }) async {
+    try {
+      final row = isLegacy
+          ? await Supabase.instance.client
+              .from('legacy_entries')
+              .select('user_id')
+              .eq('id', targetId)
+              .maybeSingle()
+          : await Supabase.instance.client
+              .from('feed_posts')
+              .select('author_id')
+              .eq('id', targetId)
+              .maybeSingle();
+      final authorId = (isLegacy ? row?['user_id'] : row?['author_id']) as String?;
+      if (authorId == null || authorId == hearterId) return;
+      final name = await _nameFor(hearterId);
+      await notify(
+        userIds: [authorId],
+        title: '$name loved your ${isLegacy ? 'story' : 'post'}',
+        body: 'Tap to see it in SeniorNest.',
+        category: 'message',
+        data: {'type': isLegacy ? 'legacy' : 'home'},
+      );
+    } catch (e) {
+      debugPrint('PUSH_SERVICE notifyHeart error: $e');
     }
   }
 

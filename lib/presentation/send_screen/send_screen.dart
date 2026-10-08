@@ -3871,6 +3871,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                       ? 'Sent a voice message'
                       : 'Sent a video'),
           category: 'message',
+          data: {'type': 'home'},
         );
         // Distinct, more prominent push specifically for tagged people
         // -- separate from the general new-message notification above
@@ -3883,6 +3884,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 ? (preview.length > 80 ? '${preview.substring(0, 80)}...' : preview)
                 : 'Tagged you in a post',
             category: 'message',
+            data: {'type': 'home'},
           );
         }
       }();

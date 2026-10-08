@@ -794,6 +794,8 @@ class _LegacyScreenState extends State<LegacyScreen>
           'legacy_entry_id': storyId,
           'user_id': userId,
         });
+        PushService.notifyHeart(
+            isLegacy: true, targetId: storyId, hearterId: userId);
       }
     } catch (e) {
       debugPrint('LEGACY HEART TOGGLE ERROR: $e');

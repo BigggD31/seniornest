@@ -9,6 +9,7 @@ import '../../../widgets/custom_image_widget.dart';
 import '../../../widgets/fullscreen_media_viewer.dart';
 import '../../../widgets/save_audio_button.dart';
 import '../../../widgets/linkified_text.dart';
+import '../../../services/push_service.dart';
 import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 class MessageCardWidget extends StatefulWidget {
@@ -152,6 +153,8 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
         'content': text.trim(),
         'parent_post_id': widget.message.id,
       });
+      PushService.notifyReply(
+          parentPostId: widget.message.id, replierId: userId, text: text.trim());
       _replyController.clear();
       await _loadReplies();
       if (mounted) {

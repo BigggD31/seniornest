@@ -25,6 +25,7 @@ import './widgets/nest_avatar_row_widget.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../core/app_state.dart';
 import '../../services/auth_service.dart';
+import '../../services/push_service.dart';
 
 // ── Data Models ────────────────────────────────────────────────
 
@@ -2123,6 +2124,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           'feed_post_id': msg.id,
           'user_id': userId,
         });
+        PushService.notifyHeart(
+            isLegacy: false, targetId: msg.id, hearterId: userId);
       }
     } catch (e) {
       debugPrint('FEED HEART TOGGLE ERROR: $e');

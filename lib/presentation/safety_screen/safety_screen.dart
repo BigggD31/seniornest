@@ -684,6 +684,7 @@ class _SafetyScreenState extends State<SafetyScreen>
           title: isEmergency ? '🚨 Emergency Alert' : "$_seniorName checked in",
           body: message,
           category: isEmergency ? 'sos' : 'check_in',
+          data: {'type': 'safety'},
         );
       }
 
