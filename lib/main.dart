@@ -143,8 +143,9 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   StreamSubscription? _sub;
+  StreamSubscription<AuthState>? _authSub;
   String _initialRoute = AppRoutes.splashScreen;
   bool _ready = false;
   // Aug 21 2026: D Von's direct ask -- grandma should be the literal
@@ -193,10 +194,34 @@ class _MyAppState extends State<MyApp> {
     _resolveShouldShowIntro();
     _resolveInitialRoute();
     // _initDeepLinks(); // Removed: native Apple Sign-In doesn't need deep links
+    // Oct 9 2026: push registration + badge counts now (re)start whenever the
+    // app returns to the foreground and right after any sign-in -- not just
+    // at cold start -- so a phone can't end up signed in with no push address.
+    WidgetsBinding.instance.addObserver(this);
+    try {
+      _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+        if (data.event == AuthChangeEvent.signedIn && data.session != null) {
+          PushService.registerDeviceToken();
+          ActivityBadgeService.initialize();
+        }
+      });
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        Supabase.instance.client.auth.currentUser != null) {
+      PushService.registerDeviceToken();
+      ActivityBadgeService.initialize();
+      ActivityBadgeService.refreshCounts();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _authSub?.cancel();
     _sub?.cancel();
     super.dispose();
   }

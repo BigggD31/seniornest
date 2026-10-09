@@ -1508,7 +1508,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // already-finished) animation, undoing the actual fix.
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
+      // Oct 9 2026: only snap to the top if the person hasn't started
+      // scrolling yet -- this callback runs after slow network checks, and
+      // used to yank someone who had already scrolled back to the top pin.
+      if (_scrollController.hasClients && _scrollController.offset <= 1) {
         _scrollController.jumpTo(0);
       }
     });

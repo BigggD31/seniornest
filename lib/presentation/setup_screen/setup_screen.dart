@@ -79,6 +79,58 @@ class _SetupScreenState extends State<SetupScreen>
     _itemAnimations = [];
     _loadData();
     _loadSuccessionStatus();
+    // Oct 9 2026: switches are per-account, so pull them from the server
+    // whenever this tab is opened (a change made on another device used to
+    // never show here).
+    appActiveTabNotifier.addListener(_onTabForToggleSync);
+    _syncTogglesFromServer();
+  }
+
+  void _onTabForToggleSync() {
+    if (appActiveTabNotifier.value == 5) _syncTogglesFromServer();
+  }
+
+  Future<void> _syncTogglesFromServer() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return;
+      final row = await Supabase.instance.client
+          .from('user_profiles')
+          .select(
+              'notify_messages, notify_check_in, notify_activity, show_activity_badges, meds_reminders_enabled, daily_checkin_enabled')
+          .eq('id', userId)
+          .maybeSingle();
+      if (row == null) return;
+      bool pick(String k, bool fallback) =>
+          row[k] is bool ? row[k] as bool : fallback;
+      final prefs = await SharedPreferences.getInstance();
+      final nm = pick('notify_messages', true);
+      final nc = pick('notify_check_in', true);
+      final na = pick('notify_activity', true);
+      final sb = pick('show_activity_badges', true);
+      final mr = pick('meds_reminders_enabled', true);
+      final dc = pick('daily_checkin_enabled', true);
+      await prefs.setBool('notify_messages', nm);
+      await prefs.setBool('notify_check_in', nc);
+      await prefs.setBool('notify_activity', na);
+      await prefs.setBool('show_activity_badges', sb);
+      await prefs.setBool('meds_reminders', mr);
+      await prefs.setBool('daily_check_in', dc);
+      appMyCheckinEnabledNotifier.value = dc;
+      appMyMedsRemindersEnabledNotifier.value = mr;
+      if (!mounted) return;
+      setState(() {
+        _notifyMessages = nm;
+        _notifyCheckIn = nc;
+        _notifyActivity = na;
+        _showActivityBadges = sb;
+        _medsReminders = mr;
+        _dailyCheckIn = dc;
+      });
+      ActivityBadgeService.refreshCounts();
+    } catch (e) {
+      debugPrint('SETUP: toggle sync from server failed: $e');
+    }
   }
 
   Future<void> _loadData() async {
@@ -1067,6 +1119,7 @@ class _SetupScreenState extends State<SetupScreen>
 
   @override
   void dispose() {
+    appActiveTabNotifier.removeListener(_onTabForToggleSync);
     _entranceController.dispose();
     super.dispose();
   }

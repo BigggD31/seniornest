@@ -94,6 +94,13 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
             if (_processedPurchaseIds.contains(purchaseId)) continue;
             _processedPurchaseIds.add(purchaseId);
           }
+          if (_restoreInFlight &&
+              purchase.status == PurchaseStatus.restored &&
+              mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Welcome back — your subscription was restored.'),
+            ));
+          }
           _restoreInFlight = false;
           await _recordSubscription(purchase.productID, purchase.purchaseID,
               isRestore: purchase.status == PurchaseStatus.restored);

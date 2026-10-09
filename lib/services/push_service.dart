@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
@@ -17,7 +18,43 @@ class PushService {
   /// this should never add latency to navigation or block anything the
   /// person is waiting on. Safe to call more than once; FCM returns the
   /// same token if nothing's changed, and the DB write is an upsert.
-  static Future<void> registerDeviceToken() async {
+  // Oct 9 2026: registration used to run only at cold start / onboarding and
+  // silently gave up on any interruption (app closed within seconds, account
+  // switch on the same phone). Now: callable any time (app resume, sign-in),
+  // skips if this account's token was saved recently, never runs twice at
+  // once, and retries once after a failure.
+  static bool _registering = false;
+  static String? _lastOkUserId;
+  static DateTime? _lastOkAt;
+  static bool _retryScheduled = false;
+  static StreamSubscription<String>? _tokenRefreshSub;
+
+  static Future<void> registerDeviceToken({bool force = false}) async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return;
+    if (_registering) return;
+    if (!force &&
+        _lastOkUserId == uid &&
+        _lastOkAt != null &&
+        DateTime.now().difference(_lastOkAt!) < const Duration(minutes: 10)) {
+      return;
+    }
+    _registering = true;
+    try {
+      await _registerDeviceTokenOnce();
+    } finally {
+      _registering = false;
+    }
+    if (_lastOkUserId != uid && !_retryScheduled) {
+      _retryScheduled = true;
+      Future.delayed(const Duration(seconds: 15), () {
+        _retryScheduled = false;
+        registerDeviceToken();
+      });
+    }
+  }
+
+  static Future<void> _registerDeviceTokenOnce() async {
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
@@ -59,7 +96,9 @@ class PushService {
       // still the one thing that can pick up a token that arrives later
       // in this same app session. Also handles ordinary token rotation
       // (reinstall, OS-level refresh) for as long as the app stays open.
-      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+      await _tokenRefreshSub?.cancel();
+      _tokenRefreshSub =
+          FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
         final currentUserId = Supabase.instance.client.auth.currentUser?.id;
         if (currentUserId != null) {
           _saveToken(currentUserId, newToken);
@@ -130,15 +169,28 @@ class PushService {
       // multi-account testing pattern -- sign out, sign into someone
       // else), this correctly moves the token to whoever's signed in
       // now rather than leaving a stale row pointing at the old account.
-      await Supabase.instance.client.from('device_tokens').upsert(
-        {
-          'user_id': userId,
-          'device_token': token,
-          'platform': 'ios',
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        onConflict: 'device_token',
-      );
+      // Oct 9 2026: goes through a server function that re-assigns the
+      // token to whoever is signed in now, even if another account on this
+      // phone owned it before (a plain upsert can be blocked by row
+      // security in that case). Falls back to the old upsert if the
+      // function isn't reachable.
+      try {
+        await Supabase.instance.client.rpc('register_device_token',
+            params: {'p_token': token, 'p_platform': 'ios'});
+      } catch (rpcErr) {
+        await _logPushDebug('register_device_token rpc failed: $rpcErr');
+        await Supabase.instance.client.from('device_tokens').upsert(
+          {
+            'user_id': userId,
+            'device_token': token,
+            'platform': 'ios',
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+          onConflict: 'device_token',
+        );
+      }
+      _lastOkUserId = userId;
+      _lastOkAt = DateTime.now();
       await _logPushDebug('device_tokens upsert OK for userId=$userId');
     } catch (e) {
       debugPrint('PUSH_SERVICE saveToken error: $e');
@@ -150,6 +202,8 @@ class PushService {
   /// this device's token so a signed-out phone can't keep receiving
   /// pushes meant for whoever signs in next on the same device.
   static Future<void> unregisterDeviceToken() async {
+    _lastOkUserId = null;
+    _lastOkAt = null;
     try {
       final messaging = FirebaseMessaging.instance;
       final token = await messaging.getToken();
