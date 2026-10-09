@@ -186,25 +186,29 @@ class AuthService {
       // upsert happens to overwrite the same row (same device, so same
       // token value) -- which usually happens fast, but there's no
       // reason to leave that gap at all when this is one extra await.
-      await PushService.unregisterDeviceToken();
-
-      // Sep 16 2026: same reasoning -- a signed-out session shouldn't
-      // leave a live realtime channel open, or hand the next person who
-      // signs in on this device a stale prior-user's badge counts. Local
-      // reset only (no network call), so this is safe to run unconditionally.
-      ActivityBadgeService.reset();
-
-      // Sign out from Google if signed in natively
-      if (!kIsWeb) {
+      // Oct 9 2026: token removal (needs the live session) and the Google
+      // disconnect (independent) now run at the same time, and the token
+      // removal is capped at 3 s so a slow network can't hold sign-out up.
+      Future<void> googleDisconnect() async {
+        if (kIsWeb) return;
         try {
-          final googleSignIn = GoogleSignIn.instance;
-          await googleSignIn.disconnect();
+          await GoogleSignIn.instance.disconnect();
           debugPrint('AUTH: Google disconnect() succeeded');
-        } catch (e, st) {
+        } catch (e) {
           debugPrint('AUTH ERROR: Google disconnect() failed: $e');
-          debugPrint('AUTH ERROR stack: $st');
         }
       }
+
+      await Future.wait([
+        PushService.unregisterDeviceToken()
+            .timeout(const Duration(seconds: 3), onTimeout: () {}),
+        googleDisconnect(),
+      ]);
+
+      // Sep 16 2026: a signed-out session shouldn't leave a live realtime
+      // channel open or hand the next person stale badge counts. Local only.
+      ActivityBadgeService.reset();
+
       await _client.auth.signOut();
       debugPrint('AUTH: Supabase signOut() succeeded');
     } catch (e, st) {

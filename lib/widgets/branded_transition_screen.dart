@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 /// resolves, and the gap after "Create Account" while the auth provider
 /// verifies -- instead of a black screen, a stale previous screen, or
 /// nothing at all.
-class BrandedTransitionScreen extends StatelessWidget {
+class BrandedTransitionScreen extends StatefulWidget {
   const BrandedTransitionScreen({super.key});
 
   // Minimum time this screen should stay visible before being replaced by
@@ -27,6 +27,24 @@ class BrandedTransitionScreen extends StatelessWidget {
   // re-verifying against that regression first.
   static const Duration minDisplayDuration = Duration(milliseconds: 1500);
 
+  @override
+  State<BrandedTransitionScreen> createState() =>
+      _BrandedTransitionScreenState();
+}
+
+class _BrandedTransitionScreenState extends State<BrandedTransitionScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _dots = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _dots.dispose();
+    super.dispose();
+  }
+
   static const String _iconAsset = 'assets/images/nest_icon_transparent.png';
 
   // Same golden-green gradient as splash_screen.dart (candidate B, chosen
@@ -36,6 +54,7 @@ class BrandedTransitionScreen extends StatelessWidget {
   // Deliberately NOT applied to the actual onboarding flow screens
   // (role choice, senior/family onboarding, etc.) -- those keep their own
   // original near-white gradient, unrelated to this decision.
+  static const Color _dotColor = Color(0xFFD4AA00);
   static const Color _gradientTop = Color(0xFFE9F1EE);
   static const Color _gradientMiddle = Color(0xFFF3E7C4);
   static const Color _gradientBottom = Color(0xFFF8E9E1);
@@ -58,22 +77,52 @@ class BrandedTransitionScreen extends StatelessWidget {
             colors: [_gradientTop, _gradientMiddle, _gradientBottom],
           ),
         ),
-        child: Center(
-          child: SizedBox(
-            width: iconWidth,
-            child: Image.asset(
-              _iconAsset,
-              fit: BoxFit.contain,
-              semanticLabel: 'SeniorNest',
-              errorBuilder: (context, error, stackTrace) {
-                return const Icon(
-                  Icons.favorite_rounded,
-                  color: Color(0xFFD4AA00),
-                  size: 90,
-                );
-              },
+        child: Stack(
+          children: [
+            Center(
+              child: SizedBox(
+                width: iconWidth,
+                child: Image.asset(
+                  _iconAsset,
+                  fit: BoxFit.contain,
+                  semanticLabel: 'SeniorNest',
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(
+                      Icons.favorite_rounded,
+                      color: Color(0xFFD4AA00),
+                      size: 90,
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
+            // Oct 9 2026: three softly pulsing dots under the logo so the
+            // person can see the app is working. Logo position unchanged.
+            Align(
+              alignment: const Alignment(0, 0.32),
+              child: AnimatedBuilder(
+                animation: _dots,
+                builder: (context, _) {
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(3, (i) {
+                      final t = (_dots.value - i * 0.18) % 1.0;
+                      final wave = t < 0.5 ? t * 2 : (1 - t) * 2;
+                      return Container(
+                        width: 10,
+                        height: 10,
+                        margin: const EdgeInsets.symmetric(horizontal: 5),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _dotColor.withValues(alpha: 0.25 + 0.75 * wave),
+                        ),
+                      );
+                    }),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

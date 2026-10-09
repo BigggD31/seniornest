@@ -11,6 +11,7 @@ import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../services/share_service.dart';
 import '../../widgets/app_navigation.dart';
+import '../../widgets/branded_transition_screen.dart';
 import '../../services/activity_badge_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
@@ -3077,35 +3078,45 @@ class _SetupScreenState extends State<SetupScreen>
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
+              // Oct 9 2026: show the branded working screen instantly so the
+              // tap clearly registered (and can't be double-tapped).
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                barrierColor: Colors.transparent,
+                useSafeArea: false,
+                builder: (_) => const PopScope(
+                  canPop: false,
+                  child: BrandedTransitionScreen(),
+                ),
+              );
               // Sign out from Supabase (and Google if applicable)
               await AuthService.signOut();
               final prefs = await SharedPreferences.getInstance();
               // Clear all user-specific cached data on sign-out
-              await prefs.remove('display_name');
-              await prefs.remove('preferred_name');
-              await prefs.remove('user_role');
-              await prefs.remove('relationship');
-              await prefs.remove('relation_type');
-              await prefs.remove('nest_id');
-              await prefs.remove('cached_nest_id');
-              await prefs.remove('bookmarks');
-              await prefs.remove('bookmarked_items');
-              await prefs.remove('cached_real_messages');
-              await prefs.remove('cached_real_messages_nest_id');
-              await prefs.remove('profile_photo_data');
-              await prefs.remove('profile_photo_owner_id');
-              await prefs.remove('birthday');
-              await prefs.remove('anniversary');
-              // These three were missing from this list -- meaning a
-              // regular Sign Out (as opposed to full account deletion,
-              // which does prefs.clear()) left them sitting on the device
-              // indefinitely. Found while investigating D Von's report of
-              // the wrong nest name appearing on a fresh invite-code
-              // attempt, Aug 16 2026 -- confirmed as a real, separate gap
-              // regardless of whether it's the exact cause of that report.
-              await prefs.remove('invite_code');
-              await prefs.remove('joined_via_invite');
-              await prefs.remove('nest_name');
+              // Oct 9 2026: removed together instead of one at a time.
+              // Account-scoped keys (incl. invite_code/joined_via_invite/
+              // nest_name, which an earlier version left behind).
+              await Future.wait([
+                prefs.remove('display_name'),
+                prefs.remove('preferred_name'),
+                prefs.remove('user_role'),
+                prefs.remove('relationship'),
+                prefs.remove('relation_type'),
+                prefs.remove('nest_id'),
+                prefs.remove('cached_nest_id'),
+                prefs.remove('bookmarks'),
+                prefs.remove('bookmarked_items'),
+                prefs.remove('cached_real_messages'),
+                prefs.remove('cached_real_messages_nest_id'),
+                prefs.remove('profile_photo_data'),
+                prefs.remove('profile_photo_owner_id'),
+                prefs.remove('birthday'),
+                prefs.remove('anniversary'),
+                prefs.remove('invite_code'),
+                prefs.remove('joined_via_invite'),
+                prefs.remove('nest_name'),
+              ]);
               await prefs.setBool('just_signed_out', true);
               // Aug 21 2026: correcting my own earlier mistake here,
               // confirmed by D Von's screenshots -- that fix sent sign-out
