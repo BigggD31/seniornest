@@ -83,6 +83,7 @@ class _SetupScreenState extends State<SetupScreen>
     // whenever this tab is opened (a change made on another device used to
     // never show here).
     appActiveTabNotifier.addListener(_onTabForToggleSync);
+    ActivityBadgeService.settingsVersion.addListener(_syncTogglesFromServer);
     _syncTogglesFromServer();
   }
 
@@ -1120,6 +1121,7 @@ class _SetupScreenState extends State<SetupScreen>
   @override
   void dispose() {
     appActiveTabNotifier.removeListener(_onTabForToggleSync);
+    ActivityBadgeService.settingsVersion.removeListener(_syncTogglesFromServer);
     _entranceController.dispose();
     super.dispose();
   }
