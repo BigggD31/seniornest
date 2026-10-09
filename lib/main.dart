@@ -17,6 +17,7 @@ import './services/auth_service.dart';
 import './services/supabase_service.dart';
 import './services/push_service.dart';
 import './services/activity_badge_service.dart';
+import './services/timing_log.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -201,6 +202,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     try {
       _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
         if (data.event == AuthChangeEvent.signedIn && data.session != null) {
+          TimingLog.mark('signedIn event received');
           PushService.registerDeviceToken();
           ActivityBadgeService.initialize();
         }
@@ -387,6 +389,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   Future<void> _resolveInitialRoute() async {
+    TimingLog.begin('coldstart');
     try {
       // Must run before anything else in this function, including the
       // dark_mode read two lines down -- detects a genuine account switch
@@ -462,7 +465,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         // app if they're currently entitled. Previously this went straight
         // to Home regardless of subscription status, since nothing
         // anywhere checked it.
+        TimingLog.mark('before entitlement check');
         final entitled = await _isCurrentlyEntitled(prefs);
+        TimingLog.mark('entitlement check done');
         if (!entitled) {
           _initialRoute = AppRoutes.subscribeNestScreen;
         } else {
@@ -473,6 +478,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           // the nest they were just removed from. This re-checks the real
           // membership every launch instead of trusting stale local state.
           final stillAMember = await _hasValidNestMembership(prefs);
+          TimingLog.mark('membership check done');
           if (stillAMember) {
             _initialRoute = AppRoutes.familyFeedScreen;
           } else {
@@ -550,6 +556,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // original Aug 21 fix had already resolved. Flips _ready immediately
     // once resolution finishes, unconditionally, matching build 264's
     // confirmed-clean behavior.
+    TimingLog.mark('route resolved, _ready=true');
     if (mounted) setState(() => _ready = true);
   }
 

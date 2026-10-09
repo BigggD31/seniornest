@@ -1,3 +1,4 @@
+import '../../services/timing_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -107,6 +108,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
   Future<void> _navigateToHome({String? userId}) async {
     if (mounted) setState(() => _isNavigatingHome = true);
     final navigateStartTime = DateTime.now();
+    TimingLog.begin('signin');
 
     // Capture this fresh signup's own just-entered values BEFORE the wipe
     // below, so they can be restored right after it. nest_name, nest_id,
@@ -456,6 +458,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             .eq('user_id', checkUserId)
             .order('joined_at', ascending: true)
             .limit(1);
+        TimingLog.mark('membership query done');
         if (existingMemberships.isNotEmpty) {
           final existingNestId = existingMemberships.first['nest_id'] as String;
           await prefs.setString('nest_id', existingNestId);
@@ -489,10 +492,12 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
           // itself has been installed. Same awaited gate as the main
           // path: don't show Home until its current photos are ready,
           // capped at 3 seconds so a slow connection never hangs anyone.
+          TimingLog.mark('notifiers resolved, precache start');
           try {
             await precacheNestImages(existingNestId)
                 .timeout(const Duration(seconds: 3));
           } catch (_) {}
+          TimingLog.mark('precache done, pushing Home');
           if (mounted) {
             Navigator.pushNamedAndRemoveUntil(
               context,

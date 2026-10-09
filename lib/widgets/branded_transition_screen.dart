@@ -54,7 +54,6 @@ class _BrandedTransitionScreenState extends State<BrandedTransitionScreen>
   // Deliberately NOT applied to the actual onboarding flow screens
   // (role choice, senior/family onboarding, etc.) -- those keep their own
   // original near-white gradient, unrelated to this decision.
-  static const Color _dotColor = Color(0xFFD4AA00);
   static const Color _gradientTop = Color(0xFFE9F1EE);
   static const Color _gradientMiddle = Color(0xFFF3E7C4);
   static const Color _gradientBottom = Color(0xFFF8E9E1);
@@ -69,7 +68,8 @@ class _BrandedTransitionScreenState extends State<BrandedTransitionScreen>
 
     return Directionality(
       textDirection: TextDirection.ltr,
-      child: DecoratedBox(
+      child: RepaintBoundary(
+        child: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -77,54 +77,82 @@ class _BrandedTransitionScreenState extends State<BrandedTransitionScreen>
             colors: [_gradientTop, _gradientMiddle, _gradientBottom],
           ),
         ),
+        // Oct 9 2026 (build 287): per Flutter's animation guidance -- the
+        // static gradient + logo live in their own RepaintBoundary (drawn
+        // once, kept), and the dots are three FadeTransitions (paint-only,
+        // no per-frame rebuild) inside another RepaintBoundary, so the
+        // looping animation can never force the page underneath (Home
+        // loading, Setup) to repaint every frame.
         child: Stack(
           children: [
-            Center(
-              child: SizedBox(
-                width: iconWidth,
-                child: Image.asset(
-                  _iconAsset,
-                  fit: BoxFit.contain,
-                  semanticLabel: 'SeniorNest',
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Icon(
-                      Icons.favorite_rounded,
-                      color: Color(0xFFD4AA00),
-                      size: 90,
-                    );
-                  },
+            RepaintBoundary(
+              child: Center(
+                child: SizedBox(
+                  width: iconWidth,
+                  child: Image.asset(
+                    _iconAsset,
+                    fit: BoxFit.contain,
+                    semanticLabel: 'SeniorNest',
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(
+                        Icons.favorite_rounded,
+                        color: Color(0xFFD4AA00),
+                        size: 90,
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
-            // Oct 9 2026: three softly pulsing dots under the logo so the
-            // person can see the app is working. Logo position unchanged.
             Align(
               alignment: const Alignment(0, 0.32),
-              child: AnimatedBuilder(
-                animation: _dots,
-                builder: (context, _) {
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: List.generate(3, (i) {
-                      final t = (_dots.value - i * 0.18) % 1.0;
-                      final wave = t < 0.5 ? t * 2 : (1 - t) * 2;
-                      return Container(
-                        width: 10,
-                        height: 10,
-                        margin: const EdgeInsets.symmetric(horizontal: 5),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _dotColor.withValues(alpha: 0.25 + 0.75 * wave),
-                        ),
-                      );
-                    }),
-                  );
-                },
+              child: RepaintBoundary(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var i = 0; i < 3; i++)
+                      FadeTransition(
+                        opacity: _dots.drive(_Pulse(i * 0.18)),
+                        child: const _Dot(),
+                      ),
+                  ],
+                ),
               ),
             ),
           ],
         ),
+        ),
       ),
     );
+  }
+}
+
+class _Dot extends StatelessWidget {
+  const _Dot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 10,
+      height: 10,
+      margin: const EdgeInsets.symmetric(horizontal: 5),
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: Color(0xFFD4AA00),
+      ),
+    );
+  }
+}
+
+/// Soft up-and-down pulse (0.25 -> 1.0 -> 0.25) offset per dot.
+class _Pulse extends Animatable<double> {
+  _Pulse(this.offset);
+  final double offset;
+
+  @override
+  double transform(double t) {
+    final x = (t - offset) % 1.0;
+    final wave = x < 0.5 ? x * 2 : (1 - x) * 2;
+    return 0.25 + 0.75 * wave;
   }
 }

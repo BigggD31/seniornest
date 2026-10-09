@@ -13,6 +13,7 @@ import '../../services/share_service.dart';
 import '../../widgets/app_navigation.dart';
 import '../../widgets/branded_transition_screen.dart';
 import '../../services/activity_badge_service.dart';
+import '../../services/timing_log.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -3078,6 +3079,7 @@ class _SetupScreenState extends State<SetupScreen>
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
+              TimingLog.begin('signout');
               // Oct 9 2026: show the branded working screen instantly so the
               // tap clearly registered (and can't be double-tapped).
               showDialog(
@@ -3092,6 +3094,7 @@ class _SetupScreenState extends State<SetupScreen>
               );
               // Sign out from Supabase (and Google if applicable)
               await AuthService.signOut();
+              TimingLog.mark('AuthService.signOut done');
               final prefs = await SharedPreferences.getInstance();
               // Clear all user-specific cached data on sign-out
               // Oct 9 2026: removed together instead of one at a time.
@@ -3117,6 +3120,7 @@ class _SetupScreenState extends State<SetupScreen>
                 prefs.remove('joined_via_invite'),
                 prefs.remove('nest_name'),
               ]);
+              TimingLog.mark('prefs cleared');
               await prefs.setBool('just_signed_out', true);
               // Aug 21 2026: correcting my own earlier mistake here,
               // confirmed by D Von's screenshots -- that fix sent sign-out
@@ -3145,6 +3149,7 @@ class _SetupScreenState extends State<SetupScreen>
               // goes through main.dart's real cold-start resolution and
               // reads that persisted flag fresh.
               appIsReturningUserNotifier.value = true;
+              TimingLog.mark('navigating to splash');
               if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(
                   context,

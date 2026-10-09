@@ -1,3 +1,4 @@
+import '../../services/timing_log.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -2586,6 +2587,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     if (appHomeLoadingNotifier.value != loadingNow) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         appHomeLoadingNotifier.value = loadingNow;
+        TimingLog.mark(loadingNow ? 'home loading started' : 'home loaded, branded hold released');
       });
     }
     return _isLoading ? _buildLoadingState() : _buildFeedContent(isTablet);

@@ -1,3 +1,4 @@
+import 'timing_log.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -204,12 +205,14 @@ class AuthService {
             .timeout(const Duration(seconds: 3), onTimeout: () {}),
         googleDisconnect(),
       ]);
+      TimingLog.mark('push token + google done');
 
       // Sep 16 2026: a signed-out session shouldn't leave a live realtime
       // channel open or hand the next person stale badge counts. Local only.
       ActivityBadgeService.reset();
 
       await _client.auth.signOut();
+      TimingLog.mark('supabase signOut done');
       debugPrint('AUTH: Supabase signOut() succeeded');
     } catch (e, st) {
       debugPrint('AUTH ERROR: Supabase signOut() failed: $e');
