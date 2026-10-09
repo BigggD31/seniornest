@@ -71,10 +71,17 @@ void main() async {
     // PushService / the send sites). Warm start = onMessageOpenedApp; cold
     // start = getInitialMessage, delayed so the app has settled on Home first.
     FirebaseMessaging.onMessageOpenedApp.listen(_openTabFromPush);
-    final initialPush = await FirebaseMessaging.instance.getInitialMessage();
-    if (initialPush != null) {
-      Future.delayed(const Duration(seconds: 4), () => _openTabFromPush(initialPush));
-    }
+    // Deliberately NOT awaited: awaiting this before runApp can stall app
+    // launch on a white screen (build 283). Fire-and-forget with a timeout.
+    FirebaseMessaging.instance
+        .getInitialMessage()
+        .timeout(const Duration(seconds: 5), onTimeout: () => null)
+        .then((initialPush) {
+      if (initialPush != null) {
+        Future.delayed(
+            const Duration(seconds: 4), () => _openTabFromPush(initialPush));
+      }
+    }).catchError((_) {});
   } catch (e) {
     debugPrint('Failed to initialize Firebase: $e');
     // Sep 12 2026: this catch was completely silent -- if Firebase init
