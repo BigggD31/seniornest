@@ -1,7 +1,7 @@
 name: seniornest
 description: A new Flutter project.
 publish_to: none
-version: 1.288.0+288
+version: 1.289.0+289
 
 environment:
   sdk: ^3.9.0

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -19,9 +18,15 @@ class BrandedTransitionScreen extends StatefulWidget {
   final bool showMessages;
 
   static DateTime? _messageEpoch;
-  static bool get messagesActive => _messageEpoch != null;
-  static void startMessages() => _messageEpoch = DateTime.now();
-  static void stopMessages() => _messageEpoch = null;
+  static bool _messagesActive = false;
+  static bool get messagesActive => _messagesActive;
+  static void startMessages() {
+    _messageEpoch = DateTime.now();
+    _messagesActive = true;
+  }
+
+  // Epoch is kept so a screen that is still fading out keeps its phrase.
+  static void stopMessages() => _messagesActive = false;
 
   static const List<String> messages = [
     'Stay close to the people who matter most.',
@@ -62,36 +67,39 @@ class _BrandedTransitionScreenState extends State<BrandedTransitionScreen>
     duration: const Duration(milliseconds: 1200),
   )..repeat();
 
-  Timer? _messageTimer;
-  int _messageIndex = -1; // -1 = nothing shown yet
-
-  int _currentIndex() {
-    final epoch = BrandedTransitionScreen._messageEpoch;
-    if (!widget.showMessages || epoch == null) return -1;
-    final ms = DateTime.now().difference(epoch).inMilliseconds -
-        BrandedTransitionScreen.messageDelay.inMilliseconds;
-    if (ms < 0) return -1;
-    return (ms ~/ BrandedTransitionScreen.messageInterval.inMilliseconds) %
-        BrandedTransitionScreen.messages.length;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.showMessages) {
-      _messageIndex = _currentIndex();
-      _messageTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
-        final i = _currentIndex();
-        if (i != _messageIndex && mounted) setState(() => _messageIndex = i);
-      });
-    }
-  }
-
   @override
   void dispose() {
-    _messageTimer?.cancel();
     _dots.dispose();
     super.dispose();
+  }
+
+  /// Phrase + opacity derived from the shared wall-clock epoch, so the
+  /// sign-in screen and the Home hold overlay show the identical phrase at
+  /// the identical fade point (seamless hand-over), and the text only ever
+  /// changes while fully transparent (no pop).
+  ({String text, double opacity})? _message() {
+    final epoch = BrandedTransitionScreen._messageEpoch;
+    if (!widget.showMessages || epoch == null) return null;
+    final total = DateTime.now().difference(epoch).inMilliseconds -
+        BrandedTransitionScreen.messageDelay.inMilliseconds;
+    if (total < 0) return null;
+    final interval = BrandedTransitionScreen.messageInterval.inMilliseconds;
+    const fade = 700;
+    final cycle = total ~/ interval;
+    final t = total % interval;
+    double o;
+    if (t < fade) {
+      o = t / fade;
+    } else if (t > interval - fade) {
+      o = (interval - t) / fade;
+    } else {
+      o = 1;
+    }
+    return (
+      text: BrandedTransitionScreen
+          .messages[cycle % BrandedTransitionScreen.messages.length],
+      opacity: Curves.easeInOut.transform(o.clamp(0.0, 1.0)),
+    );
   }
 
   static const String _iconAsset = 'assets/images/nest_icon_transparent.png';
@@ -174,21 +182,29 @@ class _BrandedTransitionScreenState extends State<BrandedTransitionScreen>
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 36),
                   child: RepaintBoundary(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 600),
-                      child: _messageIndex < 0
-                          ? const SizedBox.shrink(key: ValueKey('none'))
-                          : Text(
-                              BrandedTransitionScreen.messages[_messageIndex],
-                              key: ValueKey(_messageIndex),
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.nunitoSans(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                height: 1.4,
-                                color: const Color(0xFF6B5B3E),
-                              ),
+                    child: AnimatedBuilder(
+                      animation: _dots,
+                      builder: (context, _) {
+                        final m = _message();
+                        if (m == null) return const SizedBox(height: 26);
+                        return Opacity(
+                          opacity: m.opacity,
+                          child: Text(
+                            m.text,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.nunitoSans(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              height: 1.4,
+                              color: const Color(0xFF6B5B3E),
+                              // No Material ancestor here (Home hold overlay):
+                              // without this Flutter draws its yellow debug
+                              // underline under the text.
+                              decoration: TextDecoration.none,
                             ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
