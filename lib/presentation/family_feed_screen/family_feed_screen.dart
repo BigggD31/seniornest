@@ -1,3 +1,4 @@
+import '../../widgets/branded_transition_screen.dart';
 import '../../services/timing_log.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -2588,6 +2589,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         appHomeLoadingNotifier.value = loadingNow;
         TimingLog.mark(loadingNow ? 'home loading started' : 'home loaded, branded hold released');
+        if (!loadingNow) BrandedTransitionScreen.stopMessages();
       });
     }
     return _isLoading ? _buildLoadingState() : _buildFeedContent(isTablet);

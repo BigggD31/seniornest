@@ -189,7 +189,7 @@ class AuthService {
       // reason to leave that gap at all when this is one extra await.
       // Oct 9 2026: token removal (needs the live session) and the Google
       // disconnect (independent) now run at the same time, and the token
-      // removal is capped at 3 s so a slow network can't hold sign-out up.
+      // removal is capped at 1.5 s so a slow network can't hold sign-out up.
       Future<void> googleDisconnect() async {
         if (kIsWeb) return;
         try {
@@ -202,7 +202,7 @@ class AuthService {
 
       await Future.wait([
         PushService.unregisterDeviceToken()
-            .timeout(const Duration(seconds: 3), onTimeout: () {}),
+            .timeout(const Duration(milliseconds: 1500), onTimeout: () {}),
         googleDisconnect(),
       ]);
       TimingLog.mark('push token + google done');

@@ -109,6 +109,10 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     if (mounted) setState(() => _isNavigatingHome = true);
     final navigateStartTime = DateTime.now();
     TimingLog.begin('signin');
+    BrandedTransitionScreen.startMessages();
+    // Oct 10 2026: Home's branded hold must be up from Home's very first
+    // frame (it was left 'false' from the last session -> visible flash).
+    appHomeLoadingNotifier.value = true;
 
     // Capture this fresh signup's own just-entered values BEFORE the wipe
     // below, so they can be restored right after it. nest_name, nest_id,
@@ -1068,7 +1072,7 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     // Shown for the whole duration of _navigateToHome's post-auth setup
     // work, not just the OAuth handshake -- see _isNavigatingHome above.
     if (_isNavigatingHome) {
-      return const Scaffold(body: BrandedTransitionScreen());
+      return const Scaffold(body: BrandedTransitionScreen(showMessages: true));
     }
 
     // This screen is reached via pushReplacementNamed from either onboarding

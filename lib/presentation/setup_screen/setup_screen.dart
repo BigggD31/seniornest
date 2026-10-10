@@ -86,7 +86,9 @@ class _SetupScreenState extends State<SetupScreen>
     // never show here).
     appActiveTabNotifier.addListener(_onTabForToggleSync);
     ActivityBadgeService.settingsVersion.addListener(_syncTogglesFromServer);
-    _syncTogglesFromServer();
+    // Oct 10 2026: no immediate server read here any more -- it was part of
+    // the busy sign-in burst. ActivityBadgeService pulls the switches once
+    // Home has loaded and notifies settingsVersion, which lands here.
   }
 
   void _onTabForToggleSync() {
@@ -3149,6 +3151,7 @@ class _SetupScreenState extends State<SetupScreen>
               // goes through main.dart's real cold-start resolution and
               // reads that persisted flag fresh.
               appIsReturningUserNotifier.value = true;
+              appHomeLoadingNotifier.value = true;
               TimingLog.mark('navigating to splash');
               if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(

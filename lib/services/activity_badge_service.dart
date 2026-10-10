@@ -100,7 +100,19 @@ class ActivityBadgeService {
     });
   }
 
+  /// Oct 10 2026: sign-in is a busy moment (Home plus five other tabs all load
+  /// at once). Notification-number startup is not needed to paint Home, so it
+  /// waits until Home has finished loading (never longer than 8 s).
+  static Future<void> whenHomeLoaded() async {
+    final deadline = DateTime.now().add(const Duration(seconds: 8));
+    while (appHomeLoadingNotifier.value && DateTime.now().isBefore(deadline)) {
+      await Future.delayed(const Duration(milliseconds: 250));
+    }
+  }
+
   static Future<bool> _initializeInner(String uid) async {
+    await whenHomeLoaded();
+    if (Supabase.instance.client.auth.currentUser?.id != uid) return false;
     final prefs = await SharedPreferences.getInstance();
     final nest = prefs.getString('nest_id');
     if (nest == null || nest.isEmpty) {
@@ -119,7 +131,7 @@ class ActivityBadgeService {
         .eq('user_id', uid)
         .maybeSingle();
     // Pull this account's switches so a stale local copy can't hide numbers.
-    await _pullSettings(uid, notify: false);
+    await _pullSettings(uid);
     if (client.auth.currentUser?.id != uid) return false;
 
     _userId = uid;

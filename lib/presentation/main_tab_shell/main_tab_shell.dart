@@ -97,8 +97,10 @@ class _MainTabShellState extends State<MainTabShell> {
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 250),
                       child: hold
-                          ? const BrandedTransitionScreen(
-                              key: ValueKey('homeHold'))
+                          ? BrandedTransitionScreen(
+                              key: const ValueKey('homeHold'),
+                              showMessages:
+                                  BrandedTransitionScreen.messagesActive)
                           : const SizedBox.shrink(key: ValueKey('homeShown')),
                     ),
                   );
