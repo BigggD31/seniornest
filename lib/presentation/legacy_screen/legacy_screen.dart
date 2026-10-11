@@ -227,6 +227,12 @@ class _LegacyScreenState extends State<LegacyScreen>
   // below to avoid a flash of the wrong/single name on load, same
   // pattern as _seniorStatuses in family_feed_screen.dart.
   List<String> _seniorNames = [];
+  // Oct 10 2026 (build 291): every senior in this nest, with id + avatar,
+  // so a member can choose who a story question is for (avatar picker), and
+  // each senior only sees the questions asked of them.
+  List<Map<String, String>> _seniors = [];
+  // Rows behind _submittedPrompts: text, who it's for, who asked (+ name).
+  List<Map<String, String>> _promptRows = [];
 
   @override
   void initState() {
@@ -463,16 +469,23 @@ class _LegacyScreenState extends State<LegacyScreen>
               // family read-only banner can show one card per senior.
               final seniorProfiles = await supabase
                   .from('user_profiles')
-                  .select('display_name, preferred_name')
+                  .select('id, display_name, preferred_name, avatar_url')
                   .inFilter('id', memberIds)
                   .eq('role', 'senior');
               final names = <String>[];
+              final seniorsFound = <Map<String, String>>[];
               for (final p in (seniorProfiles as List)) {
                 final preferred = p['preferred_name'] as String? ?? '';
                 final display = p['display_name'] as String? ?? '';
                 final n = preferred.isNotEmpty ? preferred : display;
                 if (n.isNotEmpty) names.add(n);
+                seniorsFound.add({
+                  'id': '${p['id']}',
+                  'name': n,
+                  'avatarUrl': p['avatar_url'] as String? ?? '',
+                });
               }
+              if (mounted) _seniors = seniorsFound;
               if (names.isNotEmpty) {
                 resolvedSeniorName = names.first;
                 resolvedSeniorNames = names;
@@ -674,15 +687,48 @@ class _LegacyScreenState extends State<LegacyScreen>
           try {
             final promptRows = await supabase
                 .from('legacy_story_prompts')
-                .select('prompt_text')
+                .select('prompt_text, for_user_id, suggested_by')
                 .eq('nest_id', nestId)
                 .order('created_at', ascending: false);
-            final realPrompts = (promptRows as List<dynamic>)
-                .map((r) => r['prompt_text'] as String)
+            // A senior only sees questions asked of them (or of everyone,
+            // for older rows with no recipient). Members see all of them.
+            final rows = (promptRows as List<dynamic>).where((r) {
+              if (!_isSenior) return true;
+              final f = r['for_user_id'];
+              return f == null || f == userId;
+            }).toList();
+            final askerIds = rows
+                .map((r) => r['suggested_by'])
+                .whereType<String>()
+                .toSet()
+                .toList();
+            final askerNames = <String, String>{};
+            if (askerIds.isNotEmpty) {
+              try {
+                final profs = await supabase
+                    .from('user_profiles')
+                    .select('id, display_name, preferred_name')
+                    .inFilter('id', askerIds);
+                for (final p in (profs as List)) {
+                  final pn = p['preferred_name'] as String? ?? '';
+                  final dn = p['display_name'] as String? ?? '';
+                  askerNames['${p['id']}'] = pn.isNotEmpty ? pn : dn;
+                }
+              } catch (_) {}
+            }
+            final realPrompts =
+                rows.map((r) => r['prompt_text'] as String).toList();
+            final metaRows = rows
+                .map((r) => <String, String>{
+                      'text': r['prompt_text'] as String,
+                      'forId': '${r['for_user_id'] ?? ''}',
+                      'askerName': askerNames['${r['suggested_by']}'] ?? '',
+                    })
                 .toList();
             if (mounted) {
               setState(() {
                 _submittedPrompts = realPrompts;
+                _promptRows = metaRows;
               });
             }
           } catch (e) {
@@ -1088,6 +1134,14 @@ class _LegacyScreenState extends State<LegacyScreen>
                           SliverToBoxAdapter(
                             child: _buildStoriesWantToHear(isTablet),
                           ),
+                          if (_isSenior && !_isNestArchived)
+                            SliverToBoxAdapter(
+                              child: _buildStoryIdeas(isTablet),
+                            ),
+                          if (!_isSenior && !_isNestArchived)
+                            SliverToBoxAdapter(
+                              child: _buildAskQuestionButton(isTablet),
+                            ),
                           if (_isSenior && !_isNestArchived) ...[
                             SliverToBoxAdapter(
                               child: _buildPromptSection(isTablet),
@@ -1369,6 +1423,397 @@ class _LegacyScreenState extends State<LegacyScreen>
     );
   }
 
+  // ── Oct 10 2026 (build 291): pre-written story questions ─────────────────
+  // Senior: a few ideas (rotating daily from the 10 in _prompts) to tap and
+  // answer. Member: the same list inside the "Ask a Story Question" sheet.
+  Widget _buildStoryIdeas(bool isTablet) {
+    final start = DateTime.now().difference(DateTime(DateTime.now().year)).inDays;
+    final ideas = <Map<String, String>>[
+      for (int i = 0; i < 5; i++) _prompts[(start + i) % _prompts.length],
+    ];
+    return Padding(
+      padding: EdgeInsets.fromLTRB(isTablet ? 28 : 20, 18, isTablet ? 28 : 20, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('💡', style: TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              Text(
+                'Story Ideas',
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: _textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tap a question to tell that story.',
+            style: GoogleFonts.nunitoSans(fontSize: 13, color: _textSecondary),
+          ),
+          const SizedBox(height: 10),
+          for (final idea in ideas)
+            GestureDetector(
+              onTap: () => _answerPrompt(idea['prompt']!),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: _cardBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _cardBorder, width: 1.5),
+                ),
+                child: Row(
+                  children: [
+                    Text(idea['icon']!, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        idea['prompt']!,
+                        style: GoogleFonts.nunitoSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _textPrimary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right,
+                        color: Color(0xFF5DA399), size: 20),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAskQuestionButton(bool isTablet) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(isTablet ? 28 : 20, 4, isTablet ? 28 : 20, 4),
+      child: GestureDetector(
+        onTap: _showAskQuestionSheet,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+          decoration: BoxDecoration(
+            color: const Color(0xFF5DA399),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.question_answer_outlined,
+                  color: Colors.white, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Ask a Story Question',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.white),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAskQuestionSheet() {
+    // One senior: automatic. Two or more: member picks avatars (like Tag
+    // someone on Share). Each picked senior gets their own copy.
+    final selected = <String>{
+      if (_seniors.length == 1) _seniors.first['id']!,
+    };
+    String? chosenPrompt;
+    final custom = TextEditingController();
+    bool sending = false;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _cardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (sheetCtx, sheetSetState) {
+          final typed = custom.text.trim();
+          final text = typed.isNotEmpty ? typed : (chosenPrompt ?? '');
+          final needsPick = _seniors.length > 1;
+          final canSend = text.isNotEmpty &&
+              (!needsPick || selected.isNotEmpty) &&
+              !sending;
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + 20,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ask a Story Question',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: _textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_seniors.length > 1) ...[
+                    Text(
+                      'Who do you want to ask?',
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 14,
+                      runSpacing: 10,
+                      children: [
+                        for (final s in _seniors)
+                          GestureDetector(
+                            onTap: () => sheetSetState(() {
+                              final id = s['id']!;
+                              if (!selected.remove(id)) selected.add(id);
+                            }),
+                            child: Column(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: selected.contains(s['id'])
+                                          ? const Color(0xFF5DA399)
+                                          : Colors.transparent,
+                                      width: 3,
+                                    ),
+                                  ),
+                                  child: ProfileAvatarWidget(
+                                    avatarUrl: s['avatarUrl'],
+                                    displayName: s['name'] ?? '',
+                                    size: 52,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  s['name'] ?? '',
+                                  style: GoogleFonts.nunitoSans(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: selected.contains(s['id'])
+                                        ? const Color(0xFF5DA399)
+                                        : _textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                  ] else if (_seniors.length == 1)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        children: [
+                          ProfileAvatarWidget(
+                            avatarUrl: _seniors.first['avatarUrl'],
+                            displayName: _seniors.first['name'] ?? '',
+                            size: 32,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Asking ${_seniors.first['name']}',
+                            style: GoogleFonts.nunitoSans(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: _textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Text(
+                    'Pick a question',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: _textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  for (final p in _prompts)
+                    GestureDetector(
+                      onTap: () => sheetSetState(() {
+                        chosenPrompt = p['prompt'];
+                        custom.clear();
+                      }),
+                      child: Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: chosenPrompt == p['prompt'] && typed.isEmpty
+                                ? const Color(0xFF5DA399)
+                                : _cardBorder,
+                            width: chosenPrompt == p['prompt'] && typed.isEmpty
+                                ? 2
+                                : 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(p['icon']!,
+                                style: const TextStyle(fontSize: 18)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                p['prompt']!,
+                                style: GoogleFonts.nunitoSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: _textPrimary,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Or write your own',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: _textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: custom,
+                    maxLines: 3,
+                    minLines: 2,
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: (_) => sheetSetState(() {}),
+                    style: GoogleFonts.nunitoSans(
+                        fontSize: 14, color: _textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'Type a question you\'d love to hear a story about',
+                      hintStyle: GoogleFonts.nunitoSans(
+                          fontSize: 13, color: _textSecondary),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: canSend
+                          ? () async {
+                              sheetSetState(() => sending = true);
+                              final ok = await _sendStoryQuestion(
+                                text,
+                                selected.toList(),
+                              );
+                              if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(ok
+                                        ? 'Question sent'
+                                        : 'Could not send. Please try again.'),
+                                  ),
+                                );
+                              }
+                            }
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF5DA399),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        'Send Question',
+                        style: GoogleFonts.nunitoSans(
+                            fontSize: 15, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    ).whenComplete(custom.dispose);
+  }
+
+  Future<bool> _sendStoryQuestion(String text, List<String> seniorIds) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      final me = supabase.auth.currentUser?.id;
+      if (nestId.isEmpty || me == null) return false;
+      // One separate copy per senior picked (null = everyone, only if the
+      // nest has no senior profile to address).
+      final targets = seniorIds.isEmpty ? <String?>[null] : seniorIds;
+      await supabase.from('legacy_story_prompts').insert([
+        for (final t in targets)
+          {
+            'nest_id': nestId,
+            'suggested_by': me,
+            'prompt_text': text,
+            if (t != null) 'for_user_id': t,
+          },
+      ]);
+      if (seniorIds.isNotEmpty) {
+        final who = _displayName.isNotEmpty ? _displayName : 'Someone';
+        PushService.notify(
+          userIds: seniorIds,
+          title: '$who has a question for you',
+          body: text.length > 90 ? '${text.substring(0, 90)}...' : text,
+          category: 'message',
+          data: {'type': 'legacy'},
+        );
+      }
+      _loadData();
+      return true;
+    } catch (e) {
+      debugPrint('LEGACY ASK QUESTION ERROR: $e');
+      return false;
+    }
+  }
+
   Widget _buildPromptSection(bool isTablet) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -1490,14 +1935,46 @@ class _LegacyScreenState extends State<LegacyScreen>
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        prompt,
-                        style: GoogleFonts.nunitoSans(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: _textPrimary,
-                          height: 1.5,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            prompt,
+                            style: GoogleFonts.nunitoSans(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: _textPrimary,
+                              height: 1.5,
+                            ),
+                          ),
+                          Builder(builder: (_) {
+                            final meta = _promptRows.firstWhere(
+                              (m) => m['text'] == prompt,
+                              orElse: () => const <String, String>{},
+                            );
+                            final asker = meta['askerName'] ?? '';
+                            if (asker.isEmpty) return const SizedBox.shrink();
+                            final forName = _seniors
+                                .where((s) => s['id'] == meta['forId'])
+                                .map((s) => s['name'] ?? '')
+                                .firstOrNull;
+                            final label = _isSenior
+                                ? '$asker asked you'
+                                : (forName != null && forName.isNotEmpty
+                                    ? '$asker asked $forName'
+                                    : 'Asked by $asker');
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                label,
+                                style: GoogleFonts.nunitoSans(
+                                  fontSize: 12,
+                                  color: _textSecondary,
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
                       ),
                     ),
                     if (_isSenior && !_isNestArchived) ...[
@@ -2238,11 +2715,15 @@ class _LegacyScreenState extends State<LegacyScreen>
       final prefs = await SharedPreferences.getInstance();
       final nestId = prefs.getString('nest_id') ?? '';
       if (nestId.isNotEmpty) {
+        // Build 291: only clear the question that was asked of THIS senior
+        // (or an old one asked of everyone) -- never another senior's copy.
+        final me = supabase.auth.currentUser?.id ?? '';
         await supabase
             .from('legacy_story_prompts')
             .delete()
             .eq('nest_id', nestId)
-            .eq('prompt_text', prompt);
+            .eq('prompt_text', prompt)
+            .or('for_user_id.eq.$me,for_user_id.is.null');
       }
     } catch (e) {
       debugPrint('LEGACY PROMPT DELETE ERROR: $e');
