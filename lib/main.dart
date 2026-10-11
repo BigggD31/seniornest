@@ -762,15 +762,27 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                       _ => null,
                     };
                     if (page == null) return null;
+                    // Oct 10 2026 (build 290): sign-in hands over from one
+                    // branded logo screen to an identical one (Home's loading
+                    // hold). The 350 ms crossfade below made both fade through
+                    // the light backdrop at once -- a visible brightness dip
+                    // and doubled dots/phrase. When Home is still loading,
+                    // cut instantly instead; the two screens are identical.
+                    final instantToHome =
+                        settings.name == AppRoutes.familyFeedScreen &&
+                            appHomeLoadingNotifier.value;
                     return PageRouteBuilder(
                       settings: settings,
-                      transitionDuration: const Duration(milliseconds: 350),
+                      transitionDuration: instantToHome
+                          ? Duration.zero
+                          : const Duration(milliseconds: 350),
                       reverseTransitionDuration:
                           const Duration(milliseconds: 350),
                       pageBuilder: (context, animation, secondaryAnimation) =>
                           page,
                       transitionsBuilder:
                           (context, animation, secondaryAnimation, child) {
+                        if (instantToHome) return child;
                         // True simultaneous crossfade -- previously this was
                         // staged (old page fades out over the first 30% of
                         // the duration, THEN the new page fades in over the

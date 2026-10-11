@@ -62,10 +62,26 @@ class BrandedTransitionScreen extends StatefulWidget {
 
 class _BrandedTransitionScreenState extends State<BrandedTransitionScreen>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _dots = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  )..repeat();
+  static const int _dotsMs = 1200;
+  late final AnimationController _dots;
+
+  @override
+  void initState() {
+    super.initState();
+    _dots = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: _dotsMs),
+    );
+    // Start the dots at the same point in their cycle as the screen being
+    // replaced (derived from the shared wall-clock epoch), so the hand-over
+    // from the sign-in screen to Home's hold doesn't restart the pulse.
+    final epoch = BrandedTransitionScreen._messageEpoch;
+    if (widget.showMessages && epoch != null) {
+      final ms = DateTime.now().difference(epoch).inMilliseconds;
+      _dots.value = (ms % _dotsMs) / _dotsMs;
+    }
+    _dots.repeat();
+  }
 
   @override
   void dispose() {
