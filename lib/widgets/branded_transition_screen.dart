@@ -212,6 +212,15 @@ class _BrandedTransitionScreenState extends State<BrandedTransitionScreen>
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                               height: 1.4,
+                              // Oct 13 2026: pinned so the phrase lays out
+                              // identically on the sign-in screen (inside a
+                              // Material Scaffold, which injects 0.25
+                              // letter spacing) and Home's hold overlay (no
+                              // Material ancestor). Otherwise the line wraps
+                              // differently at hand-over and looks like the
+                              // first phrase flashing twice.
+                              letterSpacing: 0,
+                              wordSpacing: 0,
                               color: const Color(0xFF6B5B3E),
                               // No Material ancestor here (Home hold overlay):
                               // without this Flutter draws its yellow debug
