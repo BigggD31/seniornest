@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // Aug 20 2026: D Von's ask -- a short sequence of full-bleed marketing
 // photos (his own wording already baked into each image, nothing else
 // drawn on top) shown before the real splash/pitch screen. Each one
-// advances on tap, or automatically after ~2.5s if nobody touches it.
+// advances on tap, or automatically after 5s (was ~2.5s until Oct 12 2026) if nobody touches it.
 // Built as one reusable widget rather than one-off screens per image,
 // since D Von's plan is "build one, then just give you a different photo
 // for the next one" -- IntroSequenceScreen below takes a plain list of
@@ -16,7 +16,7 @@ class BrandedIntroSlide extends StatefulWidget {
     super.key,
     required this.imagePath,
     required this.onAdvance,
-    this.autoAdvanceDelay = const Duration(milliseconds: 2500),
+    this.autoAdvanceDelay = const Duration(seconds: 5),
   });
 
   final String imagePath;
@@ -117,7 +117,7 @@ class _IntroSequenceScreenState extends State<IntroSequenceScreen> {
       return widget.builder(context);
     }
     return BrandedIntroSlide(
-      // Keying by index forces a fresh State (and a fresh 2.5s timer)
+      // Keying by index forces a fresh State (and a fresh 5s timer)
       // for each slide -- without this, Flutter could reuse the same
       // State object across slides since they're the same widget type,
       // and the old timer/tap-guard would carry over incorrectly.
