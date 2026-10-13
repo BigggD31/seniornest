@@ -142,9 +142,19 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     );
   }
 
+  // Oct 12 2026: these screens stay mounted (tab IndexedStack) and only read
+  // dark mode when they loaded, so flipping the Setup toggle left them
+  // stale. Follow the app-wide notifier live.
+  void _onDarkModeChanged() {
+    if (!mounted) return;
+    final v = appDarkModeNotifier.value;
+    if (_isDarkMode != v) setState(() => _isDarkMode = v);
+  }
+
   @override
   void initState() {
     super.initState();
+    appDarkModeNotifier.addListener(_onDarkModeChanged);
     appProfilePhotoVersionNotifier.addListener(_reloadProfilePhoto);
     AudioSession.instance.then((session) async {
       await session.configure(AudioSessionConfiguration(
@@ -299,6 +309,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     _videoCaptionController.dispose();
     _textFocusNode.dispose();
     appProfilePhotoVersionNotifier.removeListener(_reloadProfilePhoto);
+    appDarkModeNotifier.removeListener(_onDarkModeChanged);
     super.dispose();
   }
 

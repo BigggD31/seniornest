@@ -49,9 +49,19 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
   bool _isDarkMode = appDarkModeNotifier.value;
   StreamSubscription<List<Map<String, dynamic>>>? _sub;
 
+  // Oct 12 2026: these screens stay mounted (tab IndexedStack) and only read
+  // dark mode when they loaded, so flipping the Setup toggle left them
+  // stale. Follow the app-wide notifier live.
+  void _onDarkModeChanged() {
+    if (!mounted) return;
+    final v = appDarkModeNotifier.value;
+    if (_isDarkMode != v) setState(() => _isDarkMode = v);
+  }
+
   @override
   void initState() {
     super.initState();
+    appDarkModeNotifier.addListener(_onDarkModeChanged);
     _init();
   }
 
@@ -60,6 +70,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     _sub?.cancel();
     _controller.dispose();
     _scrollController.dispose();
+    appDarkModeNotifier.removeListener(_onDarkModeChanged);
     super.dispose();
   }
 

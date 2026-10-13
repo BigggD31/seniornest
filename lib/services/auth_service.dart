@@ -1,6 +1,5 @@
 import 'timing_log.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
@@ -583,9 +582,7 @@ class AuthService {
     // to fix. D Von confirmed on-device: worse than before. Back to the
     // narrower, proven-safe dark_mode-only fix until a version of the
     // full fix exists that doesn't render before the real data is ready.
-    final brightness = SchedulerBinding.instance.platformDispatcher.platformBrightness;
-    final savedDarkMode = prefs.getBool('dark_mode');
-    appDarkModeNotifier.value = savedDarkMode ?? (brightness == Brightness.dark);
+    appDarkModeNotifier.value = prefs.getBool('dark_mode') ?? false;
 
     await prefs.setString('last_known_user_id', currentUserId);
   }

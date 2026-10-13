@@ -465,9 +465,19 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   RealtimeChannel? _feedChannel;
   Timer? _realtimeRefreshDebounce;
 
+  // Oct 12 2026: these screens stay mounted (tab IndexedStack) and only read
+  // dark mode when they loaded, so flipping the Setup toggle left them
+  // stale. Follow the app-wide notifier live.
+  void _onDarkModeChanged() {
+    if (!mounted) return;
+    final v = appDarkModeNotifier.value;
+    if (_isDarkMode != v) setState(() => _isDarkMode = v);
+  }
+
   @override
   void initState() {
     super.initState();
+    appDarkModeNotifier.addListener(_onDarkModeChanged);
     _listEntranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 260),
@@ -2529,6 +2539,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     _feedChannel?.unsubscribe();
     _listEntranceController.dispose();
     _scrollController.dispose();
+    appDarkModeNotifier.removeListener(_onDarkModeChanged);
     super.dispose();
   }
 

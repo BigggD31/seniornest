@@ -87,9 +87,19 @@ class _SafetyScreenState extends State<SafetyScreen>
     },
   ];
 
+  // Oct 12 2026: these screens stay mounted (tab IndexedStack) and only read
+  // dark mode when they loaded, so flipping the Setup toggle left them
+  // stale. Follow the app-wide notifier live.
+  void _onDarkModeChanged() {
+    if (!mounted) return;
+    final v = appDarkModeNotifier.value;
+    if (_isDarkMode != v) setState(() => _isDarkMode = v);
+  }
+
   @override
   void initState() {
     super.initState();
+    appDarkModeNotifier.addListener(_onDarkModeChanged);
     appProfilePhotoVersionNotifier.addListener(_reloadProfilePhoto);
     _entranceController = AnimationController(
       vsync: this,
@@ -173,9 +183,6 @@ class _SafetyScreenState extends State<SafetyScreen>
     // Everything else this screen needs before the senior-name network
     // lookup is a synchronous SharedPreferences read -- no reason to wait
     // on a network round-trip to paint the screen with these.
-    final systemDark =
-        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-        Brightness.dark;
     final profileJson = prefs.getString(kProfilePhotoKey);
     Map<String, dynamic>? profileData;
     if (profileJson != null) {
@@ -271,7 +278,7 @@ class _SafetyScreenState extends State<SafetyScreen>
       }
       _isNestArchived = isNestArchived;
       _isSenior = isSeniorRole;
-      _isDarkMode = prefs.getBool('dark_mode') ?? systemDark;
+      _isDarkMode = prefs.getBool('dark_mode') ?? false;
       _seniorName = initialSeniorName;
       if (initialSeniorStatuses.isNotEmpty) {
         _seniorStatuses = initialSeniorStatuses;
@@ -487,6 +494,7 @@ class _SafetyScreenState extends State<SafetyScreen>
       Supabase.instance.client.removeChannel(_statusChannel!);
     }
     appProfilePhotoVersionNotifier.removeListener(_reloadProfilePhoto);
+    appDarkModeNotifier.removeListener(_onDarkModeChanged);
     super.dispose();
   }
 

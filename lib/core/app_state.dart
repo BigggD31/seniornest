@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -410,16 +409,9 @@ double textSizeToScale(String size) {
 // switch). Takes an already-obtained SharedPreferences instance rather
 // than fetching its own, since both call sites already have one in scope.
 Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
-  // Dark mode: follow the saved preference if one was ever set, else
-  // follow system brightness -- same fallback this always had.
-  final savedDarkMode = prefs.getBool('dark_mode');
-  if (savedDarkMode != null) {
-    appDarkModeNotifier.value = savedDarkMode;
-  } else {
-    final brightness =
-        SchedulerBinding.instance.platformDispatcher.platformBrightness;
-    appDarkModeNotifier.value = brightness == Brightness.dark;
-  }
+  // Dark mode: light unless the person turned it on in Setup (Oct 12 2026:
+  // no longer follows the phone's system brightness when nothing is saved).
+  appDarkModeNotifier.value = prefs.getBool('dark_mode') ?? false;
 
   final savedNestName = prefs.getString('nest_name');
   if (savedNestName != null && savedNestName.isNotEmpty) {
