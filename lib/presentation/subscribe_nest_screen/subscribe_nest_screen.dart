@@ -67,6 +67,16 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
         if (purchase.status == PurchaseStatus.purchased ||
             purchase.status == PurchaseStatus.restored) {
           _iap.completePurchase(purchase);
+          // Oct 14 2026: first-time signup must NEVER move on by itself.
+          // StoreKit replays purchases this Apple ID already owns the moment
+          // the screen starts listening (a reinstall, a new device, or a
+          // returning customer). Only a purchase the person just started
+          // with the button, or a Restore Purchases tap, may move them on.
+          if (!_isAdditionalNest && !_userStartedPurchase && !_restoreInFlight) {
+            debugPrint('SUBSCRIBE_REPLAY_IGNORED: ${purchase.productID} ${purchase.status}');
+            if (mounted) setState(() => _isPurchasing = false);
+            continue;
+          }
           // Always complete the purchase with the store above (required
           // regardless of dedup, or StoreKit keeps redelivering it), but
           // skip everything else if this exact purchase was already
@@ -357,7 +367,15 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
       await _iap.buyNonConsumable(purchaseParam: purchaseParam);
       setState(() => _isPurchasing = false);
     } else {
-      _navigateForward();
+      // Oct 14 2026: used to call _navigateForward() here, which let anyone
+      // past this screen without paying whenever the price had not loaded
+      // yet. Never move on without a confirmed purchase.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Still loading — please try again in a moment."),
+        ));
+      }
+      _initIAP();
     }
   }
 
