@@ -1000,6 +1000,17 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             .select(
                 'user_profiles(display_name, preferred_name, birthday, anniversary, avatar_url)')
             .eq('nest_id', earlyNestId));
+    // Oct 14 2026: TEMPORARY timing (TIMING_DEBUG) -- D Von reported the
+    // Birthdays & Anniversaries card appearing ~10 s after the rest of Home
+    // on a cold sign-in. Remove with the other temporary logging.
+    if (celebrationsFuture != null) {
+      TimingLog.mark('celebrations query sent');
+      celebrationsFuture.then((r) {
+        TimingLog.mark(r is _QueryFailed
+            ? 'celebrations query FAILED'
+            : 'celebrations query returned ${r is List ? r.length : 0} rows');
+      });
+    }
     final Future<Object?>? existenceFuture =
         (earlyNestId.isEmpty || earlyCacheMatches)
             ? null
@@ -1134,8 +1145,22 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     try {
       final celebrationsNestId = celebrationsFetchedFor;
       if (celebrationsNestId.isNotEmpty) {
-        final memberRowsResult =
+        Object? memberRowsResult =
             celebrationsFuture == null ? null : await celebrationsFuture;
+        if (memberRowsResult is _QueryFailed) {
+          // Oct 14 2026: one retry instead of silently leaving the card
+          // empty for the whole session (this is the only place the
+          // celebrations are ever set).
+          TimingLog.mark('celebrations retry');
+          memberRowsResult = await _safeQuery(Supabase.instance.client
+              .from('nest_members')
+              .select(
+                  'user_profiles(display_name, preferred_name, birthday, anniversary, avatar_url)')
+              .eq('nest_id', celebrationsNestId));
+          TimingLog.mark(memberRowsResult is _QueryFailed
+              ? 'celebrations retry FAILED'
+              : 'celebrations retry ok');
+        }
         if (memberRowsResult is _QueryFailed) {
           throw Exception('celebrations query failed');
         }
@@ -1327,6 +1352,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               ]
             : [];
 
+    TimingLog.mark(
+        'home first setState (celebrations today=${todayEvents.length} upcoming=${upcomingEvents.length})');
     setState(() {
       _isSenior = role == 'senior';
       _displayName = name;
