@@ -4,21 +4,28 @@ import 'package:google_fonts/google_fonts.dart';
 /// Oct 15 2026: plain-language "Tips & Tricks" page, opened from Setup.
 /// Each tip is a card that opens to show a few short lines and, where one
 /// exists, a real screenshot with a circle and a caption.
+enum _Audience { everyone, senior, family, owner }
+
 class _Tip {
   const _Tip({
     required this.emoji,
     required this.title,
     required this.lines,
+    this.audience = _Audience.everyone,
     this.image,
     this.caption,
   });
   final String emoji;
   final String title;
   final List<String> lines;
+  final _Audience audience;
   final String? image;
   final String? caption;
 }
 
+/// Oct 15 2026: tips are text-only for now (screenshots can be added later
+/// through [image] / [caption]). Each tip is shown only to the people it
+/// applies to: everyone, seniors, family members, or the Nest Owner.
 const List<_Tip> _tips = [
   _Tip(
     emoji: '✨',
@@ -39,46 +46,84 @@ const List<_Tip> _tips = [
     ],
   ),
   _Tip(
+    emoji: '💌',
+    title: 'Sending something to your family',
+    lines: [
+      'Open the Share tab and choose Text, Photo, Voice or Video.',
+      'Write or record your message, then tap Send with Love.',
+    ],
+  ),
+  _Tip(
+    emoji: '👤',
+    title: 'Changing your name, birthday or photo',
+    lines: [
+      'In Setup, tap the pencil on your profile card to change your name, what you want to be called, and your birthday and anniversary.',
+      'Tap your picture to choose a new photo or emoji.',
+      'Changes show up right away.',
+    ],
+  ),
+  _Tip(
     emoji: '💚',
     title: 'Letting family know you\'re okay',
+    audience: _Audience.senior,
     lines: [
       'On the Home tab, tap the "I\'m Good Today" heart. One tap, no phone call needed.',
       'Your family sees it right away on their Home screen.',
     ],
   ),
   _Tip(
-    emoji: '🔑',
-    title: 'Inviting your family',
-    lines: [
-      'If you are the Nest Owner, your invite code is at the top of Setup.',
-      'Tap Share to send it by text or email. Everyone you invite joins for free.',
-    ],
-  ),
-  _Tip(
     emoji: '🎙️',
     title: 'Recording a Legacy story',
+    audience: _Audience.senior,
     lines: [
       'Open the Legacy tab to record a memory in your own voice or on video, as long as you like.',
       'Stories are saved for your family to keep for generations.',
     ],
   ),
   _Tip(
-    emoji: '🏡',
-    title: 'Changing your Nest name',
+    emoji: '💚',
+    title: 'Knowing your loved one is okay',
+    audience: _Audience.family,
     lines: [
-      'The Nest Owner can rename the Nest any time in Setup, under Your Nest.',
-      'Tap Nest Name, type the new name, and save. It changes everywhere right away.',
-      'You can also change your name, what you want to be called, and your birthday and anniversary with the pencil on your profile card at the top of Setup.',
+      'When your senior taps "I\'m Good Today", you will see it right away on your Home screen.',
+      'You can also send them a message any time from the Share tab.',
     ],
-    image: 'assets/images/tip_nest_name.jpg',
-    caption: 'Tap Nest Name under "Your Nest" in Setup.',
+  ),
+  _Tip(
+    emoji: '🔑',
+    title: 'Inviting family and renaming your Nest',
+    audience: _Audience.owner,
+    lines: [
+      'Your invite code is at the top of Setup. Tap Share to send it by text or email. Everyone you invite joins for free.',
+      'To rename your Nest, open Setup, tap Nest Name under Your Nest, type the new name, and save.',
+    ],
   ),
 ];
 
 class TipsScreen extends StatelessWidget {
-  const TipsScreen({super.key, required this.isDarkMode});
+  const TipsScreen({
+    super.key,
+    required this.isDarkMode,
+    this.isSenior = false,
+    this.isNestOwner = false,
+  });
 
   final bool isDarkMode;
+  final bool isSenior;
+  final bool isNestOwner;
+
+  bool _shows(_Tip t) {
+    switch (t.audience) {
+      case _Audience.everyone:
+        return true;
+      case _Audience.senior:
+        return isSenior;
+      case _Audience.family:
+        return !isSenior;
+      case _Audience.owner:
+        return isNestOwner;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +164,7 @@ class TipsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            for (final tip in _tips)
+            for (final tip in _tips.where(_shows))
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(

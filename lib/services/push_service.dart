@@ -148,18 +148,9 @@ class PushService {
     }
   }
 
-  static Future<void> _logPushDebug(String message) async {
-    debugPrint('PUSH_DEBUG: $message');
-    // Oct 8 2026: restored (push registration outcomes only) -- zero device
-    // tokens were registered on build 281 and without this there is no way
-    // to see why. Remove again once push is confirmed working.
-    try {
-      await Supabase.instance.client.from('temp_debug_logs').insert({
-        'tag': 'PUSH_DEBUG',
-        'message': message,
-      });
-    } catch (_) {}
-  }
+  /// Oct 15 2026: temporary push diagnostics switched off for release.
+  /// Kept as a no-op so the call sites above stay untouched; nothing is sent.
+  static Future<void> _logPushDebug(String message) async {}
 
   static Future<void> _saveToken(String userId, String token) async {
     try {

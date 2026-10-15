@@ -506,6 +506,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     appDisplayNameNotifier.addListener(_onDisplayNameNotified);
     appCelebrationsVersionNotifier.addListener(_reloadCelebrations);
     appNestMembersNotifier.addListener(_onNestMembersNotified);
+    appProfilePhotoVersionNotifier.addListener(_onOwnPhotoChanged);
     // Oct 7 2026: load the Nest list quietly, a few seconds after Home is
     // up (not during the sign-in burst), so tapping the Nest name opens
     // the switcher instantly instead of waiting on a server round trip.
@@ -2202,6 +2203,63 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   // A member removed on Setup disappears from Home's avatar row at once.
+  /// Oct 15 2026: when the person changes their own picture, update every
+  /// place on Home that already shows it (their posts and their
+  /// Celebrations card) without waiting for a reload. The new picture is
+  /// read from the same local copy the picture picker just saved.
+  Future<void> _onOwnPhotoChanged() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final json = prefs.getString(kProfilePhotoKey);
+      final me = Supabase.instance.client.auth.currentUser?.id;
+      if (json == null || json.isEmpty || me == null || !mounted) return;
+      final myName = (() {
+        final pref = prefs.getString('preferred_name') ?? '';
+        return pref.isNotEmpty ? pref : (prefs.getString('display_name') ?? '');
+      })();
+      setState(() {
+        _messages = _messages
+            .map((m) => m.authorId == me
+                ? MessageModel(
+                    id: m.id,
+                    authorId: m.authorId,
+                    senderName: m.senderName,
+                    senderRelationship: m.senderRelationship,
+                    senderRole: m.senderRole,
+                    senderAvatarUrl: json,
+                    senderAvatarLabel: m.senderAvatarLabel,
+                    senderAvatarJson: json,
+                    type: m.type,
+                    content: m.content,
+                    imageUrl: m.imageUrl,
+                    imageSemanticLabel: m.imageSemanticLabel,
+                    timestamp: m.timestamp,
+                    heartCount: m.heartCount,
+                    isHearted: m.isHearted,
+                    isSample: m.isSample,
+                    isRecordedVideo: m.isRecordedVideo,
+                    recipientLabel: m.recipientLabel,
+                    taggedNamesLabel: m.taggedNamesLabel,
+                    pinnedPosition: m.pinnedPosition,
+                  )
+                : m)
+            .toList();
+        CelebrationEvent withMyPhoto(CelebrationEvent e) => (myName.isNotEmpty &&
+                e.name == myName)
+            ? CelebrationEvent(
+                name: e.name,
+                type: e.type,
+                dateLabel: e.dateLabel,
+                daysUntil: e.daysUntil,
+                avatarJson: json,
+              )
+            : e;
+        _todayCelebrations = _todayCelebrations.map(withMyPhoto).toList();
+        _upcomingCelebrations = _upcomingCelebrations.map(withMyPhoto).toList();
+      });
+    } catch (_) {}
+  }
+
   void _onNestMembersNotified() {
     if (!mounted || appNestMembersNotifier.value.isEmpty) return;
     final ids = appNestMembersNotifier.value.map((m) => m['id']).toSet();
@@ -2694,6 +2752,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     appDisplayNameNotifier.removeListener(_onDisplayNameNotified);
     appCelebrationsVersionNotifier.removeListener(_reloadCelebrations);
     appNestMembersNotifier.removeListener(_onNestMembersNotified);
+    appProfilePhotoVersionNotifier.removeListener(_onOwnPhotoChanged);
     _realtimeRefreshDebounce?.cancel();
     _feedChannel?.unsubscribe();
     _listEntranceController.dispose();

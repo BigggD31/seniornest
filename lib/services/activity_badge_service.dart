@@ -60,15 +60,9 @@ class ActivityBadgeService {
     _badgeChannel.invokeMethod('setBadge', total).catchError((_) {});
   }
 
-  static Future<void> _log(String msg) async {
-    try {
-      final who = Supabase.instance.client.auth.currentUser?.id ?? 'none';
-      await Supabase.instance.client.from('temp_debug_logs').insert({
-        'tag': 'BADGE_DEBUG',
-        'message': '[$who] $msg',
-      });
-    } catch (_) {}
-  }
+  /// Oct 15 2026: temporary badge diagnostics switched off for release.
+  /// Kept as a no-op so the call sites stay untouched; nothing is sent.
+  static Future<void> _log(String msg) async {}
 
   /// Safe to call any number of times, from anywhere. Concurrent calls are
   /// collapsed, a different signed-in user triggers a clean re-init, and a

@@ -2020,7 +2020,11 @@ class _SetupScreenState extends State<SetupScreen>
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => TipsScreen(isDarkMode: _isDarkMode),
+                builder: (_) => TipsScreen(
+                  isDarkMode: _isDarkMode,
+                  isSenior: _isSenior,
+                  isNestOwner: _isNestOwner,
+                ),
               ),
             ),
             child: Container(
@@ -3943,7 +3947,14 @@ class _FamilyMembersSheetState extends State<_FamilyMembersSheet> {
               ),
             )
           else
-            ...widget.members.map((member) {
+            // Oct 15 2026: the list scrolls inside the sheet so a large
+            // family never runs off the bottom of the screen.
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: widget.members.map((member) {
               return GestureDetector(
                 onTap: widget.isNestOwner
                     ? () => _showMemberOptions(context, member)
@@ -4002,7 +4013,10 @@ class _FamilyMembersSheetState extends State<_FamilyMembersSheet> {
                   ),
                 ),
               );
-            }),
+            }).toList(),
+                ),
+              ),
+            ),
         ],
       ),
     );
