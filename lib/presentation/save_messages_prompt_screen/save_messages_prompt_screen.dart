@@ -1,3 +1,4 @@
+import '../../services/subscription_recorder.dart';
 import '../../services/timing_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -852,6 +853,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             // failure here shouldn't fail the nest creation that already
             // succeeded, so it's isolated in its own try/catch.
             try {
+              // Oct 14 2026: make sure a purchase made before this account
+              // existed has been written before attaching it to the Nest.
+              await SubscriptionRecorder.flushPending();
               await supabase
                   .from('subscriptions')
                   .update({'nest_id': nestId})

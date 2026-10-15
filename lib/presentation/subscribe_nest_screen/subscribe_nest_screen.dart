@@ -1,3 +1,4 @@
+import '../../services/subscription_recorder.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -262,69 +263,11 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   // an *additional* nest from an existing account, the nest already exists
   // by the time they land here, so nestId will be passed in directly.
   Future<void> _recordSubscription(String productId, String? transactionId, {String? nestId, bool isRestore = false}) async {
-    try {
-      final supabase = Supabase.instance.client;
-      final userId = supabase.auth.currentUser?.id;
-      if (userId == null) return;
-      final now = DateTime.now();
-      // PROVISIONAL expiry only. The phone cannot know whether Apple started
-      // a 3-day trial or charged right away, so it never guesses a long
-      // window. A new purchase gets 3 days of access here; the real
-      // paid-through date is written by the server when Apple reports it
-      // (apple-subscription-webhook) and always wins. A later expiry already
-      // on the row is never shortened, and a "restored" event never extends
-      // anything. Lifetime/promo entitlements never expire.
-      DateTime? expiresAt;
-      String status = 'active';
-      if (productId == _yearlyProductId ||
-          productId == _additionalNestYearlyProductId ||
-          productId == _monthlyProductId ||
-          productId == _additionalNestMonthlyProductId) {
-        expiresAt = now.add(const Duration(days: 3));
-      } else {
-        // promo / lifetime-style entitlement
-        expiresAt = null;
-        status = 'lifetime';
-      }
-      final row = {
-        'user_id': userId,
-        'nest_id': nestId,
-        'product_id': productId,
-        'status': status,
-        'purchase_date': now.toIso8601String(),
-        'expires_at': expiresAt?.toIso8601String(),
-        'transaction_id': transactionId,
-        'updated_at': now.toIso8601String(),
-      };
-      // Explicit check-then-write instead of upsert(onConflict: 'user_id,nest_id'):
-      // Postgres unique constraints don't treat NULL = NULL, so a plain
-      // upsert wouldn't reliably catch a retry/double-tap when nestId is null
-      // (the first-time-signup case). Mirrors the same pattern used in the
-      // redeem_vip_code() DB function for the same reason.
-      var query = supabase.from('subscriptions').select('id, expires_at, status').eq('user_id', userId);
-      query = nestId == null ? query.isFilter('nest_id', null) : query.eq('nest_id', nestId);
-      final existing = await query.maybeSingle();
-      if (existing != null) {
-        // A restored purchase must never touch an existing row: the server
-        // already holds Apple's real dates.
-        if (isRestore) return;
-        if (existing['status'] == 'lifetime') return;
-        final existingExpiry = DateTime.tryParse('${existing['expires_at'] ?? ''}');
-        if (existingExpiry != null && expiresAt != null && existingExpiry.isAfter(expiresAt)) {
-          row.remove('expires_at');
-        }
-        await supabase.from('subscriptions').update(row).eq('id', existing['id'] as String);
-      } else {
-        await supabase.from('subscriptions').insert(row);
-      }
-      // Pull in Apple's verified dates if Apple's notification already
-      // reached the server. Harmless no-op otherwise.
-      try {
-        await supabase.rpc('reconcile_my_subscription');
-      } catch (_) {}
-    } catch (e) {
-      debugPrint('SUBSCRIPTION_RECORD_ERROR: $e');
-    }
+    // Oct 14 2026: moved to SubscriptionRecorder, which also holds the
+    // purchase on the phone when no account exists yet (first-time signup
+    // pays before the account is created) and writes it after sign-in.
+    await SubscriptionRecorder.record(productId, transactionId,
+        nestId: nestId, isRestore: isRestore);
   }
 
   Future<void> _initIAP() async {

@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_state.dart';
 import 'push_service.dart';
 import 'activity_badge_service.dart';
+import 'subscription_recorder.dart';
 
 class AuthService {
   static SupabaseClient get _client => Supabase.instance.client;
@@ -27,6 +28,18 @@ class AuthService {
   static bool get isSignedIn => _client.auth.currentUser != null;
   static User? get currentUser => _client.auth.currentUser;
   static String? get currentUserId => _client.auth.currentUser?.id;
+
+  // Oct 14 2026: a first-time signup pays before the account exists, so the
+  // purchase is held on the phone. Write it as soon as an account exists.
+  // Never allowed to fail or noticeably delay the sign-in itself.
+  static Future<void> _flushHeldPurchase() async {
+    try {
+      await SubscriptionRecorder.flushPending()
+          .timeout(const Duration(seconds: 6));
+    } catch (e) {
+      debugPrint('FLUSH_HELD_PURCHASE_ERROR: $e');
+    }
+  }
 
   // ── Google Sign-In ────────────────────────────────────────────────────────
   static Future<AuthResult> signInWithGoogle() async {
@@ -71,6 +84,7 @@ class AuthService {
           idToken: idToken,
         );
 
+        await _flushHeldPurchase();
         return AuthResult.success(response.user);
       }
     } on AuthException catch (e) {
@@ -118,6 +132,7 @@ class AuthService {
         nonce: rawNonce,
       );
 
+      await _flushHeldPurchase();
       return AuthResult.success(response.user);
     } on AuthException catch (e) {
       return AuthResult.error(_friendlyAuthError(e.message));
@@ -145,6 +160,7 @@ class AuthService {
             ? {'display_name': displayName}
             : null,
       );
+      await _flushHeldPurchase();
       return AuthResult.success(response.user);
     } on AuthException catch (e) {
       return AuthResult.error(_friendlyAuthError(e.message));
@@ -165,6 +181,7 @@ class AuthService {
         email: email.trim(),
         password: password,
       );
+      await _flushHeldPurchase();
       return AuthResult.success(response.user);
     } on AuthException catch (e) {
       return AuthResult.error(_friendlyAuthError(e.message));

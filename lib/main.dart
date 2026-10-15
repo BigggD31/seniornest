@@ -1,3 +1,4 @@
+import 'services/subscription_recorder.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:app_links/app_links.dart';
 import 'dart:async';
@@ -280,6 +281,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     try {
       final userId = await _waitForRestoredUserId();
       if (userId == null) return false;
+
+      // Oct 14 2026: safety net -- if a purchase made before this account
+      // existed is still held on the phone (e.g. the write at sign-in hit a
+      // network blip), write it now. A no-op when nothing is held.
+      await SubscriptionRecorder.flushPending();
 
       if (await _hasActiveSubscriptionRow(userId)) return true;
 
