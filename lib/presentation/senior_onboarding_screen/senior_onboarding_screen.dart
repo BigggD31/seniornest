@@ -1300,9 +1300,13 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
 
   Widget _buildStep3(bool isTablet) {
     // Read from controller first; fall back to SharedPreferences-loaded _savedName
-    final name = _nameController.text.trim().isNotEmpty
-        ? _nameController.text.trim()
-        : (_savedName.isNotEmpty ? _savedName : 'your friend');
+    // Oct 14 2026: the "What should we call you?" answer always wins over
+    // the full name on this summary.
+    final name = _preferredNameController.text.trim().isNotEmpty
+        ? _preferredNameController.text.trim()
+        : (_nameController.text.trim().isNotEmpty
+            ? _nameController.text.trim()
+            : (_savedName.isNotEmpty ? _savedName : 'your friend'));
     // Sep 19 2026: D Von's direct report -- for an invite-joiner, this
     // fell back to "$name's Nest" (a plausible-looking but WRONG guess)
     // for the split second before the real name arrives from the

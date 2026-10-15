@@ -1515,9 +1515,13 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
         ? const Color(0xFF7A6A58)
         : const Color(0xFFA8A090);
 
-    final name = _nameController.text.trim().isNotEmpty
-        ? _nameController.text.trim()
-        : (_savedName.isNotEmpty ? _savedName : 'you');
+    // Oct 14 2026: the "What should we call you?" answer always wins over
+    // the full name on this summary.
+    final name = _preferredNameController.text.trim().isNotEmpty
+        ? _preferredNameController.text.trim()
+        : (_nameController.text.trim().isNotEmpty
+            ? _nameController.text.trim()
+            : (_savedName.isNotEmpty ? _savedName : 'you'));
 
     // Sep 19 2026: same fix as senior_onboarding_screen.dart's identical
     // spot -- an invite-joiner shouldn't see a specific wrong guess

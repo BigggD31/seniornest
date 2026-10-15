@@ -2795,12 +2795,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 // from Home on purpose -- the invite code lives only in
                 // Setup, for the Nest Owner.
                 // Celebrations card (all users, only if events within 30 days)
-                // Oct 5 2026: placeholders last until a Nest has real content --
-                // a brand-new Nest shows no real Birthdays & Anniversaries
-                // card until its first real post.
-                if ((_todayCelebrations.isNotEmpty ||
-                        _upcomingCelebrations.isNotEmpty) &&
-                    _messages.any((m) => !m.id.startsWith('msg_'))) ...[
+                // Oct 14 2026: a real birthday/anniversary within 30 days IS
+                // real content, so it shows immediately on a brand-new Nest
+                // (above the sample posts). The lists only ever hold real
+                // dates inside the 30-day window; the other sample
+                // placeholders stay exactly as before.
+                if (_todayCelebrations.isNotEmpty ||
+                    _upcomingCelebrations.isNotEmpty) ...[
                   DailyUpdatesSectionWidget(
                     isDarkMode: _isDarkMode,
                     title: 'Birthdays & Anniversaries',
