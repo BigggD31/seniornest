@@ -15,6 +15,9 @@ import '../../widgets/branded_transition_screen.dart';
 import '../../services/activity_badge_service.dart';
 import '../../services/timing_log.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
+import '../tips_screen/tips_screen.dart';
+import '../../core/community_config.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SetupScreen extends StatefulWidget {
   const SetupScreen({super.key});
@@ -1279,6 +1282,7 @@ class _SetupScreenState extends State<SetupScreen>
                     child: _buildNotificationsSection(isTablet),
                   ),
                   SliverToBoxAdapter(child: _buildAppearanceSection(isTablet)),
+                  SliverToBoxAdapter(child: _buildTipsAndCommunity(isTablet)),
                   SliverToBoxAdapter(child: _buildNestOwnershipSectionWrapper(isTablet)),
                   SliverToBoxAdapter(child: _buildAccountSection(isTablet)),
                   const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
@@ -1999,6 +2003,82 @@ class _SetupScreenState extends State<SetupScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Oct 15 2026: highlighted Tips & Tricks card (and, once a group link is
+  // set in community_config.dart, the community row) just above Nest
+  // Ownership.
+  Widget _buildTipsAndCommunity(bool isTablet) {
+    const gold = Color(0xFFC8922A);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(isTablet ? 28 : 20, 24, isTablet ? 28 : 20, 0),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TipsScreen(isDarkMode: _isDarkMode),
+              ),
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              decoration: BoxDecoration(
+                color: gold.withValues(alpha: _isDarkMode ? 0.18 : 0.12),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: gold.withValues(alpha: 0.6), width: 1.5),
+              ),
+              child: Row(
+                children: [
+                  const Text('💡', style: TextStyle(fontSize: 24)),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Tips & Tricks',
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: _textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Quick help, with pictures',
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 13,
+                            color: _textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: _textSecondary),
+                ],
+              ),
+            ),
+          ),
+          if (kCommunityGroupUrl.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildSettingRow(
+              icon: Icons.groups_rounded,
+              label: 'Join our family community',
+              value: '',
+              onTap: () async {
+                final uri = Uri.parse(kCommunityGroupUrl);
+                try {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                } catch (e) {
+                  debugPrint('COMMUNITY_LINK_ERROR: $e');
+                }
+              },
+            ),
+          ],
+        ],
       ),
     );
   }
