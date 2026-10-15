@@ -507,6 +507,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     appCelebrationsVersionNotifier.addListener(_reloadCelebrations);
     appNestMembersNotifier.addListener(_onNestMembersNotified);
     appProfilePhotoVersionNotifier.addListener(_onOwnPhotoChanged);
+    appMyMedsRemindersEnabledNotifier.addListener(_onMyTogglesChanged);
+    appMyCheckinEnabledNotifier.addListener(_onMyTogglesChanged);
     // Oct 7 2026: load the Nest list quietly, a few seconds after Home is
     // up (not during the sign-in burst), so tapping the Nest name opens
     // the switcher instantly instead of waiting on a server round trip.
@@ -2203,6 +2205,21 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   // A member removed on Setup disappears from Home's avatar row at once.
+  /// Oct 15 2026: Setup's Medication Reminders and Daily Check-In switches
+  /// change these shared values; Home keeps its own copies, so it must
+  /// listen or the medications card and "I'm Good Today" button only
+  /// change after the person leaves and re-enters the app.
+  void _onMyTogglesChanged() {
+    if (!mounted) return;
+    final meds = appMyMedsRemindersEnabledNotifier.value;
+    final checkin = appMyCheckinEnabledNotifier.value;
+    if (meds == _myMedsRemindersEnabled && checkin == _myCheckinEnabled) return;
+    setState(() {
+      _myMedsRemindersEnabled = meds;
+      _myCheckinEnabled = checkin;
+    });
+  }
+
   /// Oct 15 2026: when the person changes their own picture, update every
   /// place on Home that already shows it (their posts and their
   /// Celebrations card) without waiting for a reload. The new picture is
@@ -2753,6 +2770,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     appCelebrationsVersionNotifier.removeListener(_reloadCelebrations);
     appNestMembersNotifier.removeListener(_onNestMembersNotified);
     appProfilePhotoVersionNotifier.removeListener(_onOwnPhotoChanged);
+    appMyMedsRemindersEnabledNotifier.removeListener(_onMyTogglesChanged);
+    appMyCheckinEnabledNotifier.removeListener(_onMyTogglesChanged);
     _realtimeRefreshDebounce?.cancel();
     _feedChannel?.unsubscribe();
     _listEntranceController.dispose();
