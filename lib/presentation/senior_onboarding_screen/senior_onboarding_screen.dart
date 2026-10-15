@@ -1343,7 +1343,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         const SizedBox(height: 24),
         Text(
           _joinedViaInvite
-              ? 'Welcome to the\nfamily nest!'
+              ? 'Welcome to the\nfamily nest, $name!'
               : 'You\'re all set as $name!\nYou\'re the Nest Owner.',
           style: GoogleFonts.nunitoSans(
             fontSize: isTablet ? 30 : 26,

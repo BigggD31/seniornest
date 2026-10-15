@@ -1587,6 +1587,8 @@ class _SetupScreenState extends State<SetupScreen>
                           } catch (e) {
                             debugPrint('SETUP_DATE_REMOVE_ERROR: $e');
                           }
+                          appCelebrationsVersionNotifier.value++;
+                          _showSavedToast('Removed ✓');
                         },
                         child: const Icon(
                           Icons.close_rounded,
@@ -1651,6 +1653,8 @@ class _SetupScreenState extends State<SetupScreen>
                           } catch (e) {
                             debugPrint('SETUP_DATE_REMOVE_ERROR: $e');
                           }
+                          appCelebrationsVersionNotifier.value++;
+                          _showSavedToast('Removed ✓');
                         },
                         child: const Icon(
                           Icons.close_rounded,
@@ -1729,7 +1733,10 @@ class _SetupScreenState extends State<SetupScreen>
             ),
           );
         }
+        return;
       }
+      appCelebrationsVersionNotifier.value++;
+      _showSavedToast(isBirthday ? 'Birthday saved ✓' : 'Anniversary saved ✓');
     }
   }
 
@@ -2426,9 +2433,24 @@ class _SetupScreenState extends State<SetupScreen>
           });
           appDisplayNameNotifier.value =
               preferredName.trim().isNotEmpty ? preferredName.trim() : name;
+          appCelebrationsVersionNotifier.value++;
+          _showSavedToast('Profile saved ✓');
         },
       ),
     );
+  }
+
+  void _showSavedToast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: const Color(0xFF5DA399),
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
   void _showEditNestSheet() {
@@ -2457,6 +2479,7 @@ class _SetupScreenState extends State<SetupScreen>
           // (and any other screen reading it) reflects a manual rename
           // right away, not just this screen.
           appNestNameNotifier.value = name;
+          _showSavedToast('Nest name saved ✓');
         },
       ),
     );
@@ -2655,6 +2678,12 @@ class _SetupScreenState extends State<SetupScreen>
               setState(() {
                 _familyMembers.removeWhere((m) => m['id'] == memberId);
               });
+              // Oct 15 2026: Home's avatar row and Celebrations card drop the
+              // removed person immediately.
+              appNestMembersNotifier.value = appNestMembersNotifier.value
+                  .where((m) => m['id'] != memberId)
+                  .toList();
+              appCelebrationsVersionNotifier.value++;
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(

@@ -501,6 +501,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     _scheduleHomeSeenClear();
     ActivityBadgeService.homeCount.addListener(_onHomeCountChanged);
     appActiveTabNotifier.addListener(_onActiveTabChangedForBadge);
+    // Oct 15 2026: changes made on Setup show up here immediately.
+    appNestNameNotifier.addListener(_onNestNameNotified);
+    appDisplayNameNotifier.addListener(_onDisplayNameNotified);
+    appCelebrationsVersionNotifier.addListener(_reloadCelebrations);
+    appNestMembersNotifier.addListener(_onNestMembersNotified);
     // Oct 7 2026: load the Nest list quietly, a few seconds after Home is
     // up (not during the sign-in burst), so tapping the Nest name opens
     // the switcher instantly instead of waiting on a server round trip.
@@ -2181,7 +2186,130 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   Future<void> _onRefresh() async {
-    await _loadFeedFromSupabase();
+    // Oct 15 2026: pull-to-refresh now also re-checks the nest name and the
+    // birthdays/anniversaries, not only the posts.
+    await Future.wait([
+      _loadFeedFromSupabase(),
+      _reloadCelebrations(),
+      _refreshNestNameFromServer(),
+    ]);
+  }
+
+  void _onNestNameNotified() {
+    final v = appNestNameNotifier.value;
+    if (!mounted || v.isEmpty || v == _nestName) return;
+    setState(() => _nestName = v);
+  }
+
+  // A member removed on Setup disappears from Home's avatar row at once.
+  void _onNestMembersNotified() {
+    if (!mounted || appNestMembersNotifier.value.isEmpty) return;
+    final ids = appNestMembersNotifier.value.map((m) => m['id']).toSet();
+    final remaining =
+        _nestMembers.where((m) => m['isSample'] == true || ids.contains(m['id'])).toList();
+    if (remaining.length == _nestMembers.length) return;
+    setState(() => _nestMembers = remaining.isEmpty ? _sampleNestMembers : remaining);
+  }
+
+  void _onDisplayNameNotified() {
+    final v = appDisplayNameNotifier.value;
+    if (!mounted || v.isEmpty || v == _displayName) return;
+    setState(() => _displayName = v);
+  }
+
+  Future<void> _refreshNestNameFromServer() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isEmpty) return;
+      final row = await Supabase.instance.client
+          .from('nests')
+          .select('name')
+          .eq('id', nestId)
+          .maybeSingle();
+      final remote = row?['name'] as String?;
+      if (remote != null && remote.isNotEmpty) {
+        await prefs.setString('nest_name', remote);
+        appNestNameNotifier.value = remote;
+      }
+    } catch (e) {
+      debugPrint('NEST_NAME_REFRESH_ERROR: $e');
+    }
+  }
+
+  /// Re-reads every member's birthday/anniversary and rebuilds the
+  /// Celebrations card (same 30-day rule as the main load).
+  Future<void> _reloadCelebrations() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isEmpty) return;
+      final rows = await Supabase.instance.client
+          .from('nest_members')
+          .select(
+              'user_profiles(display_name, preferred_name, birthday, anniversary, avatar_url)')
+          .eq('nest_id', nestId);
+      final today = DateTime.now();
+      final todayDate = DateTime(today.year, today.month, today.day);
+      const monthNames = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      final todayEvents = <CelebrationEvent>[];
+      final upcomingEvents = <CelebrationEvent>[];
+      void check(DateTime? date, CelebrationEventType type, String name,
+          String? avatar) {
+        if (date == null) return;
+        final thisYear = DateTime(today.year, date.month, date.day);
+        final nextYear = DateTime(today.year + 1, date.month, date.day);
+        final candidate = thisYear.isBefore(todayDate) ? nextYear : thisYear;
+        final diff = candidate.difference(todayDate).inDays;
+        final label = '${monthNames[candidate.month - 1]} ${candidate.day}';
+        final ev = CelebrationEvent(
+            name: name,
+            type: type,
+            dateLabel: label,
+            daysUntil: diff,
+            avatarJson: avatar);
+        if (diff == 0) {
+          todayEvents.add(ev);
+        } else if (diff > 0 && diff <= 30) {
+          upcomingEvents.add(ev);
+        }
+      }
+
+      for (final row in (rows as List<dynamic>)) {
+        final p = row['user_profiles'] as Map<String, dynamic>?;
+        if (p == null) continue;
+        final pref = p['preferred_name'] as String? ?? '';
+        final disp = p['display_name'] as String? ?? '';
+        final name = pref.isNotEmpty
+            ? pref
+            : (disp.isNotEmpty ? disp : 'A family member');
+        final avatar = p['avatar_url'] as String?;
+        DateTime? b;
+        DateTime? a;
+        try {
+          final bs = p['birthday'] as String?;
+          if (bs != null) b = DateTime.parse(bs);
+        } catch (_) {}
+        try {
+          final as_ = p['anniversary'] as String?;
+          if (as_ != null) a = DateTime.parse(as_);
+        } catch (_) {}
+        check(b, CelebrationEventType.birthday, name, avatar);
+        check(a, CelebrationEventType.anniversary, name, avatar);
+      }
+      upcomingEvents.sort((x, y) => x.daysUntil.compareTo(y.daysUntil));
+      // Ignore the result if the active Nest changed while this was running.
+      if (!mounted || (prefs.getString('nest_id') ?? '') != nestId) return;
+      setState(() {
+        _todayCelebrations = todayEvents;
+        _upcomingCelebrations = upcomingEvents;
+      });
+    } catch (e) {
+      debugPrint('CELEBRATIONS_RELOAD_ERROR: $e');
+    }
   }
 
   Future<void> _loadFeedFromSupabase() async {
@@ -2562,6 +2690,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     _homeSeenDelayTimer?.cancel();
     ActivityBadgeService.homeCount.removeListener(_onHomeCountChanged);
     appActiveTabNotifier.removeListener(_onActiveTabChangedForBadge);
+    appNestNameNotifier.removeListener(_onNestNameNotified);
+    appDisplayNameNotifier.removeListener(_onDisplayNameNotified);
+    appCelebrationsVersionNotifier.removeListener(_reloadCelebrations);
+    appNestMembersNotifier.removeListener(_onNestMembersNotified);
     _realtimeRefreshDebounce?.cancel();
     _feedChannel?.unsubscribe();
     _listEntranceController.dispose();

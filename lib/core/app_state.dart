@@ -69,6 +69,11 @@ final ValueNotifier<int> appProfilePhotoVersionNotifier = ValueNotifier<int>(0);
 
 final ValueNotifier<String> appNestNameNotifier = ValueNotifier<String>('');
 
+/// Oct 15 2026: bumped by Setup whenever a birthday, anniversary or name is
+/// saved, so Home reloads its Birthdays & Anniversaries card immediately
+/// instead of only after the app is closed and reopened.
+final ValueNotifier<int> appCelebrationsVersionNotifier = ValueNotifier<int>(0);
+
 /// Global returning-user notifier -- resolved once in main.dart's
 /// _resolveInitialRoute(), before any screen ever builds, same pattern as
 /// the two notifiers above. True when this device just signed out (the
