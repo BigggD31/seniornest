@@ -2205,6 +2205,22 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   // A member removed on Setup disappears from Home's avatar row at once.
+  /// Oct 16 2026: true when at least one Daily Updates card would show.
+  /// When every card is switched off, the "Daily Updates" heading goes too.
+  bool get _anyDailyStatusCardVisible {
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    for (final status in _seniorStatuses) {
+      final mine = status['id'] == myId;
+      final checkin =
+          mine ? _myCheckinEnabled : (status['checkinEnabled'] as bool? ?? true);
+      final meds = mine
+          ? _myMedsRemindersEnabled
+          : (status['medsRemindersEnabled'] as bool? ?? true);
+      if (checkin || meds) return true;
+    }
+    return false;
+  }
+
   /// Oct 15 2026: Setup's Medication Reminders and Daily Check-In switches
   /// change these shared values; Home keeps its own copies, so it must
   /// listen or the medications card and "I'm Good Today" button only
@@ -2935,7 +2951,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                             const SizedBox(height: 14),
                           ],
                         )
-                      : _seniorStatuses.isNotEmpty
+                      : _anyDailyStatusCardVisible
                       ? DailyUpdatesSectionWidget(
                           key: const ValueKey('checkinPresent'),
                           isDarkMode: _isDarkMode,
