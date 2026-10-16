@@ -2947,7 +2947,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                             // status, matched by their own id (not
                             // "whichever senior was found first").
                             for (final status in _seniorStatuses) ...[
-                              if (status['checkinEnabled'] as bool? ?? true) ...[
+                              // Oct 16 2026: for my own card pair, follow the
+                              // live Setup switches instead of the snapshot
+                              // loaded from the database, so turning a
+                              // switch off removes the card at once.
+                              if (status['id'] ==
+                                      Supabase.instance.client.auth
+                                          .currentUser?.id
+                                  ? _myCheckinEnabled
+                                  : (status['checkinEnabled'] as bool? ?? true)) ...[
                                 DailyCheckinCardWidget(
                                   isDarkMode: _isDarkMode,
                                   isSenior: _isSenior &&
@@ -2960,7 +2968,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                                 ),
                                 const SizedBox(height: 10),
                               ],
-                              if (status['medsRemindersEnabled'] as bool? ?? true) ...[
+                              if (status['id'] ==
+                                      Supabase.instance.client.auth
+                                          .currentUser?.id
+                                  ? _myMedsRemindersEnabled
+                                  : (status['medsRemindersEnabled'] as bool? ?? true)) ...[
                                 DailyMedsCardWidget(
                                   isDarkMode: _isDarkMode,
                                   isSenior: _isSenior &&
