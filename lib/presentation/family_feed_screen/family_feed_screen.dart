@@ -2548,6 +2548,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             taggedNamesLabel = taggedNames.join(', ');
           }
         }
+        // Oct 17 2026: a post with no restricted audience that tags people
+        // reads "To: <tagged names>" -- everyone still sees it.
+        if ((rawVisibleTo is! List || rawVisibleTo.isEmpty) &&
+            taggedNamesLabel != null) {
+          recipientLabel = taggedNamesLabel;
+        }
         return MessageModel(
           id: post['id'] as String,
           authorId: authorId,

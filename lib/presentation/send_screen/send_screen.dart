@@ -2260,7 +2260,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         Row(
           children: [
             Text(
-              'Send To:',
+              'Who is this for?',
               style: GoogleFonts.nunitoSans(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
@@ -2283,7 +2283,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                   ),
                 ),
                 child: Text(
-                  '${_selectedRecipients.length} selected',
+                  '${_selectedRecipients.length} tagged',
                   style: GoogleFonts.nunitoSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -2350,7 +2350,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                         ),
                       ),
                       Text(
-                        'All family members receive your message',
+                        'Everyone in the Nest sees your message',
                         style: GoogleFonts.nunitoSans(
                           fontSize: 12,
                           color: _textSecondary,
@@ -2484,32 +2484,18 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
             },
           ),
         ),
-        // Sep 3 2026: tag someone specifically -- separate from the
-        // Everyone/individual visibility picker above. Opens a small
-        // sheet reusing the same _nestRecipients data.
+        // Oct 17 2026: tapping a name tags that person. Everyone in the
+        // Nest still sees the post; it just says who it is for.
         if (_nestRecipients.isNotEmpty) ...[
           const SizedBox(height: 10),
-          GestureDetector(
-            onTap: _showTagPickerSheet,
-            child: Row(
-              children: [
-                Icon(Icons.sell_outlined, size: 16, color: const Color(0xFF5DA399)),
-                const SizedBox(width: 6),
-                Text(
-                  _taggedRecipients.isEmpty
-                      ? 'Tag someone'
-                      : 'Tagged: ${_taggedRecipients.map((id) => _nestRecipients.firstWhere(
-                            (r) => r['id'] == id,
-                            orElse: () => {'name': 'Someone'},
-                          )['name'] as String? ?? 'Someone').join(', ')}',
-                  style: GoogleFonts.nunitoSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF5DA399),
-                    decoration: TextDecoration.underline,
-                  ),
-                ),
-              ],
+          Text(
+            _selectedRecipients.isEmpty
+                ? 'Tap a name to tag them. Everyone still sees your message.'
+                : 'Everyone will see this. Tagged people get a special note.',
+            style: GoogleFonts.nunitoSans(
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+              color: _textSecondary,
             ),
           ),
         ],
@@ -3817,10 +3803,13 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         'content': overrideContent ?? _messageController.text.trim(),
         'media_url': mediaUrl,
         'is_recorded_video': effectiveType == 'video' ? _videoIsFromRecording : false,
-        'visible_to_ids':
-            _selectedRecipients.isEmpty ? null : _selectedRecipients,
-        'tagged_ids':
-            _taggedRecipients.isEmpty ? null : _taggedRecipients,
+        // Oct 17 2026: a post always goes to the whole Nest. Tapping a
+        // name on Share now tags that person (shown as "To: Name"); it no
+        // longer hides the post from everyone else.
+        'visible_to_ids': null,
+        'tagged_ids': _selectedRecipients.isEmpty
+            ? (_taggedRecipients.isEmpty ? null : _taggedRecipients)
+            : _selectedRecipients,
       });
 
       // Sep 3 2026: real push for a new message. Empty _selectedRecipients
@@ -3843,8 +3832,12 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       // path was taken -- not the actual message content.
       final capturedPreview = (overrideContent ?? _messageController.text.trim());
       () async {
-        List<String> pushRecipientIds = _selectedRecipients;
-        if (pushRecipientIds.isEmpty && userId != null && nestId.isNotEmpty) {
+        // Oct 17 2026: tagged people get their own "tagged you" push below;
+        // everyone else in the Nest gets the normal new-message push.
+        final taggedIds = List<String>.from(
+            _selectedRecipients.isEmpty ? _taggedRecipients : _selectedRecipients);
+        List<String> pushRecipientIds = [];
+        if (userId != null && nestId.isNotEmpty) {
           final memberRows = await supabase
               .from('nest_members')
               .select('user_id')
@@ -3852,7 +3845,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           pushRecipientIds = (memberRows as List<dynamic>)
               .map((m) => m['user_id'] as String?)
               .whereType<String>()
-              .where((id) => id != userId)
+              .where((id) => id != userId && !taggedIds.contains(id))
               .toList();
         }
         // Sep 16 2026: _displayName can legitimately still be empty here
@@ -3871,7 +3864,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         }
         if (pushSenderName.trim().isEmpty) pushSenderName = 'Someone';
         final preview = capturedPreview;
-        PushService.notify(
+        if (pushRecipientIds.isNotEmpty) PushService.notify(
           userIds: pushRecipientIds,
           title: 'New message from $pushSenderName',
           body: preview.isNotEmpty
@@ -3887,9 +3880,9 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         // Distinct, more prominent push specifically for tagged people
         // -- separate from the general new-message notification above
         // (which they'd also get via visibility, if visible to them).
-        if (_taggedRecipients.isNotEmpty) {
+        if (taggedIds.isNotEmpty) {
           PushService.notify(
-            userIds: _taggedRecipients,
+            userIds: taggedIds,
             title: '$pushSenderName tagged you',
             body: preview.isNotEmpty
                 ? (preview.length > 80 ? '${preview.substring(0, 80)}...' : preview)

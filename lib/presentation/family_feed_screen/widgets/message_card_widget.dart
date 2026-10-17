@@ -507,7 +507,8 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                       // tagged is a different, more pointed thing than
                       // just being in the general visibility list.
                       if (msg.taggedNamesLabel != null &&
-                          msg.taggedNamesLabel!.isNotEmpty) ...[
+                          msg.taggedNamesLabel!.isNotEmpty &&
+                          msg.taggedNamesLabel != msg.recipientLabel) ...[
                         const SizedBox(height: 3),
                         Container(
                           padding: const EdgeInsets.symmetric(
