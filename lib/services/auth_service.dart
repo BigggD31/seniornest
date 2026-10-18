@@ -568,6 +568,9 @@ class AuthService {
     for (final key in _accountScopedPrefsKeys) {
       await prefs.remove(key);
     }
+    // Oct 18 2026: the switch settings were just wiped; until the new
+    // account's are loaded, Home must not guess.
+    appMyTogglesKnownNotifier.value = false;
     // Date-suffixed keys (good_today_2026-08-08, meds_reminder_2026-08-08,
     // etc.) need prefix matching since the exact key varies by day.
     final allKeys = prefs.getKeys().toList();

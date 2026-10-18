@@ -176,6 +176,7 @@ class ActivityBadgeService {
       await prefs.setBool('daily_check_in', pick('daily_checkin_enabled'));
       appMyCheckinEnabledNotifier.value = pick('daily_checkin_enabled');
       appMyMedsRemindersEnabledNotifier.value = pick('meds_reminders_enabled');
+      appMyTogglesKnownNotifier.value = true;
       if (notify) settingsVersion.value++;
     } catch (e) {
       debugPrint('ACTIVITY_BADGE_SERVICE pullSettings error: $e');

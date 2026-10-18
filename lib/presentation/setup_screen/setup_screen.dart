@@ -126,6 +126,7 @@ class _SetupScreenState extends State<SetupScreen>
       await prefs.setBool('daily_check_in', dc);
       appMyCheckinEnabledNotifier.value = dc;
       appMyMedsRemindersEnabledNotifier.value = mr;
+      appMyTogglesKnownNotifier.value = true;
       if (!mounted) return;
       setState(() {
         _notifyMessages = nm;
@@ -1164,6 +1165,9 @@ class _SetupScreenState extends State<SetupScreen>
       appMyMedsRemindersEnabledNotifier.value = value;
     } else if (key == 'daily_check_in') {
       appMyCheckinEnabledNotifier.value = value;
+    }
+    if (key == 'meds_reminders' || key == 'daily_check_in') {
+      appMyTogglesKnownNotifier.value = true;
     }
     setState(() {
       switch (key) {

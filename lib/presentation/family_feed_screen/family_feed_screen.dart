@@ -274,6 +274,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   bool _myMedsRemindersEnabled = appMyMedsRemindersEnabledNotifier.value;
   // Same idea, for the floating "I'm Good" check-in button.
   bool _myCheckinEnabled = appMyCheckinEnabledNotifier.value;
+  // Oct 18 2026: false until the two switches above are really known (see
+  // appMyTogglesKnownNotifier); my own cards/button stay hidden until then.
+  bool _togglesKnown = appMyTogglesKnownNotifier.value;
+  bool get _showMyCheckin => _togglesKnown && _myCheckinEnabled;
+  bool get _showMyMedsReminders => _togglesKnown && _myMedsRemindersEnabled;
   // Sep 2 2026: every senior in the nest, each with their own check-in/meds
   // status -- drives one small card pair per senior. The five fields above
   // stay as "the primary/first senior" for other screens and the shared
@@ -509,6 +514,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     appProfilePhotoVersionNotifier.addListener(_onOwnPhotoChanged);
     appMyMedsRemindersEnabledNotifier.addListener(_onMyTogglesChanged);
     appMyCheckinEnabledNotifier.addListener(_onMyTogglesChanged);
+    appMyTogglesKnownNotifier.addListener(_onMyTogglesChanged);
     // Oct 7 2026: load the Nest list quietly, a few seconds after Home is
     // up (not during the sign-in burst), so tapping the Nest name opens
     // the switcher instantly instead of waiting on a server round trip.
@@ -1803,6 +1809,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             _myMedsTakenToday = mine['medsTaken'] as bool;
             _myMedsRemindersEnabled = mine['medsRemindersEnabled'] as bool? ?? true;
             _myCheckinEnabled = mine['checkinEnabled'] as bool? ?? true;
+            _togglesKnown = true;
           }
         });
         if (_isSenior && mine != null) {
@@ -1822,6 +1829,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           await prefs.setBool('daily_check_in', checkinEnabled);
           appMyMedsRemindersEnabledNotifier.value = medsRemindersEnabled;
           appMyCheckinEnabledNotifier.value = checkinEnabled;
+          appMyTogglesKnownNotifier.value = true;
         }
         // Update the shared notifier so any other screen currently showing
         // this value picks it up immediately. Persistence to
@@ -2195,6 +2203,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       _loadFeedFromSupabase(),
       _reloadCelebrations(),
       _refreshNestNameFromServer(),
+      // Oct 18 2026: also re-read Daily Updates (check-in / medication
+      // cards and each senior's switches), so a switch changed on another
+      // phone shows up on a pull-down.
+      _loadCheckinStatus(),
     ]);
   }
 
@@ -2212,9 +2224,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     for (final status in _seniorStatuses) {
       final mine = status['id'] == myId;
       final checkin =
-          mine ? _myCheckinEnabled : (status['checkinEnabled'] as bool? ?? true);
+          mine ? _showMyCheckin : (status['checkinEnabled'] as bool? ?? true);
       final meds = mine
-          ? _myMedsRemindersEnabled
+          ? _showMyMedsReminders
           : (status['medsRemindersEnabled'] as bool? ?? true);
       if (checkin || meds) return true;
     }
@@ -2229,10 +2241,16 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     if (!mounted) return;
     final meds = appMyMedsRemindersEnabledNotifier.value;
     final checkin = appMyCheckinEnabledNotifier.value;
-    if (meds == _myMedsRemindersEnabled && checkin == _myCheckinEnabled) return;
+    final known = appMyTogglesKnownNotifier.value;
+    if (meds == _myMedsRemindersEnabled &&
+        checkin == _myCheckinEnabled &&
+        known == _togglesKnown) {
+      return;
+    }
     setState(() {
       _myMedsRemindersEnabled = meds;
       _myCheckinEnabled = checkin;
+      _togglesKnown = known;
     });
   }
 
@@ -2794,6 +2812,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     appProfilePhotoVersionNotifier.removeListener(_onOwnPhotoChanged);
     appMyMedsRemindersEnabledNotifier.removeListener(_onMyTogglesChanged);
     appMyCheckinEnabledNotifier.removeListener(_onMyTogglesChanged);
+    appMyTogglesKnownNotifier.removeListener(_onMyTogglesChanged);
     _realtimeRefreshDebounce?.cancel();
     _feedChannel?.unsubscribe();
     _listEntranceController.dispose();
@@ -2832,7 +2851,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           const KeyboardDoneBarOverlay(),
         ],
       ),
-      floatingActionButton: (!_isNestArchived && _isSenior && _myCheckinEnabled && (!_isGoodTodaySent || _justCheckedIn))
+      floatingActionButton: (!_isNestArchived && _isSenior && _showMyCheckin && (!_isGoodTodaySent || _justCheckedIn))
           ? ImGoodTodayOrbWidget(
               isSent: _isGoodTodaySent,
               onTap: _handleGoodToday,
@@ -2976,7 +2995,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                               if (status['id'] ==
                                       Supabase.instance.client.auth
                                           .currentUser?.id
-                                  ? _myCheckinEnabled
+                                  ? _showMyCheckin
                                   : (status['checkinEnabled'] as bool? ?? true)) ...[
                                 DailyCheckinCardWidget(
                                   isDarkMode: _isDarkMode,
@@ -2993,8 +3012,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                               if (status['id'] ==
                                       Supabase.instance.client.auth
                                           .currentUser?.id
-                                  ? _myMedsRemindersEnabled
+                                  ? _showMyMedsReminders
                                   : (status['medsRemindersEnabled'] as bool? ?? true)) ...[
+
                                 DailyMedsCardWidget(
                                   isDarkMode: _isDarkMode,
                                   isSenior: _isSenior &&
@@ -3028,7 +3048,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 // (_myMedsTakenToday) instead of the primary/first-found
                 // senior's -- fixes a case where a second senior's own
                 // reminder could reflect the other senior's status.
-                if (!_isNestArchived && _isSenior && _showMedsReminder && !_myMedsTakenToday && _myMedsRemindersEnabled) ...[
+                if (!_isNestArchived && _isSenior && _showMedsReminder && !_myMedsTakenToday && _showMyMedsReminders) ...[
                   MedsReminderCardWidget(
                     isDarkMode: _isDarkMode,
                     onTaken: _handleMedsTaken,

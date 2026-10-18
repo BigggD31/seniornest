@@ -379,6 +379,9 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
     await prefs.setString('text_size', _selectedFontSize);
     await prefs.setBool('meds_reminders', _medsReminders);
     await prefs.setBool('daily_check_in', _dailyCheckIn);
+    appMyMedsRemindersEnabledNotifier.value = _medsReminders;
+    appMyCheckinEnabledNotifier.value = _dailyCheckIn;
+    appMyTogglesKnownNotifier.value = true;
     await prefs.setBool('onboarding_complete', true);
     await prefs.setBool('first_load', true);
     await prefs.setBool('has_onboarded', true);

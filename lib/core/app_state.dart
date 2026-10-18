@@ -361,6 +361,13 @@ String celebrationsCollapsedPrefsKey() {
 /// (used to seed Setup's own fields instantly) -- Home just never read
 /// that same cache. Seeded from it here instead of a hardcoded true.
 final ValueNotifier<bool> appMyCheckinEnabledNotifier = ValueNotifier<bool>(true);
+
+/// Oct 18 2026: false until this account's two switch settings are actually
+/// known (read from the phone's saved copy or from the server). While false,
+/// Home hides the Daily Updates cards and the "I'm Good" button instead of
+/// guessing "on" -- guessing "on" is what made them flash for a moment for
+/// anyone who had switched them off, especially after signing out and in.
+final ValueNotifier<bool> appMyTogglesKnownNotifier = ValueNotifier<bool>(false);
 final ValueNotifier<bool> appMyMedsRemindersEnabledNotifier =
     ValueNotifier<bool>(true);
 
@@ -589,6 +596,8 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
   appMyCheckinEnabledNotifier.value = prefs.getBool('daily_check_in') ?? true;
   appMyMedsRemindersEnabledNotifier.value =
       prefs.getBool('meds_reminders') ?? true;
+  appMyTogglesKnownNotifier.value =
+      prefs.containsKey('daily_check_in') && prefs.containsKey('meds_reminders');
 
   appHasSentMessagesNotifier.value =
       prefs.getBool('has_sent_messages') ?? false;
