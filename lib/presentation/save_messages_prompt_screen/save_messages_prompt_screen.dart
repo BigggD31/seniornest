@@ -1313,6 +1313,12 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             left: isTablet ? 60 : 20,
             child: GestureDetector(
               onTap: () {
+                // Oct 18 2026: opened from the "Welcome back / Sign In"
+                // screen (signInMode) -- go back to it, not to onboarding.
+                if (args?['signInMode'] == true && Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                  return;
+                }
                 Navigator.pushReplacementNamed(
                   context,
                   cameFrom == 'senior'
