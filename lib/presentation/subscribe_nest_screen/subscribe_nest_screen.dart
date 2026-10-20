@@ -295,6 +295,81 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     super.dispose();
   }
 
+  // Oct 19 2026: "Have a code?" on the Add Another Nest screen only. Lets an
+  // existing owner use a VIP/Founder code to add a free extra nest. Same
+  // redeem_vip_code call the first-nest flow uses (no nest id yet -- the nest
+  // doesn't exist until _createAdditionalNest runs, which then attaches the
+  // lifetime subscription row, exactly as it does after a purchase). Never
+  // starts a purchase and never touches _recordSubscription.
+  Future<void> _onHaveCode() async {
+    if (_isPurchasing) return;
+    final codeController = TextEditingController();
+    String? errorText;
+    final code = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('Enter Your Code',
+            style: GoogleFonts.manrope(fontWeight: FontWeight.w700, fontSize: 18)),
+          content: TextField(
+            controller: codeController,
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            autocorrect: false,
+            decoration: InputDecoration(hintText: 'Your code', errorText: errorText),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                final entered = codeController.text.trim();
+                if (entered.isEmpty) {
+                  setDialogState(() => errorText = 'Please enter your code.');
+                  return;
+                }
+                Navigator.pop(ctx, entered);
+              },
+              child: const Text('Redeem'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (code == null || !mounted) return;
+
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    setState(() => _isPurchasing = true);
+    bool redeemed = false;
+    try {
+      final result = await supabase.rpc('redeem_vip_code', params: {
+        'p_code': code,
+        'p_user_id': userId,
+      });
+      redeemed = result == true;
+    } catch (e) {
+      debugPrint('ADDITIONAL_NEST_VIP_ERROR: $e');
+    }
+    if (!mounted) return;
+    if (!redeemed) {
+      setState(() => _isPurchasing = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("That code isn't valid or has already been used."),
+      ));
+      return;
+    }
+    await _createAdditionalNest();
+    if (mounted) {
+      setState(() => _isPurchasing = false);
+      _navigateForward();
+    }
+  }
+
   void _onSubscribeNow() async {
     if (_isPurchasing) return;
 
@@ -533,6 +608,16 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
             fontWeight: FontWeight.w400, color: Colors.white.withValues(alpha: 0.65)),
           textAlign: TextAlign.center),
         const SizedBox(height: 14),
+        if (_isAdditionalNest) ...[
+          GestureDetector(
+            onTap: _isPurchasing ? null : _onHaveCode,
+            child: Text('Have a code?',
+              style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.85),
+                decoration: TextDecoration.underline)),
+          ),
+          const SizedBox(height: 10),
+        ],
         if (!_isAdditionalNest) ...[
           GestureDetector(
             onTap: _onRestorePurchases,
