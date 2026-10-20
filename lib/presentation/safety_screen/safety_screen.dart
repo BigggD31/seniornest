@@ -726,9 +726,14 @@ class _SafetyScreenState extends State<SafetyScreen>
             .toSet()
             .toList();
         if (phones.isNotEmpty) {
-          final smsUri = Uri.parse(
-            'sms:${phones.join(",")}&body=${Uri.encodeComponent(message)}',
-          );
+          // Android expects '?body=' (iOS uses '&body=').
+          final smsUri = (!kIsWeb && Platform.isAndroid)
+              ? Uri.parse(
+                  'sms:${phones.join(",")}?body=${Uri.encodeComponent(message)}',
+                )
+              : Uri.parse(
+                  'sms:${phones.join(",")}&body=${Uri.encodeComponent(message)}',
+                );
           try {
             final launched = await launchUrl(smsUri);
             if (!kIsWeb && Platform.isAndroid) {
