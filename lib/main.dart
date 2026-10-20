@@ -2,6 +2,7 @@ import 'services/subscription_recorder.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:app_links/app_links.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -733,8 +734,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             return ValueListenableBuilder<double>(
               valueListenable: appTextScaleNotifier,
               builder: (context, scale, child) {
-                return MaterialApp(
-                  title: 'seniornest',
+                return _androidNavBarLayer(isDark, MaterialApp(
+                  title: (!kIsWeb && Platform.isAndroid) ? 'SeniorNest' : 'seniornest',
                   theme: AppTheme.lightTheme,
                   darkTheme: AppTheme.darkTheme,
                   themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
@@ -834,7 +835,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   },
                   initialRoute: initialRoute,
                   home: home,
-                );
+                ));
               },
             );
           },
@@ -842,4 +843,43 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       },
     );
   }
+}
+
+/// Android only: keep the whole app (screens, tab bar and every bottom
+/// sheet) above the system navigation bar instead of drawn underneath it
+/// (Android 15+ edge-to-edge). The strip behind the back/home buttons is
+/// filled with the app background colour. iOS and web return the app
+/// untouched.
+Widget _androidNavBarLayer(bool isDark, Widget app) {
+  if (kIsWeb || !Platform.isAndroid) return app;
+  return Builder(
+    builder: (context) => MediaQuery.fromView(
+      view: View.of(context),
+      child: Builder(
+        builder: (context) {
+          final mq = MediaQuery.of(context);
+          final navBar = mq.viewPadding.bottom;
+          if (navBar <= 0) return app;
+          return ColoredBox(
+            color: isDark ? AppTheme.darkBackground : AppTheme.background,
+            child: Padding(
+              padding: EdgeInsets.only(bottom: navBar),
+              child: MediaQuery(
+                data: mq.copyWith(
+                  size: Size(mq.size.width, mq.size.height - navBar),
+                  padding: mq.padding.copyWith(bottom: 0),
+                  viewPadding: mq.viewPadding.copyWith(bottom: 0),
+                  viewInsets: mq.viewInsets.copyWith(
+                    bottom: (mq.viewInsets.bottom - navBar)
+                        .clamp(0.0, double.infinity),
+                  ),
+                ),
+                child: app,
+              ),
+            ),
+          );
+        },
+      ),
+    ),
+  );
 }
