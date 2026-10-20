@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
@@ -653,6 +655,8 @@ class _SafetyScreenState extends State<SafetyScreen>
   }) async {
     setState(() => _isSendingAlert = true);
     bool smsComposerOpened = false;
+    // Android only: the Messages app could not be opened, so no text went out.
+    bool androidSmsFailed = false;
     try {
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
@@ -726,9 +730,18 @@ class _SafetyScreenState extends State<SafetyScreen>
             'sms:${phones.join(",")}&body=${Uri.encodeComponent(message)}',
           );
           try {
-            await launchUrl(smsUri);
-            smsComposerOpened = true;
+            final launched = await launchUrl(smsUri);
+            if (!kIsWeb && Platform.isAndroid) {
+              smsComposerOpened = launched;
+              androidSmsFailed = !launched;
+              if (!launched) {
+                debugPrint('SAFETY_ALERT: launchUrl returned false for SMS');
+              }
+            } else {
+              smsComposerOpened = true;
+            }
           } catch (e) {
+            if (!kIsWeb && Platform.isAndroid) androidSmsFailed = true;
             debugPrint('SAFETY_ALERT: could not launch SMS composer: $e');
           }
         }
@@ -763,7 +776,9 @@ class _SafetyScreenState extends State<SafetyScreen>
               ),
               const SizedBox(width: 8),
               Text(
-                isEmergency ? 'Alert Sent ✓' : 'Message Sent ✓',
+                androidSmsFailed
+                    ? 'Text Not Sent'
+                    : (isEmergency ? 'Alert Sent ✓' : 'Message Sent ✓'),
                 style: GoogleFonts.nunitoSans(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
@@ -773,7 +788,9 @@ class _SafetyScreenState extends State<SafetyScreen>
             ],
           ),
           content: Text(
-            isEmergency
+            androidSmsFailed
+                ? 'Your phone could not open the Messages app, so no text went to your emergency contacts. Please call or text them directly. Your family has been notified in the app.'
+                : isEmergency
                 ? (smsComposerOpened
                       ? 'A text to your emergency contacts is ready to send — check your Messages app to send it now. Your family has also been notified in the app.'
                       : 'No emergency contacts are set up yet, so your family has been notified in the app. Add emergency contacts on this page so a real text can go out next time.')

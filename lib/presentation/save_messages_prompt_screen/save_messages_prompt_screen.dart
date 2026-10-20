@@ -13,7 +13,9 @@ import '../../services/push_service.dart';
 import '../../services/activity_badge_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../splash_screen/widgets/nest_logo_widget.dart';
 import '../../widgets/keyboard_done_bar.dart';
 import '../../widgets/branded_transition_screen.dart';
@@ -1440,16 +1442,18 @@ class _AuthOptionsSheet extends StatelessWidget {
             textColor: const Color(0xFF2C2417),
           ),
           const SizedBox(height: 8),
-          // Apple button
-          _buildSocialButton(
-            onTap: isAuthLoading ? null : onAppleTap,
-            icon: const Icon(Icons.apple, color: Colors.white, size: 20),
-            label: 'Continue with Apple',
-            bgColor: const Color(0xFF1C1C1E),
-            borderColor: const Color(0xFF1C1C1E),
-            textColor: Colors.white,
-          ),
-          const SizedBox(height: 8),
+          // Apple button (hidden on Android, along with its spacer)
+          if (kIsWeb || !Platform.isAndroid) ...[
+            _buildSocialButton(
+              onTap: isAuthLoading ? null : onAppleTap,
+              icon: const Icon(Icons.apple, color: Colors.white, size: 20),
+              label: 'Continue with Apple',
+              bgColor: const Color(0xFF1C1C1E),
+              borderColor: const Color(0xFF1C1C1E),
+              textColor: Colors.white,
+            ),
+            const SizedBox(height: 8),
+          ],
           // Email button
           _buildSocialButton(
             onTap: isAuthLoading ? null : (isSignInMode ? onEmailSignIn : onEmailSignUp),
