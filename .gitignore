@@ -46,3 +46,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 android/app/.cxx
+
+# Firebase config for Android (kept on this machine, never committed)
+/android/app/google-services.json
