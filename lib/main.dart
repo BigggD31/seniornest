@@ -18,6 +18,7 @@ import './presentation/main_tab_shell/main_tab_shell.dart';
 import './services/auth_service.dart';
 import './services/supabase_service.dart';
 import './services/push_service.dart';
+import './services/android_push_banner.dart';
 import './services/activity_badge_service.dart';
 import './services/timing_log.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -74,6 +75,10 @@ void main() async {
     // PushService / the send sites). Warm start = onMessageOpenedApp; cold
     // start = getInitialMessage, delayed so the app has settled on Home first.
     FirebaseMessaging.onMessageOpenedApp.listen(_openTabFromPush);
+    // Android only: banner for a push that arrives while the app is open.
+    if (!kIsWeb && Platform.isAndroid) {
+      AndroidPushBanner.start(_openTabFromPush);
+    }
     // Deliberately NOT awaited: awaiting this before runApp can stall app
     // launch on a white screen (build 283). Fire-and-forget with a timeout.
     FirebaseMessaging.instance

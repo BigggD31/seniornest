@@ -8,6 +8,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase (push): only applied once android/app/google-services.json is in
+// place, so the app still builds without it (push simply stays off).
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // Upload-key credentials live in android/key.properties (gitignored), which
 // points at the keystore stored outside the repo.
 val keystorePropertiesFile = rootProject.file("key.properties")

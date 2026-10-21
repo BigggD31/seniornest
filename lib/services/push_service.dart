@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
@@ -10,6 +11,9 @@ import 'package:flutter/foundation.dart';
 /// reminder) happens server-side, in a Supabase Edge Function triggered by
 /// those events -- this file has nothing to do with that half.
 class PushService {
+  // Android has no APNs step and is labelled 'android' in device_tokens.
+  static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
+
   /// Call this once a real signed-in session exists -- either at cold
   /// start (main.dart's _resolveInitialRoute, for an already-signed-in
   /// return visit) or right after onboarding completes
@@ -120,20 +124,23 @@ class PushService {
       // token directly (not a fixed sleep) so this resolves as fast as
       // the OS actually allows, with a generous ceiling for a slow
       // network or first-launch registration.
-      String? apnsToken = await messaging.getAPNSToken();
-      var apnsAttempts = 0;
-      while (apnsToken == null && apnsAttempts < 10) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        apnsToken = await messaging.getAPNSToken();
-        apnsAttempts++;
-      }
-      await _logPushDebug(
-          'APNS token after $apnsAttempts retries: ${apnsToken == null ? 'still null' : 'present'}');
-      if (apnsToken == null) {
-        // Give up on this attempt -- the onTokenRefresh listener
-        // registered above is still active and will catch it if APNs
-        // registration completes later in this same app session.
-        return;
+      // Android: no APNs token exists, FCM issues the token directly.
+      if (!_isAndroid) {
+        String? apnsToken = await messaging.getAPNSToken();
+        var apnsAttempts = 0;
+        while (apnsToken == null && apnsAttempts < 10) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          apnsToken = await messaging.getAPNSToken();
+          apnsAttempts++;
+        }
+        await _logPushDebug(
+            'APNS token after $apnsAttempts retries: ${apnsToken == null ? 'still null' : 'present'}');
+        if (apnsToken == null) {
+          // Give up on this attempt -- the onTokenRefresh listener
+          // registered above is still active and will catch it if APNs
+          // registration completes later in this same app session.
+          return;
+        }
       }
 
       final token = await messaging.getToken();
@@ -167,14 +174,14 @@ class PushService {
       // function isn't reachable.
       try {
         await Supabase.instance.client.rpc('register_device_token',
-            params: {'p_token': token, 'p_platform': 'ios'});
+            params: {'p_token': token, 'p_platform': _isAndroid ? 'android' : 'ios'});
       } catch (rpcErr) {
         await _logPushDebug('register_device_token rpc failed: $rpcErr');
         await Supabase.instance.client.from('device_tokens').upsert(
           {
             'user_id': userId,
             'device_token': token,
-            'platform': 'ios',
+            'platform': _isAndroid ? 'android' : 'ios',
             'updated_at': DateTime.now().toIso8601String(),
           },
           onConflict: 'device_token',
