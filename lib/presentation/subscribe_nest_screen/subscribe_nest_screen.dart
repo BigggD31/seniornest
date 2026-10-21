@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:math';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -114,7 +116,12 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           }
           _restoreInFlight = false;
           await _recordSubscription(purchase.productID, purchase.purchaseID,
-              isRestore: purchase.status == PurchaseStatus.restored);
+              isRestore: purchase.status == PurchaseStatus.restored,
+              // Android only: Google Play's purchase token, for server-side
+              // verification. iOS passes nothing, exactly as before.
+              googlePurchaseToken: (!kIsWeb && Platform.isAndroid)
+                  ? purchase.verificationData.serverVerificationData
+                  : null);
           if (_isAdditionalNest) {
             _userStartedPurchase = false;
             await _createAdditionalNest();
@@ -262,12 +269,14 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   // retroactively once the nest is actually created. For someone creating
   // an *additional* nest from an existing account, the nest already exists
   // by the time they land here, so nestId will be passed in directly.
-  Future<void> _recordSubscription(String productId, String? transactionId, {String? nestId, bool isRestore = false}) async {
+  Future<void> _recordSubscription(String productId, String? transactionId, {String? nestId, bool isRestore = false, String? googlePurchaseToken}) async {
     // Oct 14 2026: moved to SubscriptionRecorder, which also holds the
     // purchase on the phone when no account exists yet (first-time signup
     // pays before the account is created) and writes it after sign-in.
     await SubscriptionRecorder.record(productId, transactionId,
-        nestId: nestId, isRestore: isRestore);
+        nestId: nestId,
+        isRestore: isRestore,
+        googlePurchaseToken: googlePurchaseToken);
   }
 
   Future<void> _initIAP() async {

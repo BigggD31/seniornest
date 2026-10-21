@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -24,25 +25,36 @@ class SubscriptionRecorder {
   static const String _kTxn = 'pending_iap_txn_id';
   static const String _kAtMs = 'pending_iap_at_ms';
   static const String _kRestore = 'pending_iap_is_restore';
+  // Android only: Google Play purchase token, held with the pending purchase.
+  static const String _kToken = 'pending_iap_google_token';
+
+  static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
   // A held purchase older than this is dropped rather than credited to
   // whoever happens to sign in on the device much later.
   static const Duration _pendingMaxAge = Duration(hours: 48);
 
   /// Records a purchase. With no signed-in account yet, holds it on the phone.
+  /// [googlePurchaseToken] is Android only (null on iOS): Google Play's
+  /// purchase token, saved as the row's original_transaction_id and sent to
+  /// the google-play-subscriptions function to verify the real expiry.
   static Future<void> record(
     String productId,
     String? transactionId, {
     String? nestId,
     bool isRestore = false,
+    String? googlePurchaseToken,
   }) async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) {
-      await _stashPending(productId, transactionId, isRestore);
+      await _stashPending(productId, transactionId, isRestore,
+          googlePurchaseToken: googlePurchaseToken);
       return;
     }
     await _writeRow(userId, productId, transactionId,
-        nestId: nestId, isRestore: isRestore);
+        nestId: nestId,
+        isRestore: isRestore,
+        googlePurchaseToken: googlePurchaseToken);
   }
 
   /// Writes a purchase held on the phone, if there is one and an account now
@@ -69,6 +81,7 @@ class SubscriptionRecorder {
         productId,
         prefs.getString(_kTxn),
         isRestore: prefs.getBool(_kRestore) ?? false,
+        googlePurchaseToken: _isAndroid ? prefs.getString(_kToken) : null,
       );
       if (ok) await _clearPending(prefs);
     } catch (e) {
@@ -77,7 +90,8 @@ class SubscriptionRecorder {
   }
 
   static Future<void> _stashPending(
-      String productId, String? transactionId, bool isRestore) async {
+      String productId, String? transactionId, bool isRestore,
+      {String? googlePurchaseToken}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kProduct, productId);
@@ -88,6 +102,13 @@ class SubscriptionRecorder {
       }
       await prefs.setInt(_kAtMs, DateTime.now().millisecondsSinceEpoch);
       await prefs.setBool(_kRestore, isRestore);
+      if (_isAndroid) {
+        if (googlePurchaseToken != null) {
+          await prefs.setString(_kToken, googlePurchaseToken);
+        } else {
+          await prefs.remove(_kToken);
+        }
+      }
     } catch (e) {
       debugPrint('SUBSCRIPTION_STASH_ERROR: $e');
     }
@@ -98,6 +119,7 @@ class SubscriptionRecorder {
     await prefs.remove(_kTxn);
     await prefs.remove(_kAtMs);
     await prefs.remove(_kRestore);
+    if (_isAndroid) await prefs.remove(_kToken);
   }
 
   // Moved unchanged from subscribe_nest_screen.dart's _recordSubscription,
@@ -108,6 +130,7 @@ class SubscriptionRecorder {
     String? transactionId, {
     String? nestId,
     bool isRestore = false,
+    String? googlePurchaseToken,
   }) async {
     try {
       final supabase = Supabase.instance.client;
@@ -141,6 +164,10 @@ class SubscriptionRecorder {
         'transaction_id': transactionId,
         'updated_at': now.toIso8601String(),
       };
+      final googleToken = _isAndroid ? googlePurchaseToken : null;
+      if (googleToken != null && googleToken.isNotEmpty) {
+        row['original_transaction_id'] = googleToken;
+      }
       // Explicit check-then-write instead of upsert(onConflict: 'user_id,nest_id'):
       // Postgres unique constraints don't treat NULL = NULL, so a plain
       // upsert wouldn't reliably catch a retry/double-tap when nestId is null
@@ -157,7 +184,10 @@ class SubscriptionRecorder {
       if (existing != null) {
         // A restored purchase must never touch an existing row: the server
         // already holds Apple's real dates.
-        if (isRestore) return true;
+        if (isRestore) {
+          await _verifyGooglePurchase(googleToken, productId);
+          return true;
+        }
         if (existing['status'] == 'lifetime') return true;
         final existingExpiry =
             DateTime.tryParse('${existing['expires_at'] ?? ''}');
@@ -178,10 +208,28 @@ class SubscriptionRecorder {
       try {
         await supabase.rpc('reconcile_my_subscription');
       } catch (_) {}
+      await _verifyGooglePurchase(googleToken, productId);
       return true;
     } catch (e) {
       debugPrint('SUBSCRIPTION_RECORD_ERROR: $e');
       return false;
+    }
+  }
+
+  // Android only: asks the server to check this purchase with Google Play and
+  // write the real paid-through date over the provisional 3-day one. Never
+  // allowed to fail or delay the purchase flow; renewals and cancellations
+  // later arrive at the same function from Google directly.
+  static Future<void> _verifyGooglePurchase(
+      String? purchaseToken, String productId) async {
+    if (!_isAndroid || purchaseToken == null || purchaseToken.isEmpty) return;
+    try {
+      await Supabase.instance.client.functions.invoke(
+        'google-play-subscriptions',
+        body: {'purchase_token': purchaseToken, 'product_id': productId},
+      ).timeout(const Duration(seconds: 8));
+    } catch (e) {
+      debugPrint('GOOGLE_VERIFY_ERROR: $e');
     }
   }
 }
