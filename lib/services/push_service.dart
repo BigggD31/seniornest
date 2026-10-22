@@ -73,11 +73,19 @@ class PushService {
       // in-app preference on top of this -- this permission request is
       // the OS-level gate that has to be granted first regardless of
       // what those toggles say.
-      final settings = await messaging.requestPermission(
+      // Oct 22 2026 (Android only): a permission prompt that never comes back
+      // (dismissed, app backgrounded to Settings) used to hang this attempt
+      // forever, and the "already registering" guard then blocked every later
+      // attempt until the app was fully restarted. A time limit lets the next
+      // attempt run. iPhone behaviour is unchanged.
+      final permissionFuture = messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
       );
+      final settings = _isAndroid
+          ? await permissionFuture.timeout(const Duration(seconds: 25))
+          : await permissionFuture;
       // Sep 12 2026: this whole function used to fail completely
       // silently at every possible step (permission denied, no token,
       // any exception) -- debugPrint only, nothing ever visible outside
@@ -92,6 +100,8 @@ class PushService {
           'permission_status=${settings.authorizationStatus} userId=$userId');
       if (settings.authorizationStatus != AuthorizationStatus.authorized &&
           settings.authorizationStatus != AuthorizationStatus.provisional) {
+        ClientLog.failure('push_permission_not_granted',
+            settings.authorizationStatus.toString());
         return;
       }
 
@@ -144,7 +154,25 @@ class PushService {
         }
       }
 
-      final token = await messaging.getToken();
+      // Oct 22 2026 (Android only): getToken() can fail or come back empty
+      // on a phone's first attempts (Google Play services still waking up, a
+      // slow network). Try a few more times, with a time limit on each, and
+      // record every failure. iPhone takes the single-attempt path as before.
+      String? token;
+      if (_isAndroid) {
+        const waits = [0, 3, 6, 12];
+        for (final w in waits) {
+          if (w > 0) await Future.delayed(Duration(seconds: w));
+          try {
+            token = await messaging.getToken().timeout(const Duration(seconds: 20));
+          } catch (e) {
+            ClientLog.failure('push_getToken_attempt', e);
+          }
+          if (token != null && token.isNotEmpty) break;
+        }
+      } else {
+        token = await messaging.getToken();
+      }
       await _logPushDebug(
           'getToken() returned: ${token == null ? 'null' : 'a token (len ${token.length})'}');
       if (token == null || token.isEmpty) {

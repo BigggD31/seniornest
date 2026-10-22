@@ -25,6 +25,11 @@ import '../core/app_state.dart';
 /// individual screens never need to know this service exists.
 class ActivityBadgeService {
   static final ValueNotifier<int> homeCount = ValueNotifier<int>(0);
+  /// Oct 22 2026 (Android only): bumped by the once-a-minute check whenever
+  /// it sees posts from other people that Home hasn't shown yet. Home listens
+  /// and reloads quietly, so a missed live update fixes itself within a
+  /// minute. Never bumped on iPhone.
+  static final ValueNotifier<int> homeStaleTick = ValueNotifier<int>(0);
   static final ValueNotifier<int> legacyCount = ValueNotifier<int>(0);
   // Oct 8 2026: unread private (direct) messages across all conversations in
   // the current Nest. Unlike Home/Legacy this is read-state based (read_at),
@@ -265,6 +270,7 @@ class ActivityBadgeService {
             .neq('author_id', userId)
             .gt('created_at', _homeLastSeen!.toIso8601String());
         home = (rows as List).length;
+        if (defaultTargetPlatform == TargetPlatform.android && home > 0) homeStaleTick.value++;
       }
       if (_legacyLastSeen != null) {
         final rows = await Supabase.instance.client

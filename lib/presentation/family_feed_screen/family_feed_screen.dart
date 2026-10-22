@@ -531,6 +531,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     _scheduleHomeSeenClear();
     ActivityBadgeService.homeCount.addListener(_onHomeCountChanged);
     appActiveTabNotifier.addListener(_onActiveTabChangedForBadge);
+    if (defaultTargetPlatform == TargetPlatform.android) ActivityBadgeService.homeStaleTick.addListener(_onHomeStaleTick);
     // Oct 15 2026: changes made on Setup show up here immediately.
     appNestNameNotifier.addListener(_onNestNameNotified);
     appDisplayNameNotifier.addListener(_onDisplayNameNotified);
@@ -555,6 +556,35 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // Oct 8 2026: tabs live in MainTabShell's IndexedStack, so this screen stays
   // alive while another tab is showing. The number must stay put until the
   // person is actually looking at Home, then clear after the delay below.
+  // Oct 22 2026 (Android only): safety net behind the live connection. The
+  // once-a-minute check found posts from others that Home hasn't shown, so
+  // reload quietly. Does nothing when everything is already live.
+  void _onHomeStaleTick() {
+    if (!mounted) return;
+    _loadFeedFromSupabase();
+    setState(() => _repliesRefreshTick++);
+  }
+
+  // Oct 22 2026 (Android only): a live connection opened with an expired
+  // login is refused by the server. Refresh the login first and hand the
+  // fresh one to the realtime connection before every (re)subscribe.
+  Future<void> _refreshAuthForRealtime() async {
+    try {
+      final client = Supabase.instance.client;
+      final session = client.auth.currentSession;
+      if (session == null) return;
+      final exp = session.expiresAt;
+      final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      if (exp != null && exp - nowSec < 120) {
+        await client.auth.refreshSession();
+      }
+      final token = client.auth.currentSession?.accessToken;
+      if (token != null) client.realtime.setAuth(token);
+    } catch (e) {
+      ClientLog.failure('realtime_auth_refresh', e);
+    }
+  }
+
   void _onActiveTabChangedForBadge() {
     // Oct 22 2026: since Sep 24 the tabs stay alive instead of being rebuilt
     // on every tap, which quietly removed the fresh reload that used to
@@ -731,6 +761,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       // Already live on the right nest -- nothing to do.
       if (_feedChannel != null && _subscribedNestId == nestId) return;
       await _teardownFeedChannel();
+      if (!mounted) return;
+      if (defaultTargetPlatform == TargetPlatform.android) await _refreshAuthForRealtime();
       if (!mounted) return;
       _subscribedNestId = nestId;
 
@@ -2982,6 +3014,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     _homeSeenDelayTimer?.cancel();
     ActivityBadgeService.homeCount.removeListener(_onHomeCountChanged);
     appActiveTabNotifier.removeListener(_onActiveTabChangedForBadge);
+    if (defaultTargetPlatform == TargetPlatform.android) ActivityBadgeService.homeStaleTick.removeListener(_onHomeStaleTick);
     appNestNameNotifier.removeListener(_onNestNameNotified);
     appDisplayNameNotifier.removeListener(_onDisplayNameNotified);
     appCelebrationsVersionNotifier.removeListener(_reloadCelebrations);
