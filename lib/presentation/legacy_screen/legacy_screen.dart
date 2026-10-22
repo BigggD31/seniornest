@@ -5032,12 +5032,22 @@ class _LegacyAudioPlayerState extends State<_LegacyAudioPlayer> {
                 await _player.pause();
                 setState(() => _isPlaying = false);
               } else {
-                if (_player.processingState == ProcessingState.idle ||
-                    _player.processingState == ProcessingState.completed) {
-                  await _player.setUrl(widget.audioUrl);
-                }
-                await _player.play();
+                // Oct 22 2026: just_audio's play() doesn't return until the
+                // audio FINISHES (or is paused), so setting _isPlaying after
+                // awaiting it meant the pause button only appeared on a
+                // second tap. Flip the icon first and don't wait on play() --
+                // same fix Home's voice-message player already has.
                 setState(() => _isPlaying = true);
+                try {
+                  if (_player.processingState == ProcessingState.idle ||
+                      _player.processingState == ProcessingState.completed) {
+                    await _player.setUrl(widget.audioUrl);
+                  }
+                  unawaited(_player.play());
+                } catch (e) {
+                  debugPrint('Audio play error: $e');
+                  if (mounted) setState(() => _isPlaying = false);
+                }
               }
             },
             child: Container(
