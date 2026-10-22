@@ -1,3 +1,4 @@
+import 'client_log.dart';
 import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -139,11 +140,15 @@ class PushService {
       final token = await messaging.getToken();
       await _logPushDebug(
           'getToken() returned: ${token == null ? 'null' : 'a token (len ${token.length})'}');
-      if (token == null || token.isEmpty) return;
+      if (token == null || token.isEmpty) {
+        ClientLog.failure('push_no_token', 'getToken returned empty');
+        return;
+      }
 
       await _saveToken(userId, token);
     } catch (e) {
       debugPrint('PUSH_SERVICE registerDeviceToken error: $e');
+      ClientLog.failure('push_registerDeviceToken', e);
       await _logPushDebug('registerDeviceToken() threw: $e');
     }
   }
@@ -185,6 +190,7 @@ class PushService {
       await _logPushDebug('device_tokens upsert OK for userId=$userId');
     } catch (e) {
       debugPrint('PUSH_SERVICE saveToken error: $e');
+      ClientLog.failure('push_saveToken', e);
       await _logPushDebug('device_tokens upsert FAILED for userId=$userId: $e');
     }
   }

@@ -1,3 +1,4 @@
+import '../../services/client_log.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -336,6 +337,7 @@ class _LegacyScreenState extends State<LegacyScreen>
           .subscribe();
     } catch (e) {
       debugPrint('LEGACY_REALTIME: subscribe failed, page still works via refresh: $e');
+      ClientLog.failure('legacy_realtime_subscribe_failed', e);
     }
   }
 

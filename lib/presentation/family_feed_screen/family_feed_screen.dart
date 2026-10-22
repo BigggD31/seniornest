@@ -28,6 +28,7 @@ import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../core/app_state.dart';
 import '../../services/auth_service.dart';
 import '../../services/push_service.dart';
+import '../../services/client_log.dart';
 
 // ── Data Models ────────────────────────────────────────────────
 
@@ -850,6 +851,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         } else if (status == RealtimeSubscribeStatus.channelError ||
             status == RealtimeSubscribeStatus.timedOut) {
           debugPrint('FEED_REALTIME: $status $error -- will reconnect');
+          ClientLog.failure('home_realtime_$status', error);
           _scheduleRealtimeRetry();
         }
         // RealtimeSubscribeStatus.closed is what our own teardown produces;
@@ -857,6 +859,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       });
     } catch (e) {
       debugPrint('FEED_REALTIME: subscribe failed, will retry: $e');
+      ClientLog.failure('home_realtime_subscribe_failed', e);
       _scheduleRealtimeRetry();
     } finally {
       _realtimeSubscribing = false;
