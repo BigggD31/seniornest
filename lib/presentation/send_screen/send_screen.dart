@@ -1909,6 +1909,44 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                 color: color,
               ),
             ),
+            // Oct 22 2026: unread direct-message count on the My Messages tab,
+            // so you can see at a glance which tab to open. Same number and
+            // colour as the one on the bottom Share icon.
+            if (index == 1)
+              ValueListenableBuilder<int>(
+                valueListenable: ActivityBadgeService.shareCount,
+                builder: (context, count, _) {
+                  if (count <= 0) return const SizedBox.shrink();
+                  final text = count > 99 ? '99+' : '$count';
+                  return Container(
+                    margin: const EdgeInsets.only(left: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    constraints: const BoxConstraints(minWidth: 18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFC0693E),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF5DA399)
+                            : (_isDarkMode
+                                ? const Color(0xFF242018)
+                                : const Color(0xFFF0E9DC)),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Text(
+                      text,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        height: 1.2,
+                      ),
+                    ),
+                  );
+                },
+              ),
           ],
         ),
       ),

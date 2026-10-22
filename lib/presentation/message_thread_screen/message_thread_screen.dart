@@ -184,6 +184,26 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     ActivityBadgeService.refreshCounts();
   }
 
+  // Oct 22 2026: like a message someone sent you. Stored as liked_at on the
+  // message row (the recipient is already allowed to update it); the live
+  // stream above carries it to the sender's screen. Tap again to un-like.
+  Future<void> _toggleLike(Map<String, dynamic> m) async {
+    final id = m['id'];
+    if (id == null) return;
+    final wasLiked = m['liked_at'] != null;
+    final prev = m['liked_at'];
+    setState(() => m['liked_at'] =
+        wasLiked ? null : DateTime.now().toUtc().toIso8601String());
+    try {
+      await _supabase
+          .from('private_messages')
+          .update({'liked_at': wasLiked ? null : DateTime.now().toUtc().toIso8601String()})
+          .eq('id', id);
+    } catch (e) {
+      if (mounted) setState(() => m['liked_at'] = prev);
+    }
+  }
+
   void _scrollToBottom() {
     if (!_scrollController.hasClients) return;
     _scrollController.animateTo(
@@ -365,12 +385,42 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
               showLinkBackground: !isMine,
             ),
             const SizedBox(height: 4),
-            Text(
-              _formatMessageTime(m),
-              style: GoogleFonts.nunitoSans(
-                fontSize: 11,
-                color: (isMine ? Colors.white : _textPrimary).withAlpha(150),
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _formatMessageTime(m),
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 11,
+                    color: (isMine ? Colors.white : _textPrimary).withAlpha(150),
+                  ),
+                ),
+                // Received message: a tappable heart. Sent message: shows a
+                // filled heart only once the other person has liked it.
+                if (!isMine) ...[
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _toggleLike(m),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        m['liked_at'] != null
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        size: 18,
+                        color: m['liked_at'] != null
+                            ? const Color(0xFFE05C5C)
+                            : _textPrimary.withAlpha(150),
+                      ),
+                    ),
+                  ),
+                ] else if (m['liked_at'] != null) ...[
+                  const SizedBox(width: 8),
+                  const Icon(Icons.favorite_rounded,
+                      size: 16, color: Color(0xFFFFB4A8)),
+                ],
+              ],
             ),
           ],
         ),
