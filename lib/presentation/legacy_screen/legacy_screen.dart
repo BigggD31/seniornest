@@ -342,6 +342,11 @@ class _LegacyScreenState extends State<LegacyScreen>
   // Oct 8 2026: same rule as Home -- the number stays until Legacy (tab 2)
   // is actually the visible tab, then clears after the delay.
   void _onActiveTabChangedForBadge() {
+    // Oct 22 2026: restore the fresh reload each time you come back to
+    // Legacy (tabs stay alive since Sep 24, so it no longer rebuilt).
+    if (appActiveTabNotifier.value == 2 && mounted) {
+      _loadData();
+    }
     if (appActiveTabNotifier.value == 2 &&
         ActivityBadgeService.legacyCount.value > 0) {
       _scheduleLegacySeenClear();

@@ -542,6 +542,14 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // alive while another tab is showing. The number must stay put until the
   // person is actually looking at Home, then clear after the delay below.
   void _onActiveTabChangedForBadge() {
+    // Oct 22 2026: since Sep 24 the tabs stay alive instead of being rebuilt
+    // on every tap, which quietly removed the fresh reload that used to
+    // happen each time you came back to Home. Restore it, quietly (same
+    // cache-first refresh as pull-to-refresh, no flash).
+    if (appActiveTabNotifier.value == 0 && mounted) {
+      _onRefresh();
+      setState(() => _repliesRefreshTick++);
+    }
     if (appActiveTabNotifier.value == 0 &&
         ActivityBadgeService.homeCount.value > 0) {
       _scheduleHomeSeenClear();
