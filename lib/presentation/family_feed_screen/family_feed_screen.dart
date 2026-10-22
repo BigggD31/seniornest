@@ -469,6 +469,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // Aug 27 2026: real-time feed updates -- see initState/_subscribeToFeedRealtime.
   RealtimeChannel? _feedChannel;
   Timer? _realtimeRefreshDebounce;
+  Timer? _membersRealtimeDebounce;
 
   // Oct 12 2026: these screens stay mounted (tab IndexedStack) and only read
   // dark mode when they loaded, so flipping the Setup toggle left them
@@ -692,6 +693,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             ),
             callback: (payload) {
               _realtimeRefreshDebounce?.cancel();
+    _membersRealtimeDebounce?.cancel();
               _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
                 if (mounted) _loadFeedFromSupabase();
               });
@@ -716,6 +718,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             table: 'daily_checkins',
             callback: (payload) {
               _realtimeRefreshDebounce?.cancel();
+    _membersRealtimeDebounce?.cancel();
               _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
                 if (mounted) _loadCheckinStatus();
               });
@@ -727,8 +730,35 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             table: 'daily_medications',
             callback: (payload) {
               _realtimeRefreshDebounce?.cancel();
+    _membersRealtimeDebounce?.cancel();
               _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
                 if (mounted) _loadCheckinStatus();
+              });
+            },
+          )
+          // Oct 22 2026: someone joining the nest now updates the avatar
+          // tray live (replaces the sample placeholders with the real
+          // person) instead of needing the app reopened. Insert-only: a
+          // removed member is already handled by the removal path. Reloads
+          // twice -- the new member's profile row can land a moment after
+          // their membership row, and a member with no name yet is skipped.
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'nest_members',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'nest_id',
+              value: nestId,
+            ),
+            callback: (payload) {
+              _membersRealtimeDebounce?.cancel();
+              _membersRealtimeDebounce = Timer(const Duration(milliseconds: 600), () {
+                if (!mounted) return;
+                _loadNestMembers();
+                Future.delayed(const Duration(seconds: 3), () {
+                  if (mounted) _loadNestMembers();
+                });
               });
             },
           )
@@ -2207,6 +2237,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       // cards and each senior's switches), so a switch changed on another
       // phone shows up on a pull-down.
       _loadCheckinStatus(),
+      // Oct 22 2026: pull-to-refresh never reloaded the member avatar
+      // tray, so a person who had just joined stayed missing (and the
+      // sample placeholders stayed) until the app was fully reopened.
+      _loadNestMembers(),
     ]);
   }
 
@@ -2814,6 +2848,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     appMyCheckinEnabledNotifier.removeListener(_onMyTogglesChanged);
     appMyTogglesKnownNotifier.removeListener(_onMyTogglesChanged);
     _realtimeRefreshDebounce?.cancel();
+    _membersRealtimeDebounce?.cancel();
     _feedChannel?.unsubscribe();
     _listEntranceController.dispose();
     _scrollController.dispose();
