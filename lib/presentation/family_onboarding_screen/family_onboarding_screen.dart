@@ -1177,6 +1177,49 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
             ),
           ),
         ),
+        if (!_joinedViaInvite) const SizedBox(height: 24),
+        // ── Nest name field (optional) ──────────────────────────
+        if (!_joinedViaInvite)
+          Text(
+            'Name your family nest (optional)',
+            style: GoogleFonts.nunitoSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: textSecondary,
+            ),
+          ),
+        if (!_joinedViaInvite) const SizedBox(height: 8),
+        if (!_joinedViaInvite)
+          Container(
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor, width: 1.5),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: TextField(
+              controller: _nestNameController,
+              textCapitalization: TextCapitalization.words,
+              style: GoogleFonts.nunitoSans(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: textPrimary,
+              ),
+              decoration: InputDecoration(
+                hintText: 'e.g. "Popy & Nana\'s Nest"',
+                hintStyle: GoogleFonts.nunitoSans(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: isDark
+                      ? const Color(0xFF5A5040)
+                      : const Color(0xFFD0C8B8),
+                ),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+              ),
+            ),
+          ),
         const SizedBox(height: 16),
         _buildDateField(
           label: 'Birthday (optional)',
@@ -1241,49 +1284,6 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
             );
           }).toList(),
         ),
-        const SizedBox(height: 32),
-        // ── Nest name field (optional) ──────────────────────────
-        if (!_joinedViaInvite)
-          Text(
-            'Name your family nest (optional)',
-            style: GoogleFonts.nunitoSans(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: textSecondary,
-            ),
-          ),
-        if (!_joinedViaInvite) const SizedBox(height: 8),
-        if (!_joinedViaInvite)
-          Container(
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderColor, width: 1.5),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: TextField(
-              controller: _nestNameController,
-              textCapitalization: TextCapitalization.words,
-              style: GoogleFonts.nunitoSans(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: textPrimary,
-              ),
-              decoration: InputDecoration(
-                hintText: 'e.g. "Popy & Nana\'s Nest"',
-                hintStyle: GoogleFonts.nunitoSans(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: isDark
-                      ? const Color(0xFF5A5040)
-                      : const Color(0xFFD0C8B8),
-                ),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-              ),
-            ),
-          ),
       ],
     );
   }
