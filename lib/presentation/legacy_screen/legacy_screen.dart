@@ -254,6 +254,7 @@ class _LegacyScreenState extends State<LegacyScreen>
     );
     _itemAnimations = [];
     _loadData();
+    _subscribeLegacyRealtime();
     _loadRemovedMemberIds();
     // Sep 16 2026: "Show What's New" -- same fix as Home's badge (see
     // family_feed_screen.dart's matching comment): show the count for a
@@ -280,6 +281,63 @@ class _LegacyScreenState extends State<LegacyScreen>
   }
 
   Timer? _legacySeenDelayTimer;
+  RealtimeChannel? _legacyChannel;
+  Timer? _legacyRealtimeDebounce;
+
+  // Oct 22 2026: Legacy never listened for live changes, so a new story, a
+  // suggested question or a heart only appeared after a manual refresh (or
+  // a long delay). Now any change to this Nest's stories, questions or
+  // hearts reloads the page quietly -- the same _loadData that
+  // pull-to-refresh already uses. Debounced so a burst reloads once.
+  Future<void> _subscribeLegacyRealtime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isEmpty || !mounted) return;
+      void onChange(dynamic _) {
+        _legacyRealtimeDebounce?.cancel();
+        _legacyRealtimeDebounce = Timer(const Duration(milliseconds: 500), () {
+          if (mounted) _loadData();
+        });
+      }
+
+      _legacyChannel = Supabase.instance.client
+          .channel('legacy_realtime_$nestId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'legacy_entries',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'nest_id',
+              value: nestId,
+            ),
+            callback: onChange,
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'legacy_story_prompts',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'nest_id',
+              value: nestId,
+            ),
+            callback: onChange,
+          )
+          // legacy_hearts has no nest_id column, so it listens unfiltered
+          // (RLS still limits what arrives).
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'legacy_hearts',
+            callback: onChange,
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('LEGACY_REALTIME: subscribe failed, page still works via refresh: $e');
+    }
+  }
 
   // Oct 8 2026: same rule as Home -- the number stays until Legacy (tab 2)
   // is actually the visible tab, then clears after the delay.
@@ -782,6 +840,8 @@ class _LegacyScreenState extends State<LegacyScreen>
   @override
   void dispose() {
     _legacySeenDelayTimer?.cancel();
+    _legacyRealtimeDebounce?.cancel();
+    _legacyChannel?.unsubscribe();
     ActivityBadgeService.legacyCount.removeListener(_onLegacyCountChanged);
     appActiveTabNotifier.removeListener(_onActiveTabChangedForBadge);
     bookmarkEventNotifier.removeListener(_onBookmarkEventChanged);
