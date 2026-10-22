@@ -169,7 +169,7 @@ class FamilyFeedScreen extends StatefulWidget {
 }
 
 class _FamilyFeedScreenState extends State<FamilyFeedScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   // Sep 28 2026: field initializers run before a try/catch block can wrap
   // them, so this has to be its own guarded static function rather than
   // an inline `.map(MessageModel.fromMap).toList()` -- MessageModel.fromMap
@@ -469,6 +469,18 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // Aug 27 2026: real-time feed updates -- see initState/_subscribeToFeedRealtime.
   RealtimeChannel? _feedChannel;
   Timer? _realtimeRefreshDebounce;
+  // Oct 22 2026: live-update reliability (ported from the separate "Live post
+  // not showing" thread). A brand-new account's first Home could subscribe
+  // BEFORE _ensureNestId() had stored/validated the right nest_id (empty or
+  // a stale id from a previous account), and a dropped or iOS-suspended
+  // connection was never re-established. These track which nest the channel
+  // is on and drive reconnect / catch-up.
+  String? _subscribedNestId;
+  Timer? _realtimeRetryTimer;
+  int _realtimeRetryCount = 0;
+  bool _realtimeNeedsCatchUp = false;
+  bool _realtimeSubscribing = false;
+  static const List<int> _realtimeBackoffSeconds = [1, 2, 4, 8, 16, 30];
   Timer? _membersRealtimeDebounce;
   // Oct 22 2026: bumped whenever feed/hearts change live so each message card
   // reloads its own replies and reply hearts; the clock timer redraws the
@@ -503,6 +515,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // see bookmarkEventNotifier in app_state.dart.
     bookmarkEventNotifier.addListener(_onBookmarkEventChanged);
     _loadRemovedMemberIds();
+    WidgetsBinding.instance.addObserver(this);
     _subscribeToFeedRealtime();
     _checkPendingSuccessionForOwner();
     // Sep 16 2026: "Show What's New" -- previously cleared its badge
@@ -693,10 +706,32 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // 400ms so a burst of changes (e.g. someone editing then immediately
   // pinning a post) doesn't trigger several overlapping refetches.
   Future<void> _subscribeToFeedRealtime() async {
+    // One attempt at a time: initState, a resume and a retry timer can all
+    // call this close together, and two channels on the same topic would
+    // fight each other.
+    if (_realtimeSubscribing) return;
+    _realtimeSubscribing = true;
     try {
+      // Settle which nest this account really belongs to BEFORE reading it.
+      // On a brand-new account (or after an account switch on this device)
+      // prefs can be empty or hold the previous account's nest_id until
+      // _ensureNestId() has run. Cheap when the id is already validated for
+      // this user (a prefs read, no network).
+      await _ensureNestId();
       final prefs = await SharedPreferences.getInstance();
       final nestId = prefs.getString('nest_id') ?? '';
-      if (nestId.isEmpty || !mounted) return;
+      if (!mounted) return;
+      if (nestId.isEmpty) {
+        // Still no nest (e.g. onboarding hasn't finished writing it). Try
+        // again rather than silently never going live.
+        _scheduleRealtimeRetry();
+        return;
+      }
+      // Already live on the right nest -- nothing to do.
+      if (_feedChannel != null && _subscribedNestId == nestId) return;
+      await _teardownFeedChannel();
+      if (!mounted) return;
+      _subscribedNestId = nestId;
 
       _feedChannel = Supabase.instance.client
           .channel('feed_posts_realtime_$nestId')
@@ -798,10 +833,79 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               });
             },
           )
-          .subscribe();
+          .subscribe((status, [error]) {
+        if (!mounted) return;
+        if (status == RealtimeSubscribeStatus.subscribed) {
+          _realtimeRetryCount = 0;
+          // Anything that happened while we weren't connected (backgrounded,
+          // dropped, retrying) was never delivered -- re-run the same loads
+          // the live events trigger so Home is current the moment we're live.
+          if (_realtimeNeedsCatchUp) {
+            _realtimeNeedsCatchUp = false;
+            _loadFeedFromSupabase();
+            _loadCheckinStatus();
+            _loadNestMembers();
+            setState(() => _repliesRefreshTick++);
+          }
+        } else if (status == RealtimeSubscribeStatus.channelError ||
+            status == RealtimeSubscribeStatus.timedOut) {
+          debugPrint('FEED_REALTIME: $status $error -- will reconnect');
+          _scheduleRealtimeRetry();
+        }
+        // RealtimeSubscribeStatus.closed is what our own teardown produces;
+        // deliberately NOT retried here, or teardown would loop.
+      });
     } catch (e) {
-      debugPrint('FEED_REALTIME: subscribe failed, feed still works via manual refresh: $e');
+      debugPrint('FEED_REALTIME: subscribe failed, will retry: $e');
+      _scheduleRealtimeRetry();
+    } finally {
+      _realtimeSubscribing = false;
     }
+  }
+
+  Future<void> _teardownFeedChannel() async {
+    final old = _feedChannel;
+    _feedChannel = null;
+    _subscribedNestId = null;
+    if (old == null) return;
+    try {
+      await Supabase.instance.client.removeChannel(old);
+    } catch (e) {
+      debugPrint('FEED_REALTIME: teardown error (ignored): $e');
+    }
+  }
+
+  // Exponential backoff (1s, 2s, 4s, 8s, 16s, then every 30s) so a bad
+  // connection never turns into a tight loop. Every retry starts from a
+  // clean channel, and the next successful subscribe does a catch-up load.
+  void _scheduleRealtimeRetry() {
+    if (!mounted) return;
+    _realtimeRetryTimer?.cancel();
+    _realtimeNeedsCatchUp = true;
+    final index = _realtimeRetryCount < _realtimeBackoffSeconds.length
+        ? _realtimeRetryCount
+        : _realtimeBackoffSeconds.length - 1;
+    _realtimeRetryCount++;
+    _realtimeRetryTimer = Timer(Duration(seconds: _realtimeBackoffSeconds[index]), () async {
+      if (!mounted) return;
+      await _teardownFeedChannel();
+      if (mounted) _subscribeToFeedRealtime();
+    });
+  }
+
+  // Coming back from the background: the OS may have silently killed the
+  // socket while the app was away, and nothing tells the channel. Always
+  // start fresh and catch up, instead of trusting a connection we can't see.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    _realtimeRetryTimer?.cancel();
+    _realtimeRetryCount = 0;
+    _realtimeNeedsCatchUp = true;
+    () async {
+      await _teardownFeedChannel();
+      if (mounted) _subscribeToFeedRealtime();
+    }();
   }
 
   Future<void> _loadRemovedMemberIds() async {
@@ -2886,7 +2990,13 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     _realtimeRefreshDebounce?.cancel();
     _membersRealtimeDebounce?.cancel();
     _clockTimer?.cancel();
-    _feedChannel?.unsubscribe();
+    WidgetsBinding.instance.removeObserver(this);
+    _realtimeRetryTimer?.cancel();
+    final feedChannel = _feedChannel;
+    _feedChannel = null;
+    if (feedChannel != null) {
+      Supabase.instance.client.removeChannel(feedChannel);
+    }
     _listEntranceController.dispose();
     _scrollController.dispose();
     appDarkModeNotifier.removeListener(_onDarkModeChanged);
