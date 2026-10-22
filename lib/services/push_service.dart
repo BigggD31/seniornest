@@ -244,6 +244,29 @@ class PushService {
     }
   }
 
+  /// Oct 22 2026: tell the sender of a direct message that the recipient
+  /// hearted it. Only call on a new heart, never an un-heart.
+  static Future<void> notifyPrivateHeart({
+    required String senderId,
+    required String hearterId,
+    required String text,
+  }) async {
+    if (senderId == hearterId) return;
+    try {
+      final name = await _nameFor(hearterId);
+      final preview = text.length > 80 ? '${text.substring(0, 80)}...' : text;
+      await notify(
+        userIds: [senderId],
+        title: '$name loved your message',
+        body: preview,
+        category: 'message',
+        data: {'type': 'dm'},
+      );
+    } catch (e) {
+      debugPrint('PUSH_SERVICE notifyPrivateHeart error: $e');
+    }
+  }
+
   /// Oct 8 2026: push to everyone else in the Nest when a Legacy story is
   /// posted. Fire-and-forget.
   static Future<void> notifyLegacyPosted({

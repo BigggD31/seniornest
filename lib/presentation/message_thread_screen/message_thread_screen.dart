@@ -199,6 +199,13 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
           .from('private_messages')
           .update({'liked_at': wasLiked ? null : DateTime.now().toUtc().toIso8601String()})
           .eq('id', id);
+      if (!wasLiked && _myUserId != null) {
+        PushService.notifyPrivateHeart(
+          senderId: m['sender_id'] as String? ?? '',
+          hearterId: _myUserId!,
+          text: m['content'] as String? ?? '',
+        );
+      }
     } catch (e) {
       if (mounted) setState(() => m['liked_at'] = prev);
     }
