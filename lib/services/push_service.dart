@@ -1,3 +1,4 @@
+import 'client_log.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -146,11 +147,15 @@ class PushService {
       final token = await messaging.getToken();
       await _logPushDebug(
           'getToken() returned: ${token == null ? 'null' : 'a token (len ${token.length})'}');
-      if (token == null || token.isEmpty) return;
+      if (token == null || token.isEmpty) {
+        ClientLog.failure('push_no_token', 'getToken returned empty');
+        return;
+      }
 
       await _saveToken(userId, token);
     } catch (e) {
       debugPrint('PUSH_SERVICE registerDeviceToken error: $e');
+      ClientLog.failure('push_registerDeviceToken', e);
       await _logPushDebug('registerDeviceToken() threw: $e');
     }
   }
@@ -192,6 +197,7 @@ class PushService {
       await _logPushDebug('device_tokens upsert OK for userId=$userId');
     } catch (e) {
       debugPrint('PUSH_SERVICE saveToken error: $e');
+      ClientLog.failure('push_saveToken', e);
       await _logPushDebug('device_tokens upsert FAILED for userId=$userId: $e');
     }
   }
@@ -248,6 +254,29 @@ class PushService {
       );
     } catch (e) {
       debugPrint('PUSH_SERVICE notifyPrivateMessage error: $e');
+    }
+  }
+
+  /// Oct 22 2026: tell the sender of a direct message that the recipient
+  /// hearted it. Only call on a new heart, never an un-heart.
+  static Future<void> notifyPrivateHeart({
+    required String senderId,
+    required String hearterId,
+    required String text,
+  }) async {
+    if (senderId == hearterId) return;
+    try {
+      final name = await _nameFor(hearterId);
+      final preview = text.length > 80 ? '${text.substring(0, 80)}...' : text;
+      await notify(
+        userIds: [senderId],
+        title: '$name loved your message',
+        body: preview,
+        category: 'message',
+        data: {'type': 'dm'},
+      );
+    } catch (e) {
+      debugPrint('PUSH_SERVICE notifyPrivateHeart error: $e');
     }
   }
 

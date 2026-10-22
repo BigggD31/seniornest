@@ -18,6 +18,7 @@ class MessageCardWidget extends StatefulWidget {
     required this.message,
     required this.isDarkMode,
     required this.onHeart,
+    this.repliesRefreshTick = 0,
     this.isBookmarked = false,
     this.onBookmark,
     this.senderAvatarJson,
@@ -32,6 +33,9 @@ class MessageCardWidget extends StatefulWidget {
   final MessageModel message;
   final bool isDarkMode;
   final VoidCallback onHeart;
+  // Bumped by Home when feed posts / hearts change live, so this card re-reads
+  // its replies and the hearts on them.
+  final int repliesRefreshTick;
   final bool isBookmarked;
   final VoidCallback? onBookmark;
   final String? senderAvatarJson;
@@ -76,6 +80,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
   List<Map<String, dynamic>> _replies = [];
   bool _loadingReplies = false;
   final Set<String> _repliesHearted = {};
+  final Map<String, int> _replyHeartCounts = {};
 
   @override
   void initState() {
@@ -101,8 +106,11 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
       setState(() {
         _replies = [];
         _repliesHearted.clear();
+        _replyHeartCounts.clear();
       });
       _loadReplies();
+    } else if (oldWidget.repliesRefreshTick != widget.repliesRefreshTick) {
+      _loadReplies(quiet: true);
     }
   }
 
@@ -113,9 +121,9 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
     super.dispose();
   }
 
-  Future<void> _loadReplies() async {
+  Future<void> _loadReplies({bool quiet = false}) async {
     if (!mounted) return;
-    setState(() => _loadingReplies = true);
+    if (!quiet) setState(() => _loadingReplies = true);
     try {
       final supabase = Supabase.instance.client;
       final response = await supabase
@@ -123,14 +131,90 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
           .select('*, user_profiles(display_name, preferred_name, avatar_url)')
           .eq('parent_post_id', widget.message.id)
           .order('created_at', ascending: true);
+      final replies = List<Map<String, dynamic>>.from(response as List);
+
+      // Oct 22 2026: hearts on replies are real (saved in feed_hearts) now,
+      // not a local-only toggle nobody else could see.
+      final counts = <String, int>{};
+      final mine = <String>{};
+      final myId = supabase.auth.currentUser?.id;
+      final ids = replies
+          .map((r) => r['id'] as String? ?? '')
+          .where((i) => i.isNotEmpty)
+          .toList();
+      if (ids.isNotEmpty) {
+        try {
+          final hearts = await supabase
+              .from('feed_hearts')
+              .select('feed_post_id, user_id')
+              .inFilter('feed_post_id', ids);
+          for (final h in hearts as List<dynamic>) {
+            final pid = h['feed_post_id'] as String;
+            counts[pid] = (counts[pid] ?? 0) + 1;
+            if (h['user_id'] == myId) mine.add(pid);
+          }
+        } catch (_) {}
+      }
       if (mounted) {
         setState(() {
-          _replies = List<Map<String, dynamic>>.from(response as List);
+          _replies = replies;
+          _replyHeartCounts
+            ..clear()
+            ..addAll(counts);
+          _repliesHearted
+            ..clear()
+            ..addAll(mine);
           _loadingReplies = false;
         });
       }
     } catch (e) {
       if (mounted) setState(() => _loadingReplies = false);
+    }
+  }
+
+  Future<void> _toggleReplyHeart(String replyId) async {
+    if (replyId.isEmpty) return;
+    final wasHearted = _repliesHearted.contains(replyId);
+    final prevCount = _replyHeartCounts[replyId] ?? 0;
+    setState(() {
+      if (wasHearted) {
+        _repliesHearted.remove(replyId);
+        _replyHeartCounts[replyId] = prevCount > 0 ? prevCount - 1 : 0;
+      } else {
+        _repliesHearted.add(replyId);
+        _replyHeartCounts[replyId] = prevCount + 1;
+      }
+    });
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+      if (wasHearted) {
+        await supabase
+            .from('feed_hearts')
+            .delete()
+            .eq('feed_post_id', replyId)
+            .eq('user_id', userId);
+      } else {
+        await supabase.from('feed_hearts').insert({
+          'feed_post_id': replyId,
+          'user_id': userId,
+        });
+        PushService.notifyHeart(
+            isLegacy: false, targetId: replyId, hearterId: userId);
+      }
+    } catch (e) {
+      // Put the heart back the way it was if the save failed.
+      if (mounted) {
+        setState(() {
+          if (wasHearted) {
+            _repliesHearted.add(replyId);
+          } else {
+            _repliesHearted.remove(replyId);
+          }
+          _replyHeartCounts[replyId] = prevCount;
+        });
+      }
     }
   }
 
@@ -873,16 +957,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                       Row(
                         children: [
                           GestureDetector(
-                            onTap: () {
-                              final replyId = reply['id'] as String? ?? '';
-                              setState(() {
-                                if (_repliesHearted.contains(replyId)) {
-                                  _repliesHearted.remove(replyId);
-                                } else {
-                                  _repliesHearted.add(replyId);
-                                }
-                              });
-                            },
+                            onTap: () => _toggleReplyHeart(reply['id'] as String? ?? ''),
                             child: Icon(
                               _repliesHearted.contains(reply['id'] as String? ?? '')
                                   ? Icons.favorite_rounded
@@ -894,7 +969,7 @@ class _MessageCardWidgetState extends State<MessageCardWidget>
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            _repliesHearted.contains(reply['id'] as String? ?? '') ? '1' : '0',
+                            '${_replyHeartCounts[reply['id'] as String? ?? ''] ?? 0}',
                             style: GoogleFonts.nunitoSans(
                                   fontSize: 12,
                                   color: _repliesHearted.contains(reply['id'] as String? ?? '')

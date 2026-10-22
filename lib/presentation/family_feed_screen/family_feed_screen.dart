@@ -28,6 +28,7 @@ import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../core/app_state.dart';
 import '../../services/auth_service.dart';
 import '../../services/push_service.dart';
+import '../../services/client_log.dart';
 
 // ── Data Models ────────────────────────────────────────────────
 
@@ -169,7 +170,7 @@ class FamilyFeedScreen extends StatefulWidget {
 }
 
 class _FamilyFeedScreenState extends State<FamilyFeedScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   // Sep 28 2026: field initializers run before a try/catch block can wrap
   // them, so this has to be its own guarded static function rather than
   // an inline `.map(MessageModel.fromMap).toList()` -- MessageModel.fromMap
@@ -469,6 +470,24 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // Aug 27 2026: real-time feed updates -- see initState/_subscribeToFeedRealtime.
   RealtimeChannel? _feedChannel;
   Timer? _realtimeRefreshDebounce;
+  // Oct 22 2026: live-update reliability (ported from the separate "Live post
+  // not showing" thread). A brand-new account's first Home could subscribe
+  // BEFORE _ensureNestId() had stored/validated the right nest_id (empty or
+  // a stale id from a previous account), and a dropped or iOS-suspended
+  // connection was never re-established. These track which nest the channel
+  // is on and drive reconnect / catch-up.
+  String? _subscribedNestId;
+  Timer? _realtimeRetryTimer;
+  int _realtimeRetryCount = 0;
+  bool _realtimeNeedsCatchUp = false;
+  bool _realtimeSubscribing = false;
+  static const List<int> _realtimeBackoffSeconds = [1, 2, 4, 8, 16, 30];
+  Timer? _membersRealtimeDebounce;
+  // Oct 22 2026: bumped whenever feed/hearts change live so each message card
+  // reloads its own replies and reply hearts; the clock timer redraws the
+  // relative times ("0m ago") which were only ever computed at build time.
+  int _repliesRefreshTick = 0;
+  Timer? _clockTimer;
 
   // Oct 12 2026: these screens stay mounted (tab IndexedStack) and only read
   // dark mode when they loaded, so flipping the Setup toggle left them
@@ -482,6 +501,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   @override
   void initState() {
     super.initState();
+    // Oct 22 2026: redraw every 30s so "0m ago" / "5m ago" keep moving
+    // on their own.
+    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
     appDarkModeNotifier.addListener(_onDarkModeChanged);
     _listEntranceController = AnimationController(
       vsync: this,
@@ -492,6 +516,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     // see bookmarkEventNotifier in app_state.dart.
     bookmarkEventNotifier.addListener(_onBookmarkEventChanged);
     _loadRemovedMemberIds();
+    WidgetsBinding.instance.addObserver(this);
     _subscribeToFeedRealtime();
     _checkPendingSuccessionForOwner();
     // Sep 16 2026: "Show What's New" -- previously cleared its badge
@@ -531,6 +556,14 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // alive while another tab is showing. The number must stay put until the
   // person is actually looking at Home, then clear after the delay below.
   void _onActiveTabChangedForBadge() {
+    // Oct 22 2026: since Sep 24 the tabs stay alive instead of being rebuilt
+    // on every tap, which quietly removed the fresh reload that used to
+    // happen each time you came back to Home. Restore it, quietly (same
+    // cache-first refresh as pull-to-refresh, no flash).
+    if (appActiveTabNotifier.value == 0 && mounted) {
+      _onRefresh();
+      setState(() => _repliesRefreshTick++);
+    }
     if (appActiveTabNotifier.value == 0 &&
         ActivityBadgeService.homeCount.value > 0) {
       _scheduleHomeSeenClear();
@@ -674,10 +707,32 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // 400ms so a burst of changes (e.g. someone editing then immediately
   // pinning a post) doesn't trigger several overlapping refetches.
   Future<void> _subscribeToFeedRealtime() async {
+    // One attempt at a time: initState, a resume and a retry timer can all
+    // call this close together, and two channels on the same topic would
+    // fight each other.
+    if (_realtimeSubscribing) return;
+    _realtimeSubscribing = true;
     try {
+      // Settle which nest this account really belongs to BEFORE reading it.
+      // On a brand-new account (or after an account switch on this device)
+      // prefs can be empty or hold the previous account's nest_id until
+      // _ensureNestId() has run. Cheap when the id is already validated for
+      // this user (a prefs read, no network).
+      await _ensureNestId();
       final prefs = await SharedPreferences.getInstance();
       final nestId = prefs.getString('nest_id') ?? '';
-      if (nestId.isEmpty || !mounted) return;
+      if (!mounted) return;
+      if (nestId.isEmpty) {
+        // Still no nest (e.g. onboarding hasn't finished writing it). Try
+        // again rather than silently never going live.
+        _scheduleRealtimeRetry();
+        return;
+      }
+      // Already live on the right nest -- nothing to do.
+      if (_feedChannel != null && _subscribedNestId == nestId) return;
+      await _teardownFeedChannel();
+      if (!mounted) return;
+      _subscribedNestId = nestId;
 
       _feedChannel = Supabase.instance.client
           .channel('feed_posts_realtime_$nestId')
@@ -693,7 +748,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             callback: (payload) {
               _realtimeRefreshDebounce?.cancel();
               _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
-                if (mounted) _loadFeedFromSupabase();
+                if (!mounted) return;
+                _loadFeedFromSupabase();
+                // A new reply is a feed_posts row too -- tell every card
+                // to re-read its replies.
+                setState(() => _repliesRefreshTick++);
               });
             },
           )
@@ -732,10 +791,124 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               });
             },
           )
-          .subscribe();
+          // Oct 22 2026: hearts (on messages AND replies) now show up live for
+          // everyone. feed_hearts has no nest_id column to filter on, so this
+          // listens unfiltered (RLS still limits what arrives) and reloads
+          // the feed + each card's reply hearts, debounced like the rest.
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'feed_hearts',
+            callback: (payload) {
+              _realtimeRefreshDebounce?.cancel();
+              _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
+                if (!mounted) return;
+                _loadFeedFromSupabase();
+                setState(() => _repliesRefreshTick++);
+              });
+            },
+          )
+          // Oct 22 2026: someone joining the nest now updates the avatar
+          // tray live (replaces the sample placeholders with the real
+          // person) instead of needing the app reopened. Insert-only: a
+          // removed member is already handled by the removal path. Reloads
+          // twice -- the new member's profile row can land a moment after
+          // their membership row, and a member with no name yet is skipped.
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'nest_members',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'nest_id',
+              value: nestId,
+            ),
+            callback: (payload) {
+              _membersRealtimeDebounce?.cancel();
+              _membersRealtimeDebounce = Timer(const Duration(milliseconds: 600), () {
+                if (!mounted) return;
+                _loadNestMembers();
+                Future.delayed(const Duration(seconds: 3), () {
+                  if (mounted) _loadNestMembers();
+                });
+              });
+            },
+          )
+          .subscribe((status, [error]) {
+        if (!mounted) return;
+        if (status == RealtimeSubscribeStatus.subscribed) {
+          _realtimeRetryCount = 0;
+          // Anything that happened while we weren't connected (backgrounded,
+          // dropped, retrying) was never delivered -- re-run the same loads
+          // the live events trigger so Home is current the moment we're live.
+          if (_realtimeNeedsCatchUp) {
+            _realtimeNeedsCatchUp = false;
+            _loadFeedFromSupabase();
+            _loadCheckinStatus();
+            _loadNestMembers();
+            setState(() => _repliesRefreshTick++);
+          }
+        } else if (status == RealtimeSubscribeStatus.channelError ||
+            status == RealtimeSubscribeStatus.timedOut) {
+          debugPrint('FEED_REALTIME: $status $error -- will reconnect');
+          ClientLog.failure('home_realtime_$status', error);
+          _scheduleRealtimeRetry();
+        }
+        // RealtimeSubscribeStatus.closed is what our own teardown produces;
+        // deliberately NOT retried here, or teardown would loop.
+      });
     } catch (e) {
-      debugPrint('FEED_REALTIME: subscribe failed, feed still works via manual refresh: $e');
+      debugPrint('FEED_REALTIME: subscribe failed, will retry: $e');
+      ClientLog.failure('home_realtime_subscribe_failed', e);
+      _scheduleRealtimeRetry();
+    } finally {
+      _realtimeSubscribing = false;
     }
+  }
+
+  Future<void> _teardownFeedChannel() async {
+    final old = _feedChannel;
+    _feedChannel = null;
+    _subscribedNestId = null;
+    if (old == null) return;
+    try {
+      await Supabase.instance.client.removeChannel(old);
+    } catch (e) {
+      debugPrint('FEED_REALTIME: teardown error (ignored): $e');
+    }
+  }
+
+  // Exponential backoff (1s, 2s, 4s, 8s, 16s, then every 30s) so a bad
+  // connection never turns into a tight loop. Every retry starts from a
+  // clean channel, and the next successful subscribe does a catch-up load.
+  void _scheduleRealtimeRetry() {
+    if (!mounted) return;
+    _realtimeRetryTimer?.cancel();
+    _realtimeNeedsCatchUp = true;
+    final index = _realtimeRetryCount < _realtimeBackoffSeconds.length
+        ? _realtimeRetryCount
+        : _realtimeBackoffSeconds.length - 1;
+    _realtimeRetryCount++;
+    _realtimeRetryTimer = Timer(Duration(seconds: _realtimeBackoffSeconds[index]), () async {
+      if (!mounted) return;
+      await _teardownFeedChannel();
+      if (mounted) _subscribeToFeedRealtime();
+    });
+  }
+
+  // Coming back from the background: the OS may have silently killed the
+  // socket while the app was away, and nothing tells the channel. Always
+  // start fresh and catch up, instead of trusting a connection we can't see.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    _realtimeRetryTimer?.cancel();
+    _realtimeRetryCount = 0;
+    _realtimeNeedsCatchUp = true;
+    () async {
+      await _teardownFeedChannel();
+      if (mounted) _subscribeToFeedRealtime();
+    }();
   }
 
   Future<void> _loadRemovedMemberIds() async {
@@ -2207,6 +2380,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       // cards and each senior's switches), so a switch changed on another
       // phone shows up on a pull-down.
       _loadCheckinStatus(),
+      // Oct 22 2026: pull-to-refresh never reloaded the member avatar
+      // tray, so a person who had just joined stayed missing (and the
+      // sample placeholders stayed) until the app was fully reopened.
+      _loadNestMembers(),
     ]);
   }
 
@@ -2814,7 +2991,15 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     appMyCheckinEnabledNotifier.removeListener(_onMyTogglesChanged);
     appMyTogglesKnownNotifier.removeListener(_onMyTogglesChanged);
     _realtimeRefreshDebounce?.cancel();
-    _feedChannel?.unsubscribe();
+    _membersRealtimeDebounce?.cancel();
+    _clockTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _realtimeRetryTimer?.cancel();
+    final feedChannel = _feedChannel;
+    _feedChannel = null;
+    if (feedChannel != null) {
+      Supabase.instance.client.removeChannel(feedChannel);
+    }
     _listEntranceController.dispose();
     _scrollController.dispose();
     appDarkModeNotifier.removeListener(_onDarkModeChanged);
@@ -3349,6 +3534,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 message: entry.message!,
                 isDarkMode: _isDarkMode,
                 onHeart: () => _toggleHeart(msgIndex),
+                repliesRefreshTick: _repliesRefreshTick,
                 isBookmarked: _bookmarkedIds.contains(entry.message!.id),
                 onBookmark: () => _toggleBookmark(entry.message!),
                 senderAvatarJson: entry.message!.senderAvatarJson,
@@ -3391,6 +3577,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               message: _messages[index],
               isDarkMode: _isDarkMode,
               onHeart: () => _toggleHeart(index),
+              repliesRefreshTick: _repliesRefreshTick,
               isBookmarked: _bookmarkedIds.contains(_messages[index].id),
               onBookmark: () => _toggleBookmark(_messages[index]),
               senderAvatarJson: _messages[index].senderAvatarJson,

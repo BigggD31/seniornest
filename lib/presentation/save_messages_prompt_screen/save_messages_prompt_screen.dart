@@ -773,8 +773,19 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             // role-scoped key using 'role' above, gated the same
             // owner-id way as the other two files.
             final nestDraftOwnerId = prefs.getString('onboarding_draft_owner_id_$role') ?? '';
+            // Oct 21 2026: a brand-new Nest Owner has NO account yet while
+            // typing on the onboarding screens (the account is created on
+            // THIS screen, after onboarding), so the draft was always tagged
+            // with an empty owner id and this check always failed -- every
+            // fresh Owner's nest was silently named "My Family" instead of
+            // what they typed (broken since the Sep 16 audit fix above).
+            // An EMPTY owner id means "written before any account existed",
+            // i.e. this very signup, so it is trusted too. A draft tagged
+            // with a DIFFERENT account's id is still rejected. The draft is
+            // cleared right after the nest is created (see below) so it can
+            // never carry over into a later signup.
             final nestDraftBelongsToCurrentUser =
-                nestDraftOwnerId.isNotEmpty && nestDraftOwnerId == effectiveUserId;
+                nestDraftOwnerId.isEmpty || nestDraftOwnerId == effectiveUserId;
             final roleScopedNestNameKey = 'onboarding_draft_nest_name_$role';
             final nestName = (nestDraftBelongsToCurrentUser
                     ? (prefs.getString(roleScopedNestNameKey) ?? '')
@@ -831,6 +842,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
               throw Exception('Could not generate a unique invite code after 5 attempts');
             }
             await prefs.setString('nest_id', nestId);
+            // Oct 21 2026: the typed nest-name draft has done its job --
+            // clear it so it can't leak into a later signup on this device.
+            await prefs.remove(roleScopedNestNameKey);
             print('NEST_DEBUG: nest created = $nestId');
 
             // Add as member. onConflict targets the real unique constraint

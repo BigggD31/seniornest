@@ -1,3 +1,4 @@
+import '../../services/client_log.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -254,6 +255,7 @@ class _LegacyScreenState extends State<LegacyScreen>
     );
     _itemAnimations = [];
     _loadData();
+    _subscribeLegacyRealtime();
     _loadRemovedMemberIds();
     // Sep 16 2026: "Show What's New" -- same fix as Home's badge (see
     // family_feed_screen.dart's matching comment): show the count for a
@@ -280,10 +282,73 @@ class _LegacyScreenState extends State<LegacyScreen>
   }
 
   Timer? _legacySeenDelayTimer;
+  RealtimeChannel? _legacyChannel;
+  Timer? _legacyRealtimeDebounce;
+
+  // Oct 22 2026: Legacy never listened for live changes, so a new story, a
+  // suggested question or a heart only appeared after a manual refresh (or
+  // a long delay). Now any change to this Nest's stories, questions or
+  // hearts reloads the page quietly -- the same _loadData that
+  // pull-to-refresh already uses. Debounced so a burst reloads once.
+  Future<void> _subscribeLegacyRealtime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nestId = prefs.getString('nest_id') ?? '';
+      if (nestId.isEmpty || !mounted) return;
+      void onChange(dynamic _) {
+        _legacyRealtimeDebounce?.cancel();
+        _legacyRealtimeDebounce = Timer(const Duration(milliseconds: 500), () {
+          if (mounted) _loadData();
+        });
+      }
+
+      _legacyChannel = Supabase.instance.client
+          .channel('legacy_realtime_$nestId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'legacy_entries',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'nest_id',
+              value: nestId,
+            ),
+            callback: onChange,
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'legacy_story_prompts',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'nest_id',
+              value: nestId,
+            ),
+            callback: onChange,
+          )
+          // legacy_hearts has no nest_id column, so it listens unfiltered
+          // (RLS still limits what arrives).
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'legacy_hearts',
+            callback: onChange,
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('LEGACY_REALTIME: subscribe failed, page still works via refresh: $e');
+      ClientLog.failure('legacy_realtime_subscribe_failed', e);
+    }
+  }
 
   // Oct 8 2026: same rule as Home -- the number stays until Legacy (tab 2)
   // is actually the visible tab, then clears after the delay.
   void _onActiveTabChangedForBadge() {
+    // Oct 22 2026: restore the fresh reload each time you come back to
+    // Legacy (tabs stay alive since Sep 24, so it no longer rebuilt).
+    if (appActiveTabNotifier.value == 2 && mounted) {
+      _loadData();
+    }
     if (appActiveTabNotifier.value == 2 &&
         ActivityBadgeService.legacyCount.value > 0) {
       _scheduleLegacySeenClear();
@@ -782,6 +847,8 @@ class _LegacyScreenState extends State<LegacyScreen>
   @override
   void dispose() {
     _legacySeenDelayTimer?.cancel();
+    _legacyRealtimeDebounce?.cancel();
+    _legacyChannel?.unsubscribe();
     ActivityBadgeService.legacyCount.removeListener(_onLegacyCountChanged);
     appActiveTabNotifier.removeListener(_onActiveTabChangedForBadge);
     bookmarkEventNotifier.removeListener(_onBookmarkEventChanged);
@@ -4967,12 +5034,22 @@ class _LegacyAudioPlayerState extends State<_LegacyAudioPlayer> {
                 await _player.pause();
                 setState(() => _isPlaying = false);
               } else {
-                if (_player.processingState == ProcessingState.idle ||
-                    _player.processingState == ProcessingState.completed) {
-                  await _player.setUrl(widget.audioUrl);
-                }
-                await _player.play();
+                // Oct 22 2026: just_audio's play() doesn't return until the
+                // audio FINISHES (or is paused), so setting _isPlaying after
+                // awaiting it meant the pause button only appeared on a
+                // second tap. Flip the icon first and don't wait on play() --
+                // same fix Home's voice-message player already has.
                 setState(() => _isPlaying = true);
+                try {
+                  if (_player.processingState == ProcessingState.idle ||
+                      _player.processingState == ProcessingState.completed) {
+                    await _player.setUrl(widget.audioUrl);
+                  }
+                  unawaited(_player.play());
+                } catch (e) {
+                  debugPrint('Audio play error: $e');
+                  if (mounted) setState(() => _isPlaying = false);
+                }
               }
             },
             child: Container(
