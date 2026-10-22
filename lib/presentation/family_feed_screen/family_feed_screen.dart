@@ -470,6 +470,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   RealtimeChannel? _feedChannel;
   Timer? _realtimeRefreshDebounce;
   Timer? _membersRealtimeDebounce;
+  // Oct 22 2026: bumped whenever feed/hearts change live so each message card
+  // reloads its own replies and reply hearts; the clock timer redraws the
+  // relative times ("0m ago") which were only ever computed at build time.
+  int _repliesRefreshTick = 0;
+  Timer? _clockTimer;
 
   // Oct 12 2026: these screens stay mounted (tab IndexedStack) and only read
   // dark mode when they loaded, so flipping the Setup toggle left them
@@ -483,6 +488,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   @override
   void initState() {
     super.initState();
+    // Oct 22 2026: redraw every 30s so "0m ago" / "5m ago" keep moving
+    // on their own.
+    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
     appDarkModeNotifier.addListener(_onDarkModeChanged);
     _listEntranceController = AnimationController(
       vsync: this,
@@ -693,9 +703,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             ),
             callback: (payload) {
               _realtimeRefreshDebounce?.cancel();
-    _membersRealtimeDebounce?.cancel();
               _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
-                if (mounted) _loadFeedFromSupabase();
+                if (!mounted) return;
+                _loadFeedFromSupabase();
+                // A new reply is a feed_posts row too -- tell every card
+                // to re-read its replies.
+                setState(() => _repliesRefreshTick++);
               });
             },
           )
@@ -718,7 +731,6 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             table: 'daily_checkins',
             callback: (payload) {
               _realtimeRefreshDebounce?.cancel();
-    _membersRealtimeDebounce?.cancel();
               _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
                 if (mounted) _loadCheckinStatus();
               });
@@ -730,9 +742,25 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             table: 'daily_medications',
             callback: (payload) {
               _realtimeRefreshDebounce?.cancel();
-    _membersRealtimeDebounce?.cancel();
               _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
                 if (mounted) _loadCheckinStatus();
+              });
+            },
+          )
+          // Oct 22 2026: hearts (on messages AND replies) now show up live for
+          // everyone. feed_hearts has no nest_id column to filter on, so this
+          // listens unfiltered (RLS still limits what arrives) and reloads
+          // the feed + each card's reply hearts, debounced like the rest.
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'feed_hearts',
+            callback: (payload) {
+              _realtimeRefreshDebounce?.cancel();
+              _realtimeRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
+                if (!mounted) return;
+                _loadFeedFromSupabase();
+                setState(() => _repliesRefreshTick++);
               });
             },
           )
@@ -2849,6 +2877,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     appMyTogglesKnownNotifier.removeListener(_onMyTogglesChanged);
     _realtimeRefreshDebounce?.cancel();
     _membersRealtimeDebounce?.cancel();
+    _clockTimer?.cancel();
     _feedChannel?.unsubscribe();
     _listEntranceController.dispose();
     _scrollController.dispose();
@@ -3384,6 +3413,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 message: entry.message!,
                 isDarkMode: _isDarkMode,
                 onHeart: () => _toggleHeart(msgIndex),
+                repliesRefreshTick: _repliesRefreshTick,
                 isBookmarked: _bookmarkedIds.contains(entry.message!.id),
                 onBookmark: () => _toggleBookmark(entry.message!),
                 senderAvatarJson: entry.message!.senderAvatarJson,
@@ -3426,6 +3456,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
               message: _messages[index],
               isDarkMode: _isDarkMode,
               onHeart: () => _toggleHeart(index),
+              repliesRefreshTick: _repliesRefreshTick,
               isBookmarked: _bookmarkedIds.contains(_messages[index].id),
               onBookmark: () => _toggleBookmark(_messages[index]),
               senderAvatarJson: _messages[index].senderAvatarJson,
