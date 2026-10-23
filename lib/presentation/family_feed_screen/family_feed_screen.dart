@@ -483,6 +483,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   bool _realtimeSubscribing = false;
   static const List<int> _realtimeBackoffSeconds = [1, 2, 4, 8, 16, 30];
   Timer? _membersRealtimeDebounce;
+  // Oct 23 2026: another member's profile change (birthday, anniversary,
+  // avatar, name) refreshes Home live.
+  Timer? _profileRealtimeDebounce;
   // Oct 22 2026: bumped whenever feed/hearts change live so each message card
   // reloads its own replies and reply hearts; the clock timer redraws the
   // relative times ("0m ago") which were only ever computed at build time.
@@ -831,6 +834,25 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 Future.delayed(const Duration(seconds: 3), () {
                   if (mounted) _loadNestMembers();
                 });
+              });
+            },
+          )
+          // Oct 23 2026: a member's profile changed (birthday, anniversary,
+          // avatar, name). user_profiles has no nest column to filter on, so
+          // every visible profile update arrives here; they are rare, and the
+          // reload is debounced and only re-reads this nest's members.
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'user_profiles',
+            callback: (payload) {
+              _profileRealtimeDebounce?.cancel();
+              _profileRealtimeDebounce =
+                  Timer(const Duration(milliseconds: 800), () {
+                if (!mounted) return;
+                _loadNestMembers();
+                _reloadCelebrations();
+                _loadFeedFromSupabase();
               });
             },
           )
@@ -2992,6 +3014,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     appMyTogglesKnownNotifier.removeListener(_onMyTogglesChanged);
     _realtimeRefreshDebounce?.cancel();
     _membersRealtimeDebounce?.cancel();
+    _profileRealtimeDebounce?.cancel();
     _clockTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _realtimeRetryTimer?.cancel();
