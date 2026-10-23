@@ -3671,15 +3671,26 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           .from('nest_members')
           .select('nests(id, name)')
           .eq('user_id', userId);
-      return (response as List<dynamic>)
+      final nests = (response as List<dynamic>)
           .map((row) => (row as Map<String, dynamic>)['nests'] as Map<String, dynamic>?)
           .whereType<Map<String, dynamic>>()
           .toList();
+      // Oct 23 2026: remembered per signed-in user, and kept across screen
+      // rebuilds (static), so the Nest switcher can open instantly even on
+      // the fresh Home that a nest switch creates.
+      if (nests.isNotEmpty) {
+        _nestsCache = nests;
+        _nestsCacheUserId = userId;
+      }
+      return nests;
     } catch (e) {
       debugPrint('FETCH_MY_NESTS_ERROR: $e');
       return [];
     }
   }
+
+  static List<Map<String, dynamic>>? _nestsCache;
+  static String? _nestsCacheUserId;
 
   // Guards against repeat taps while the nest list is still being fetched --
   // each extra tap used to queue another switcher on top of the first.
@@ -3688,23 +3699,29 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   void _showNestSwitcher() async {
     if (_nestSwitcherOpening) return;
     _nestSwitcherOpening = true;
-    List<Map<String, dynamic>> myNests;
     SharedPreferences prefs;
     try {
-      // Use the list loaded in the background if there is one (instant);
-      // otherwise fetch now. Either way, start a fresh fetch for the next
-      // open so the list never goes stale for long.
-      final pending = _myNestsFuture ?? _fetchMyNests();
-      _myNestsFuture = _fetchMyNests();
-      myNests = await pending;
       prefs = await SharedPreferences.getInstance();
     } finally {
-      // Released as soon as the list is ready; the dialog itself is
-      // barrier-modal, so it can't be opened twice once it is showing.
+      // The dialog itself is barrier-modal, so it can't be opened twice
+      // once it is showing.
       _nestSwitcherOpening = false;
     }
     final activeNestId = prefs.getString('nest_id') ?? '';
     if (!mounted) return;
+    // Oct 23 2026: open immediately. Show the last known list for this user
+    // (or just the active Nest if there is none yet) and fill in the fresh
+    // list the moment it arrives, instead of waiting on the server first.
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    final cached =
+        (uid != null && _nestsCacheUserId == uid) ? _nestsCache : null;
+    final nestsNotifier =
+        ValueNotifier<List<Map<String, dynamic>>>(cached ?? const []);
+    var dialogClosed = false;
+    _myNestsFuture = _fetchMyNests();
+    _myNestsFuture!.then((fresh) {
+      if (!dialogClosed && fresh.isNotEmpty) nestsNotifier.value = fresh;
+    });
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -3803,6 +3820,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                           // cached name/active-only tile if the fetch came
                           // back empty (e.g. offline), so this never shows
                           // a completely blank sheet.
+                          ValueListenableBuilder<List<Map<String, dynamic>>>(
+                            valueListenable: nestsNotifier,
+                            builder: (_, myNests, __) => Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                           if (myNests.isEmpty)
                             _buildNestTile(_nestName, true, onTap: () => Navigator.pop(ctx))
                           else
@@ -3839,6 +3862,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                                 ),
                               );
                             }),
+                              ],
+                            ),
+                          ),
                           const SizedBox(height: 8),
                           _buildAddNestButton(),
                         ],
@@ -3851,7 +3877,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           ],
         );
       },
-    );
+    ).whenComplete(() {
+      // Not disposed on purpose: the dialog is still animating out when this
+      // runs, and the notifier has no other owner so it is simply collected.
+      dialogClosed = true;
+    });
   }
 
   Widget _buildNestTile(String name, bool isActive, {VoidCallback? onTap}) {
