@@ -400,12 +400,13 @@ class AuthService {
     // Same root cause, same fix shape as every entry above.
     'display_name', 'preferred_name', 'user_name', 'relationship',
     'birthday', 'anniversary',
-    // vip_code is shorter-lived (read only within the onboarding flow
-    // itself, to carry a redeemed code from role_choice_screen forward
-    // into account creation), but it's exactly the same bug shape as the
-    // onboarding-draft bleed fixed Aug 29: a stale value from one
-    // abandoned onboarding attempt surviving into a brand-new one.
-    'vip_code',
+    // vip_code is deliberately NOT in this list (Oct 24 2026). It is
+    // entered before the account exists and must survive this wipe, which
+    // runs at sign-in one step before save_messages_prompt_screen reads it
+    // to redeem the code -- on a phone last used by a different account,
+    // listing it here silently dropped the code (same failure as the build
+    // 161 note above). Stale codes from an abandoned attempt are cleared
+    // when a fresh signup starts instead (splash_screen.dart).
   ];
 
   // Sep 3 2026: a subset of the account-scoped list above, for a

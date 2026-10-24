@@ -958,23 +958,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        _buildDateField(
-          label: 'Birthday (optional)',
-          icon: Icons.cake_rounded,
-          iconColor: const Color(0xFFE05C5C),
-          value: _birthday,
-          onTap: () => _pickDate(isBirthday: true),
-        ),
-        const SizedBox(height: 12),
-        _buildDateField(
-          label: 'Anniversary (optional)',
-          icon: Icons.favorite_rounded,
-          iconColor: const Color(0xFFD4AA00),
-          value: _anniversary,
-          onTap: () => _pickDate(isBirthday: false),
-        ),
-        const SizedBox(height: 24),
+        if (!_joinedViaInvite) const SizedBox(height: 24),
         if (!_joinedViaInvite)
           Text(
             'Name your family nest (optional)',
@@ -1009,6 +993,22 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
               ),
             ),
           ),
+        const SizedBox(height: 16),
+        _buildDateField(
+          label: 'Birthday (optional)',
+          icon: Icons.cake_rounded,
+          iconColor: const Color(0xFFE05C5C),
+          value: _birthday,
+          onTap: () => _pickDate(isBirthday: true),
+        ),
+        const SizedBox(height: 12),
+        _buildDateField(
+          label: 'Anniversary (optional)',
+          icon: Icons.favorite_rounded,
+          iconColor: const Color(0xFFD4AA00),
+          value: _anniversary,
+          onTap: () => _pickDate(isBirthday: false),
+        ),
       ],
     );
   }

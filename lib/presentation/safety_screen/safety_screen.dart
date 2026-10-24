@@ -152,6 +152,19 @@ class _SafetyScreenState extends State<SafetyScreen>
               });
             },
           )
+          // A member's profile changed (e.g. a senior switched Daily Check-in
+          // or Medication reminders on/off): refresh the status cards.
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'user_profiles',
+            callback: (payload) {
+              _statusRefreshDebounce?.cancel();
+              _statusRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
+                if (mounted) _loadData();
+              });
+            },
+          )
           .subscribe();
     } catch (e) {
       debugPrint('SAFETY_REALTIME: subscribe failed, status still works via manual refresh: $e');
