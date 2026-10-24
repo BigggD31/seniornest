@@ -886,6 +886,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 _loadNestMembers();
                 _reloadCelebrations();
                 _loadFeedFromSupabase();
+                _loadCheckinStatus();
               });
             },
           )
@@ -3966,7 +3967,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                       fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
                       color: isActive
                           ? const Color(0xFF5DA399)
-                          : const Color(0xFF2C2417),
+                          : (_isDarkMode
+                              ? const Color(0xFFF5EDD8)
+                              : const Color(0xFF2C2417)),
                     ),
                   ),
                   if (isActive)

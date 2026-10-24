@@ -40,9 +40,27 @@ class _SplashScreenState extends State<SplashScreen> {
   // before switching to the leaner returning-user view.
   bool _isReturningUser = appIsReturningUserNotifier.value;
 
+  // Oct 24 2026: a fresh signup starts on this screen, so a VIP code saved by
+  // an earlier, abandoned attempt is cleared here (signed out only) and can
+  // never be redeemed for a different account. vip_code is no longer in
+  // AuthService's account-switch wipe, which used to drop a genuine code on
+  // a phone last used by someone else. A code entered on this screen waits
+  // for this clear to finish first (see _InviteCodeSubmitButton), so it can
+  // never be removed by it.
+  static Future<void>? _staleVipCodeClear;
+
+  static Future<void> _clearStaleVipCode() async {
+    try {
+      if (Supabase.instance.client.auth.currentUser != null) return;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('vip_code');
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
+    _staleVipCodeClear = _clearStaleVipCode();
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -668,6 +686,8 @@ class _InviteCodeSubmitButtonState extends State<_InviteCodeSubmitButton> {
           params: {'p_code': normalizedCode},
         );
         if (valid == true) {
+          // Let the screen's stale-code clear finish before saving this one.
+          await _SplashScreenState._staleVipCodeClear;
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('vip_code', normalizedCode);
           // Explicitly clear any leftover invite state from a previous
