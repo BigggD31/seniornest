@@ -84,7 +84,7 @@ class _AppNavigationState extends State<AppNavigation>
     _NavItem(
       icon: Icons.settings_outlined,
       activeIcon: Icons.settings_rounded,
-      label: 'Setup',
+      label: 'Settings',
     ),
   ];
 

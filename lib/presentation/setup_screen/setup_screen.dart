@@ -1289,6 +1289,7 @@ class _SetupScreenState extends State<SetupScreen>
                   SliverToBoxAdapter(child: _buildTipsAndCommunity(isTablet)),
                   SliverToBoxAdapter(child: _buildNestOwnershipSectionWrapper(isTablet)),
                   SliverToBoxAdapter(child: _buildAccountSection(isTablet)),
+                  SliverToBoxAdapter(child: _buildVersionFooter()),
                   const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
                 ],
               ),
@@ -1316,7 +1317,7 @@ class _SetupScreenState extends State<SetupScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Setup',
+                'Settings',
                 style: GoogleFonts.nunitoSans(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
@@ -2099,6 +2100,29 @@ class _SetupScreenState extends State<SetupScreen>
       animation: anim,
       builder: (context, child) => Opacity(opacity: anim.value, child: child),
       child: _buildNestOwnershipSection(isTablet),
+    );
+  }
+
+  // Oct 23 2026: small light-gray footer. The version comes from the build
+  // command (--dart-define=APP_VERSION=1.03+312, same numbers as
+  // --build-name/--build-number) so no package or native code is involved;
+  // if it was not passed, only the copyright line shows.
+  static const String _appVersionLabel =
+      String.fromEnvironment('APP_VERSION', defaultValue: '');
+
+  Widget _buildVersionFooter() {
+    final muted = _textSecondary.withValues(alpha: 0.55);
+    final style = GoogleFonts.nunitoSans(fontSize: 12, color: muted);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+      child: Column(
+        children: [
+          if (_appVersionLabel.isNotEmpty)
+            Text('SeniorNest $_appVersionLabel', style: style),
+          const SizedBox(height: 2),
+          Text('© 2026 SeniorNest', style: style),
+        ],
+      ),
     );
   }
 

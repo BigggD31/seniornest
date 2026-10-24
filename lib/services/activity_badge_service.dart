@@ -280,6 +280,21 @@ class ActivityBadgeService {
             .neq('user_id', userId)
             .gt('created_at', _legacyLastSeen!.toIso8601String());
         legacy = (rows as List).length;
+        // Oct 23 2026: story requests ("Suggest a Question") count toward the
+        // Legacy tab too -- only ones asked of me (or of everyone), never my
+        // own. A failure here must not hide the story count above.
+        try {
+          final asked = await Supabase.instance.client
+              .from('legacy_story_prompts')
+              .select('id')
+              .eq('nest_id', nestId)
+              .neq('suggested_by', userId)
+              .or('for_user_id.is.null,for_user_id.eq.$userId')
+              .gt('created_at', _legacyLastSeen!.toIso8601String());
+          legacy += (asked as List).length;
+        } catch (e) {
+          debugPrint('ACTIVITY_BADGE_SERVICE story-request count error: $e');
+        }
       }
       if (Supabase.instance.client.auth.currentUser?.id != userId) return;
       shareCount.value = dm;
@@ -328,6 +343,17 @@ class ActivityBadgeService {
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'legacy_entries',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'nest_id',
+            value: nestId,
+          ),
+          callback: (payload) => _scheduleRefresh(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'legacy_story_prompts',
           filter: PostgresChangeFilter(
             type: PostgresChangeFilterType.eq,
             column: 'nest_id',
