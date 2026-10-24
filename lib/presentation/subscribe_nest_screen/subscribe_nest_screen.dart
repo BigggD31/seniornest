@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'dart:math';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -19,6 +20,26 @@ const String _monthlyProductId = 'com.devonmurphy.seniornest.monthly';
 const String _yearlyProductId = 'com.devonmurphy.seniornest.yearly';
 const String _additionalNestMonthlyProductId = 'com.devonmurphy.seniornest.additionalnest.monthly';
 const String _additionalNestYearlyProductId = 'com.devonmurphy.seniornest.additionalnest.yearly';
+// Google Play limits product IDs to 40 characters, so on Android the
+// Additional Nest products are named nest2. iOS keeps the IDs above.
+const String _androidNest2MonthlyProductId = 'com.devonmurphy.seniornest.nest2.monthly';
+const String _androidNest2YearlyProductId = 'com.devonmurphy.seniornest.nest2.yearly';
+
+bool get _isAndroidStore =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+String get _nestMonthlyProductId => _isAndroidStore
+    ? _androidNest2MonthlyProductId
+    : _additionalNestMonthlyProductId;
+String get _nestYearlyProductId => _isAndroidStore
+    ? _androidNest2YearlyProductId
+    : _additionalNestYearlyProductId;
+
+// Either store's Additional Nest IDs count as Additional Nest.
+bool _isAdditionalNestProduct(String productId) =>
+    productId == _additionalNestMonthlyProductId ||
+    productId == _additionalNestYearlyProductId ||
+    productId == _androidNest2MonthlyProductId ||
+    productId == _androidNest2YearlyProductId;
 
 class SubscribeNestScreen extends StatefulWidget {
   const SubscribeNestScreen({super.key});
@@ -93,8 +114,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           // prior purchase there is exactly what should happen.)
           if (_isAdditionalNest) {
             final isAdditionalProduct =
-                purchase.productID == _additionalNestMonthlyProductId ||
-                purchase.productID == _additionalNestYearlyProductId;
+                _isAdditionalNestProduct(purchase.productID);
             if (purchase.status == PurchaseStatus.restored ||
                 !_userStartedPurchase ||
                 !isAdditionalProduct) {
@@ -289,7 +309,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
       // in initState (see _isAdditionalNest's own comment; _initIAP is
       // called directly from initState at construction).
       final productIds = _isAdditionalNest
-          ? {_additionalNestMonthlyProductId, _additionalNestYearlyProductId}
+          ? {_nestMonthlyProductId, _nestYearlyProductId}
           : {_monthlyProductId, _yearlyProductId};
       final response = await _iap.queryProductDetails(productIds);
       if (!mounted) return;
@@ -383,7 +403,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
     if (_isPurchasing) return;
 
     final productId = _isAdditionalNest
-        ? (_isYearly ? _additionalNestYearlyProductId : _additionalNestMonthlyProductId)
+        ? (_isYearly ? _nestYearlyProductId : _nestMonthlyProductId)
         : (_isYearly ? _yearlyProductId : _monthlyProductId);
     final product = _products.where((p) => p.id == productId).firstOrNull;
 
@@ -704,7 +724,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   }
 
   String _additionalNestPrice() {
-    final id = _isYearly ? _additionalNestYearlyProductId : _additionalNestMonthlyProductId;
+    final id = _isYearly ? _nestYearlyProductId : _nestMonthlyProductId;
     final product = _products.where((p) => p.id == id).firstOrNull;
     return product?.price ?? '';
   }

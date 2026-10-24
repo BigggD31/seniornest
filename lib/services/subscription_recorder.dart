@@ -20,6 +20,11 @@ class SubscriptionRecorder {
       'com.devonmurphy.seniornest.additionalnest.monthly';
   static const String _additionalNestYearlyProductId =
       'com.devonmurphy.seniornest.additionalnest.yearly';
+  // Android's Additional Nest IDs (Google Play's 40-character limit).
+  static const String _androidNest2MonthlyProductId =
+      'com.devonmurphy.seniornest.nest2.monthly';
+  static const String _androidNest2YearlyProductId =
+      'com.devonmurphy.seniornest.nest2.yearly';
 
   static const String _kProduct = 'pending_iap_product_id';
   static const String _kTxn = 'pending_iap_txn_id';
@@ -147,7 +152,9 @@ class SubscriptionRecorder {
       if (productId == _yearlyProductId ||
           productId == _additionalNestYearlyProductId ||
           productId == _monthlyProductId ||
-          productId == _additionalNestMonthlyProductId) {
+          productId == _additionalNestMonthlyProductId ||
+          productId == _androidNest2YearlyProductId ||
+          productId == _androidNest2MonthlyProductId) {
         expiresAt = now.add(const Duration(days: 3));
       } else {
         // promo / lifetime-style entitlement
