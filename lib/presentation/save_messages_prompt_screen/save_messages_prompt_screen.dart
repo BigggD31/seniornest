@@ -465,6 +465,37 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
             .limit(1);
         TimingLog.mark('membership query done');
         if (existingMemberships.isNotEmpty) {
+          // Oct 26 2026 (build 314): someone typed an invite code and then
+          // signed in with an account that ALREADY has a Nest. Previously
+          // the typed code was silently dropped. If it points to a Nest
+          // this account is not in yet, remember it -- Home finishes the
+          // join with the normal confirm + relationship step.
+          try {
+            final typedCode = (prefs.getString('invite_code') ?? '').trim();
+            final typedViaInvite = prefs.getBool('joined_via_invite') ?? false;
+            if (typedViaInvite && typedCode.isNotEmpty) {
+              final lookup = await supabaseClient.rpc(
+                'lookup_nest_by_invite_code',
+                params: {'p_code': typedCode.toUpperCase()},
+              );
+              final typedNest = (lookup is List && lookup.isNotEmpty)
+                  ? lookup.first as Map<String, dynamic>
+                  : null;
+              if (typedNest != null) {
+                final mine = await supabaseClient
+                    .from('nest_members')
+                    .select('nest_id')
+                    .eq('user_id', checkUserId)
+                    .eq('nest_id', typedNest['id'] as String)
+                    .maybeSingle();
+                if (mine == null) {
+                  await prefs.setString('pending_join_code', typedCode);
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint('PENDING_JOIN_CODE_ERROR: $e');
+          }
           final existingNestId = existingMemberships.first['nest_id'] as String;
           await prefs.setString('nest_id', existingNestId);
           final existingNest =

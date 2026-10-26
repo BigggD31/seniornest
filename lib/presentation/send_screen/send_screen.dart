@@ -199,7 +199,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       final membersResponse = await supabase
           .from('nest_members')
           .select(
-              'user_id, user_profiles(display_name, preferred_name, avatar_url, relation_type, role)')
+              'user_id, relation_type, user_profiles(display_name, preferred_name, avatar_url, relation_type, role)')
           .eq('nest_id', nestId);
       final rows = membersResponse as List<dynamic>;
 
@@ -212,7 +212,10 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         final display = profile?['display_name'] as String? ?? '';
         final name = preferred.isNotEmpty ? preferred : display;
         if (name.isEmpty) continue;
-        final rawRelation = profile?['relation_type'] as String? ?? '';
+        // Oct 26 2026 (build 314): per-Nest relationship first, then the
+        // profile-wide one.
+        final rawRelation = (row['relation_type'] as String?) ??
+            (profile?['relation_type'] as String? ?? '');
         final memberRole = profile?['role'] as String? ?? '';
         // relation_type only applies to family members (Son/Daughter/etc.) --
         // it's legitimately empty for the senior, so don't blindly default
