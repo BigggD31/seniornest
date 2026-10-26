@@ -17,6 +17,7 @@ import '../../services/timing_log.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../tips_screen/tips_screen.dart';
 import '../../core/community_config.dart';
+import '../join_nest_flow.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -30,6 +31,21 @@ class _SetupScreenState extends State<SetupScreen>
     with TickerProviderStateMixin {
   final int _currentNavIndex = 5;
   bool _isSenior = appIsSeniorNotifier.value;
+  // Oct 26 2026 (build 314): true when this account belongs to 2+ Nests, so
+  // the Daily Check-In / Medication switches can say they apply to all.
+  bool _inMultipleNests = false;
+
+  Future<void> _loadNestCount() async {
+    try {
+      final uid = Supabase.instance.client.auth.currentUser?.id;
+      if (uid == null) return;
+      final rows = await Supabase.instance.client
+          .from('nest_members')
+          .select('nest_id')
+          .eq('user_id', uid);
+      if (mounted) setState(() => _inMultipleNests = (rows as List).length > 1);
+    } catch (_) {}
+  }
   // Seeded from the already-resolved app-wide notifier instead of a
   // hardcoded false -- see messages_inbox_screen.dart for the full
   // explanation of the white-flash bug this fixes.
@@ -77,6 +93,7 @@ class _SetupScreenState extends State<SetupScreen>
   @override
   void initState() {
     super.initState();
+    _loadNestCount();
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -367,7 +384,7 @@ class _SetupScreenState extends State<SetupScreen>
       if (currentUserId != null && nestId.isNotEmpty) {
         final memberRows = await supabase
             .from('nest_members')
-            .select('user_id, user_profiles(display_name, preferred_name, avatar_url, relation_type, role)')
+            .select('user_id, relation_type, user_profiles(display_name, preferred_name, avatar_url, relation_type, role)')
             .eq('nest_id', nestId);
         for (final row in (memberRows as List<dynamic>)) {
           final memberUserId = row['user_id'] as String?;
@@ -377,7 +394,9 @@ class _SetupScreenState extends State<SetupScreen>
           final preferred = profile['preferred_name'] as String? ?? '';
           final display = profile['display_name'] as String? ?? '';
           final memberName = preferred.isNotEmpty ? preferred : (display.isNotEmpty ? display : 'Family member');
-          final relationType = profile['relation_type'] as String? ?? '';
+          // Oct 26 2026 (build 314): per-Nest relationship first.
+          final relationType = (row['relation_type'] as String?) ??
+              (profile['relation_type'] as String? ?? '');
           final memberRole = profile['role'] as String? ?? '';
           final relationshipLabel = relationType.isNotEmpty
               ? (relationType[0].toUpperCase() + relationType.substring(1))
@@ -2006,6 +2025,12 @@ class _SetupScreenState extends State<SetupScreen>
               value: '${_familyMembers.length} members',
               onTap: () => _showFamilyMembersSheet(),
             ),
+            _buildSettingRow(
+              icon: Icons.vpn_key_rounded,
+              label: 'Join a nest with a code',
+              value: '',
+              onTap: () => JoinNestFlow.start(context),
+            ),
           ],
         ),
       ),
@@ -2158,6 +2183,17 @@ class _SetupScreenState extends State<SetupScreen>
                 value: _dailyCheckIn,
                 onChanged: (v) => _togglePref('daily_check_in', v),
               ),
+              if (_inMultipleNests)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8, left: 4),
+                  child: Text(
+                    'These apply to all your nests.',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 12,
+                      color: const Color(0xFF9E8E7E),
+                    ),
+                  ),
+                ),
             ],
             _buildSettingRow(
               icon: Icons.text_fields_rounded,

@@ -30,6 +30,7 @@ import '../../core/app_state.dart';
 import '../../services/auth_service.dart';
 import '../../services/push_service.dart';
 import '../../services/client_log.dart';
+import '../join_nest_flow.dart';
 
 // ── Data Models ────────────────────────────────────────────────
 
@@ -505,6 +506,11 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted) _checkPendingJoinCode();
+      });
+    });
     // Oct 22 2026: redraw every 30s so "0m ago" / "5m ago" keep moving
     // on their own.
     _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -2706,6 +2712,24 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
       // PREVIOUS Nest must never paint or cache its posts over the new one.
       if ((prefs.getString('nest_id') ?? '') != nestId) return;
 
+      // Oct 26 2026 (build 314): how someone is related can differ per Nest
+      // (nest_members.relation_type). Falls back to their profile-wide value
+      // below wherever a Nest has none saved.
+      final Map<String, String> nestRelations = {};
+      try {
+        final relRows = await supabase
+            .from('nest_members')
+            .select('user_id, relation_type')
+            .eq('nest_id', nestId);
+        for (final r in (relRows as List<dynamic>)) {
+          final uid = r['user_id'] as String?;
+          final rel = r['relation_type'] as String?;
+          if (uid != null && rel != null && rel.isNotEmpty) {
+            nestRelations[uid] = rel;
+          }
+        }
+      } catch (_) {}
+
       final localPreferredName = prefs.getString('preferred_name') ?? '';
       final localFirstName = prefs.getString('display_name') ?? '';
       final localName = localPreferredName.isNotEmpty ? localPreferredName : localFirstName;
@@ -2771,7 +2795,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             } catch (_) {}
           }
         }
-        final rawRelation = profile?['relation_type'] as String? ?? 'Family';
+        final rawRelation = nestRelations[authorId] ??
+            profile?['relation_type'] as String? ??
+            'Family';
         final relation = rawRelation.isNotEmpty
             ? rawRelation[0].toUpperCase() + rawRelation.substring(1)
             : rawRelation;
@@ -3902,6 +3928,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                           ),
                           const SizedBox(height: 8),
                           _buildAddNestButton(),
+                          const SizedBox(height: 8),
+                          _buildJoinNestButton(),
                         ],
                       ),
                     ),
@@ -3993,6 +4021,55 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         ),
       ),
     );
+  }
+
+  // Oct 26 2026 (build 314): already signed in and invited to another
+  // Nest -- join it with its code, no onboarding again.
+  Widget _buildJoinNestButton() {
+    return GestureDetector(
+      onTap: () {
+        final navContext = context;
+        Navigator.pop(context);
+        JoinNestFlow.start(navContext);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE8E0D0), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.vpn_key_rounded,
+                color: Color(0xFF5DA399), size: 22),
+            const SizedBox(width: 12),
+            Text(
+              'Join a nest with a code',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF5DA399),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Oct 26 2026 (build 314): someone typed an invite code and then signed
+  // in with an account that already had a Nest -- finish that join here,
+  // with the same confirm + relationship step as the dropdown.
+  Future<void> _checkPendingJoinCode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final code = prefs.getString(JoinNestFlow.pendingCodePrefKey) ?? '';
+      if (code.isEmpty) return;
+      await prefs.remove(JoinNestFlow.pendingCodePrefKey);
+      if (!mounted) return;
+      await JoinNestFlow.start(context, prefillCode: code);
+    } catch (_) {}
   }
 
   Widget _buildAddNestButton() {
