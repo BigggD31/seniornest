@@ -200,6 +200,14 @@ final ValueNotifier<String> appSeniorNameNotifier = ValueNotifier<String>('');
 /// load instead of being there from the first frame when a senior exists.
 final ValueNotifier<String> appSeniorUserIdNotifier = ValueNotifier<String>('');
 
+/// Oct 26 2026: the primary senior's own check-in / meds-reminder choices,
+/// remembered across launches (per nest, no date limit). Without these, the
+/// first frame of Home assumed both were ON and a senior with meds OFF made
+/// the Medications card flash on every app open until the live fetch
+/// finished. Unknown defaults to true, same as before.
+final ValueNotifier<bool> appSeniorCheckinEnabledNotifier = ValueNotifier<bool>(true);
+final ValueNotifier<bool> appSeniorMedsEnabledNotifier = ValueNotifier<bool>(true);
+
 /// Sep 24 2026: added while fixing Home's avatar row and check-in card
 /// still visibly popping in at slightly different moments even after the
 /// full-screen skeleton was removed -- two genuinely separate Supabase
@@ -503,6 +511,18 @@ Future<void> resolveAppNotifiersFromPrefs(SharedPreferences prefs) async {
 
   appSeniorUserIdNotifier.value =
       prefs.getString('cached_checkin_senior_id') ?? '';
+
+  // Oct 26 2026: senior toggle flags, trusted only for the same nest.
+  if ((prefs.getString('cached_senior_flags_nest_id') ?? '').isNotEmpty &&
+      prefs.getString('cached_senior_flags_nest_id') == prefs.getString('nest_id')) {
+    appSeniorCheckinEnabledNotifier.value =
+        prefs.getBool('cached_senior_checkin_enabled') ?? true;
+    appSeniorMedsEnabledNotifier.value =
+        prefs.getBool('cached_senior_meds_enabled') ?? true;
+  } else {
+    appSeniorCheckinEnabledNotifier.value = true;
+    appSeniorMedsEnabledNotifier.value = true;
+  }
 
   // Sep 24 2026: same nest+user scoping as family_feed_screen.dart's own
   // read of these exact keys -- a stale list from a different nest, or

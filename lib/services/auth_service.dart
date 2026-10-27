@@ -330,6 +330,7 @@ class AuthService {
     // stay excluded -- their own self-correction-via-live-check
     // reasoning is still correct and unrelated to this.
     'cached_checkin_senior_name', 'cached_checkin_senior_id', 'cached_checkin_nest_id',
+    'cached_senior_flags_nest_id', 'cached_senior_checkin_enabled', 'cached_senior_meds_enabled',
     // Aug 31 2026: found via Audit 1 (cross-session state sweep) --
     // "has this nest's owner shared their invite code yet" is a
     // nest-specific fact, not a device preference, and wasn't in this
@@ -431,6 +432,7 @@ class AuthService {
     'cached_nest_members', 'cached_nest_members_nest_id', 'cached_nest_members_user_id',
     'cached_real_messages', 'cached_real_messages_nest_id',
     'cached_checkin_senior_name', 'cached_checkin_senior_id', 'cached_checkin_nest_id',
+    'cached_senior_flags_nest_id', 'cached_senior_checkin_enabled', 'cached_senior_meds_enabled',
     'cached_legacy_senior_names', 'cached_senior_statuses',
     'cached_legacy_stories', 'cached_legacy_stories_user_id', 'cached_legacy_stories_nest_id',
     'invite_code_shared',
