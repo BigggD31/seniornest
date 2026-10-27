@@ -76,8 +76,8 @@ const List<_Tip> _tips = [
     title: 'Recording a Legacy story',
     audience: _Audience.senior,
     lines: [
-      'Open the Legacy tab to record a memory in your own voice or on video, as long as you like.',
-      'Stories are saved for your family to keep for generations.',
+      'Open the Legacy tab to record a memory in your own voice or on video. Take your time, and record in parts if you like.',
+      'Stories are saved for your family to enjoy and share together.',
     ],
   ),
   _Tip(

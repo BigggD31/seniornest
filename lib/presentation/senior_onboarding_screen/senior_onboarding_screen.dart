@@ -880,7 +880,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
         _buildWarmFeatureRow(
           Icons.auto_stories_rounded,
           const Color(0xFFD4AA00),
-          'Write and preserve your life stories for generations',
+          'Share your life stories with the people you love',
         ),
         const SizedBox(height: 8),
         _buildWarmFeatureRow(

@@ -23,6 +23,8 @@ import '../../widgets/save_audio_button.dart';
 import '../../widgets/collapsible_date_group_header.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../core/app_state.dart';
+import '../../core/upload_messages.dart';
+import '../../widgets/limit_reached_note.dart';
 
 class LegacyScreen extends StatefulWidget {
   const LegacyScreen({super.key});
@@ -1435,7 +1437,7 @@ class _LegacyScreenState extends State<LegacyScreen>
               ),
               Text(
                 _isSenior
-                    ? 'Your stories, preserved forever'
+                    ? 'Your stories, kept safe for your family'
                     : 'Stories from your loved one',
                 style: GoogleFonts.nunitoSans(
                   fontSize: 13,
@@ -3127,7 +3129,7 @@ class _WriteStorySheetState extends State<_WriteStorySheet> {
       if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 8)),
+          SnackBar(content: Text(friendlyUploadError(e)), backgroundColor: Colors.red, duration: const Duration(seconds: 8)),
         );
       }
       return;
@@ -3860,6 +3862,8 @@ class _LegacyVoiceRecordSheet extends StatefulWidget {
 class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
   bool _isRecording = false;
   bool _hasRecording = false;
+  static const int _maxSeconds = 30 * 60; // 1.05: 30 minutes per voice recording
+  bool _autoStopped = false; // 1.05: stopped by the time limit
   int _seconds = 0;
   Timer? _timer;
   bool _isPlaying = false;
@@ -3929,13 +3933,20 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
       setState(() {
         _isRecording = true;
         _hasRecording = false;
+        _autoStopped = false;
         _seconds = 0;
         _isPlaying = false;
         _playPosition = 0;
         _audioFilePath = path;
       });
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _seconds++);
+        if (!mounted) return;
+        if (_seconds >= _maxSeconds - 1) {
+          _autoStopped = true;
+          _stopRecording();
+        } else {
+          setState(() => _seconds++);
+        }
       });
     } catch (e) {
       debugPrint('Legacy start recording error: $e');
@@ -3960,6 +3971,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
     setState(() {
       _isRecording = false;
       _hasRecording = false;
+      _autoStopped = false;
       _seconds = 0;
       _isPlaying = false;
       _playPosition = 0;
@@ -4014,6 +4026,20 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
       final nestId = prefs.getString('nest_id') ?? '';
 
       if (userId != null && _audioFilePath != null) {
+        // 1.05: check the size first so a too-long recording gets a clear
+        // message instead of a failed upload.
+        if (await File(_audioFilePath!).length() > kServerMaxUploadBytes) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(tooLargeBeforeUploadMessage()),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 8),
+              ),
+            );
+          }
+          return;
+        }
         final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.m4a';
         await supabase.storage.from('media').upload(
           'audio/$fileName',
@@ -4043,7 +4069,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
       print('LEGACY AUDIO SEND ERROR: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 8)),
+          SnackBar(content: Text(friendlyUploadError(e)), backgroundColor: Colors.red, duration: const Duration(seconds: 8)),
         );
       }
       return;
@@ -4226,7 +4252,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              'No time limit — take as long as you need',
+              'Up to 30 minutes per recording. You can record in parts.',
               style: GoogleFonts.nunitoSans(
                 fontSize: 12,
                 color: const Color(0xFF9B8FD4),
@@ -4241,8 +4267,9 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
                   width: 96,
                   height: 96,
                   child: CircularProgressIndicator(
-                    value: null,
+                    value: _seconds / _maxSeconds,
                     strokeWidth: 4,
+                    backgroundColor: const Color(0xFFE8A0A0).withAlpha(40),
                     valueColor: const AlwaysStoppedAnimation<Color>(
                       Color(0xFFE8A0A0),
                     ),
@@ -4284,7 +4311,7 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'Recording  ${_fmt(_seconds)}',
+                  'Recording  ${_fmt(_seconds)} / 30:00',
                   style: GoogleFonts.nunitoSans(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -4304,6 +4331,11 @@ class _LegacyVoiceRecordSheetState extends State<_LegacyVoiceRecordSheet> {
             ),
           ] else ...[
             // Preview
+            if (_autoStopped)
+              LimitReachedNote(
+                message: "That's the 30-minute limit. Save this part, then record the next one.",
+                isDarkMode: widget.isDarkMode,
+              ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
@@ -4531,6 +4563,8 @@ class _LegacyVideoRecordSheet extends StatefulWidget {
 class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
   bool _isRecording = false;
   bool _hasRecording = false;
+  static const int _maxSeconds = 15 * 60; // 1.05: 15 minutes per video recording
+  bool _autoStopped = false; // 1.05: stopped by the time limit
   int _seconds = 0;
   Timer? _timer;
   bool _isSaving = false;
@@ -4572,11 +4606,18 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
       setState(() {
         _isRecording = true;
         _hasRecording = false;
+        _autoStopped = false;
         _seconds = 0;
         _videoFilePath = null;
       });
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _seconds++);
+        if (!mounted) return;
+        if (_seconds >= _maxSeconds - 1) {
+          _autoStopped = true;
+          _stopRecording();
+        } else {
+          setState(() => _seconds++);
+        }
       });
     } catch (e) {
       debugPrint('Legacy video start error: $e');
@@ -4612,6 +4653,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
     setState(() {
       _isRecording = false;
       _hasRecording = false;
+      _autoStopped = false;
       _seconds = 0;
     });
   }
@@ -4630,6 +4672,20 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
       final prefs = await SharedPreferences.getInstance();
       final nestId = prefs.getString('nest_id') ?? '';
       if (userId != null && _videoFilePath != null) {
+        // 1.05: check the size first so a too-long recording gets a clear
+        // message instead of a failed upload.
+        if (await File(_videoFilePath!).length() > kServerMaxUploadBytes) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(tooLargeBeforeUploadMessage()),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 8),
+              ),
+            );
+          }
+          return;
+        }
         final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
         await supabase.storage.from('media').upload(
           'video/$fileName',
@@ -4659,7 +4715,7 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
       print('LEGACY VIDEO SEND ERROR: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 8)),
+          SnackBar(content: Text(friendlyUploadError(e)), backgroundColor: Colors.red, duration: const Duration(seconds: 8)),
         );
       }
       return;
@@ -4799,9 +4855,16 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
                           Container(width: 8, height: 8,
                             decoration: const BoxDecoration(color: Color(0xFFE05C5C), shape: BoxShape.circle)),
                           const SizedBox(width: 5),
-                          Text('REC  ${_fmt(_seconds)}',
+                          Text('REC  ${_fmt(_seconds)} / 15:00',
                             style: GoogleFonts.nunitoSans(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFE05C5C))),
                         ])),
+                      Positioned(left: 0, right: 0, bottom: 0,
+                        child: LinearProgressIndicator(
+                          value: _seconds / _maxSeconds,
+                          minHeight: 4,
+                          backgroundColor: Colors.black26,
+                          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFE05C5C)),
+                        )),
                     ],
                   ),
                 ),
@@ -4866,6 +4929,10 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
                       const SizedBox(height: 12),
                       Text('Tap to start recording',
                         style: GoogleFonts.nunitoSans(fontSize: 15, color: _textSecondary)),
+                      const SizedBox(height: 4),
+                      Text('Up to 15 minutes per recording. You can record in parts.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.nunitoSans(fontSize: 12, color: const Color(0xFF9B8FD4), fontStyle: FontStyle.italic)),
                     ],
                   ),
                 ),
@@ -4892,6 +4959,11 @@ class _LegacyVideoRecordSheetState extends State<_LegacyVideoRecordSheet> {
                 ),
               ),
             ] else if (_hasRecording) ...[
+              if (_autoStopped)
+                LimitReachedNote(
+                  message: "That's the 15-minute limit. Save this part, then record the next one.",
+                  isDarkMode: widget.isDarkMode,
+                ),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text('Caption (optional)', style: GoogleFonts.nunitoSans(fontSize: 12, fontWeight: FontWeight.w600, color: _textSecondary, letterSpacing: 0.5)),

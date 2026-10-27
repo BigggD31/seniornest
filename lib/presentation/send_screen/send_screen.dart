@@ -23,6 +23,8 @@ import '../../services/push_service.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'widgets/private_inbox_list_widget.dart';
 import '../../core/app_state.dart';
+import '../../core/upload_messages.dart';
+import '../../widgets/limit_reached_note.dart';
 
 class SendScreen extends StatefulWidget {
   const SendScreen({super.key});
@@ -93,6 +95,8 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   // ── Voice recording state ──────────────────────────────────────────────────
   bool _voiceIsRecording = false;
   bool _voiceHasRecording = false;
+  bool _voiceAutoStopped = false; // 1.05: stopped by the time limit
+  bool _videoAutoStopped = false;
   int _voiceSeconds = 0;
   Timer? _voiceTimer;
   bool _voiceIsPlaying = false;
@@ -126,7 +130,9 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   // e.g. an hour-long digitized cassette tape, which can run 300-600MB in
   // an older/uncompressed format even though an hour of modern compressed
   // speech audio is only ~50-60MB).
-  static const int _maxVideoBytes = 750 * 1024 * 1024;
+  // Oct 27 2026 (1.05): video cap lowered from 750MB to 500MB so the app
+  // never accepts a file the server (500MB global limit) would then reject.
+  static const int _maxVideoBytes = 500 * 1024 * 1024;
   static const int _maxPhotoBytes = 20 * 1024 * 1024;
   static const int _maxAudioBytes = 300 * 1024 * 1024;
 
@@ -641,6 +647,11 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                       ),
                     ] else ...[
                       // Preview state
+                      if (_voiceAutoStopped)
+                        LimitReachedNote(
+                          message: "That's the 60-second limit. You can send this one, or tap Retake to record it again.",
+                          isDarkMode: _isDarkMode,
+                        ),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -1224,6 +1235,11 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
                       ),
                     ] else ...[
                       // Preview state
+                      if (_videoAutoStopped)
+                        LimitReachedNote(
+                          message: "That's the 60-second limit. You can send this one, or tap Retake to record it again.",
+                          isDarkMode: _isDarkMode,
+                        ),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(16),
                         child: Container(
@@ -2776,6 +2792,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       setState(() {
         _voiceIsRecording = true;
         _voiceHasRecording = false;
+        _voiceAutoStopped = false;
         _voiceSeconds = 0;
         _voiceIsPlaying = false;
         _voicePlayPosition = 0;
@@ -2783,7 +2800,14 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       });
       _voiceTimer = Timer.periodic(const Duration(seconds: 1), (t) {
         if (_voiceSeconds >= _maxRecordSeconds - 1) {
-          _stopVoiceRecording();
+          // 1.05: refresh the recording sheet after the automatic stop, the
+          // same way the Stop button does. Before, the sheet kept showing
+          // "REC 00:59 / Stop Recording" even though recording had ended,
+          // and you had to tap Stop again to reach Retake / Send.
+          _voiceAutoStopped = true;
+          _stopVoiceRecording().then((_) {
+            if (mounted) modalSetState?.call(() {});
+          });
         } else {
           if (mounted) {
             setState(() => _voiceSeconds++);
@@ -2817,6 +2841,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     setState(() {
       _voiceIsRecording = false;
       _voiceHasRecording = false;
+      _voiceAutoStopped = false;
       _voiceSeconds = 0;
       _voiceIsPlaying = false;
       _voicePlayPosition = 0;
@@ -2890,13 +2915,18 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
       setState(() {
         _videoIsRecording = true;
         _videoHasRecording = false;
+        _videoAutoStopped = false;
         _videoSeconds = 0;
         _videoIsPlaying = false;
         _videoPlayPosition = 0;
       });
       _videoTimer = Timer.periodic(const Duration(seconds: 1), (t) {
         if (_videoSeconds >= _maxRecordSeconds - 1) {
-          _stopVideoRecording();
+          // 1.05: same fix as the voice timer above.
+          _videoAutoStopped = true;
+          _stopVideoRecording().then((_) {
+            if (mounted) modalSetState?.call(() {});
+          });
         } else {
           if (mounted) {
             setState(() => _videoSeconds++);
@@ -2945,6 +2975,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     setState(() {
       _videoIsRecording = false;
       _videoHasRecording = false;
+      _videoAutoStopped = false;
       _videoSeconds = 0;
       _videoIsPlaying = false;
       _videoPlayPosition = 0;
@@ -3139,6 +3170,11 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     return Column(
       children: [
         const SizedBox(height: 12),
+        if (_voiceAutoStopped)
+          LimitReachedNote(
+            message: "That's the 60-second limit. You can send this one, or tap Retake to record it again.",
+            isDarkMode: _isDarkMode,
+          ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
@@ -3476,6 +3512,11 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     return Column(
       children: [
         const SizedBox(height: 8),
+        if (_videoAutoStopped)
+          LimitReachedNote(
+            message: "That's the 60-second limit. You can send this one, or tap Retake to record it again.",
+            isDarkMode: _isDarkMode,
+          ),
         ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: Container(
@@ -3970,7 +4011,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         setState(() => _isSending = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Send error: $e'),
+            content: Text(friendlyUploadError(e)),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 10),
           ),
