@@ -32,7 +32,7 @@ class BrandedTransitionScreen extends StatefulWidget {
     'Stay close to the people who matter most.',
     'One private place for your entire family.',
     'Make Nana feel loved every single day.',
-    'Every story, saved for generations to come.',
+    'Every story, shared with the people who matter.',
   ];
   // First phrase waits a beat so a fast load never flashes text.
   static const Duration messageDelay = Duration(milliseconds: 1000);

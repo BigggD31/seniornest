@@ -56,6 +56,26 @@ class HelpSupportScreen extends StatelessWidget {
       },
     ];
 
+    // 1.05: storage explainer, shown to the Nest Owner only (the person who
+    // pays and manages the Nest). Wording agreed with D Von Oct 27 2026:
+    // plain, no prices (the add-on does not exist yet), and honest that
+    // extra storage is coming.
+    if (appIsNestOwnerNotifier.value) {
+      faqs.insert(0, {
+        'q': 'How much storage does my Nest include?',
+        'a':
+            'Every Nest includes up to 50 GB of storage for your family\'s '
+            'photos, videos, voice messages, and Legacy stories. That is a lot: '
+            'it holds tens of thousands of photos and many hours of video, and '
+            'most families will not come close to using it for years. How '
+            'quickly it fills depends on your family, and families who share a '
+            'lot of video will use it faster than others.\n\n'
+            'If your Nest ever gets close to its limit, additional storage will '
+            'be available to add. We will keep you informed as that comes '
+            'online.',
+      });
+    }
+
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
