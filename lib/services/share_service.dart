@@ -11,10 +11,6 @@ import 'share_service_web.dart'
     as web_helper;
 
 class ShareService {
-  static const String _appStoreUrl =
-      'https://apps.apple.com/us/app/seniornest-family-connection/id6763690515';
-  static const String _playStoreUrl =
-      'https://play.google.com/store/apps/details?id=com.devonmurphy.seniornest';
   static const String _joinPageUrl = 'https://seniornestapp.com/join.html';
 
   /// Share invite code — native sheet on mobile, web modal on web.
@@ -23,18 +19,15 @@ class ShareService {
     String inviteCode = 'NEST000000',
     bool isDarkMode = false,
   }) {
-    // Oct 26 2026 (build 314): two clear paths, code in plain text, and a
-    // join page link that shows the right store button for the phone.
+    // Oct 26 2026 (build 315): trimmed to one join link -- the join page
+    // already shows the right store button for the phone (and both store
+    // links), so the long store URLs only cluttered the message.
     final shareText = "You're invited to join our family on SeniorNest! 🏡\n\n"
         'Your invite code: $inviteCode\n\n'
-        '🆕 NEW TO SENIORNEST?\n'
-        'Tap here to get the free app and join:\n'
-        '$_joinPageUrl?code=$inviteCode\n'
-        'App Store: $_appStoreUrl\n'
-        'Google Play: $_playStoreUrl\n\n'
-        '✅ ALREADY HAVE SENIORNEST?\n'
-        'Open the app, tap the nest name at the top, choose '
-        '"Join a nest with a code" and enter the code above.';
+        '🆕 New to SeniorNest? Tap to get the free app and join:\n'
+        '$_joinPageUrl?code=$inviteCode\n\n'
+        '✅ Already have SeniorNest? Open the app, tap the nest name at the '
+        'top, choose "Join a nest with a code", and enter the code above.';
 
     if (kIsWeb) {
       _showWebModal(

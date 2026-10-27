@@ -540,7 +540,33 @@ class _SetupScreenState extends State<SetupScreen>
       if (userId != null) {
         final result = await Supabase.instance.client
             .rpc('is_vip_member', params: {'p_user_id': userId});
-        final isVip = result == true;
+        var isVip = result == true;
+        // Oct 26 2026 (build 315): the check above is per ACCOUNT ("has this
+        // person ever redeemed a VIP code"), but VIP belongs to a Nest. Now
+        // that one account can be in several Nests, show the badge only in
+        // the Nest where this account's VIP applies. A VIP record with no
+        // Nest saved (one old record) counts for Nests this person owns. If
+        // the lookup fails, keep the old account-wide answer.
+        if (isVip) {
+          try {
+            final currentNestId = prefs.getString('nest_id') ?? '';
+            final vipRows = await Supabase.instance.client
+                .from('subscriptions')
+                .select('nest_id')
+                .eq('user_id', userId)
+                .eq('product_id', 'vip_code');
+            final rows = vipRows as List<dynamic>;
+            final forThisNest = rows.any(
+                (r) => (r as Map<String, dynamic>)['nest_id'] == currentNestId);
+            final noNestSaved = rows.any(
+                (r) => (r as Map<String, dynamic>)['nest_id'] == null);
+            if (rows.isNotEmpty) {
+              isVip = forThisNest || (noNestSaved && _isNestOwner);
+            }
+          } catch (e) {
+            debugPrint('VIP_NEST_CHECK_ERROR: $e');
+          }
+        }
         if (mounted) {
           setState(() => _isVipMember = isVip);
         }

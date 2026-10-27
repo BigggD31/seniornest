@@ -308,8 +308,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 'checkinTime': null,
                 'medsTaken': appSeniorMedsTakenTodayNotifier.value,
                 'medsTime': null,
-                'checkinEnabled': true,
-                'medsRemindersEnabled': true,
+                'checkinEnabled': appSeniorCheckinEnabledNotifier.value,
+                'medsRemindersEnabled': appSeniorMedsEnabledNotifier.value,
               }
             ]
           : <Map<String, dynamic>>[]);
@@ -1564,6 +1564,10 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                   'checkinTime': initialSeniorCheckinTime,
                   'medsTaken': initialSeniorMedsTaken,
                   'medsTime': initialSeniorMedsTakenTime,
+                  // Oct 26 2026: remembered toggles, so a senior with meds
+                  // OFF doesn't flash the Medications card on open.
+                  'checkinEnabled': appSeniorCheckinEnabledNotifier.value,
+                  'medsRemindersEnabled': appSeniorMedsEnabledNotifier.value,
                 }
               ]
             : [];
@@ -2047,6 +2051,14 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         await prefs.setString('cached_checkin_senior_id', seniorId);
         await prefs.setString('cached_checkin_senior_name', seniorName);
         appSeniorNameNotifier.value = seniorName;
+        // Oct 26 2026: remember this senior's toggles (see app_state.dart).
+        final cacheCheckinEnabled = primary['checkinEnabled'] as bool? ?? true;
+        final cacheMedsEnabled = primary['medsRemindersEnabled'] as bool? ?? true;
+        await prefs.setString('cached_senior_flags_nest_id', nestId);
+        await prefs.setBool('cached_senior_checkin_enabled', cacheCheckinEnabled);
+        await prefs.setBool('cached_senior_meds_enabled', cacheMedsEnabled);
+        appSeniorCheckinEnabledNotifier.value = cacheCheckinEnabled;
+        appSeniorMedsEnabledNotifier.value = cacheMedsEnabled;
         await prefs.setBool('cached_checkin_checked_in', checkinResponse);
         if (checkinResponse) {
           await prefs.setString('cached_checkin_time',
