@@ -1239,12 +1239,27 @@ class _FamilyOnboardingScreenState extends State<FamilyOnboardingScreen>
           isDark: isDark,
         ),
         const SizedBox(height: 28),
-        Text(
-          'Your relationship to the senior',
-          style: GoogleFonts.nunitoSans(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: textSecondary,
+        // Build 317: larger and darker, with "senior" in bold, so nobody
+        // picks their relationship to the wrong person.
+        Text.rich(
+          TextSpan(
+            style: GoogleFonts.nunitoSans(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: textPrimary,
+            ),
+            children: [
+              const TextSpan(text: 'How are you related to the '),
+              TextSpan(
+                text: 'senior',
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: textPrimary,
+                ),
+              ),
+              const TextSpan(text: '?'),
+            ],
           ),
         ),
         const SizedBox(height: 12),
