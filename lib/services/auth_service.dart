@@ -192,6 +192,28 @@ class AuthService {
     }
   }
 
+  // ── Forgot password (Oct 27 2026, build 317) ─────────────────────────────
+  // Sends Supabase's recovery email. The link opens a small page on the
+  // website where the person chooses a new password (reset-password.html),
+  // then they come back and sign in. That URL must be in Supabase's
+  // Authentication -> URL Configuration -> Redirect URLs list.
+  static const String passwordResetUrl =
+      'https://seniornestapp.com/reset-password.html';
+
+  static Future<AuthResult> sendPasswordReset(String email) async {
+    try {
+      await _client.auth
+          .resetPasswordForEmail(email.trim(), redirectTo: passwordResetUrl);
+      return AuthResult.success(null);
+    } on AuthException catch (e) {
+      return AuthResult.error(_friendlyAuthError(e.message));
+    } catch (e) {
+      return AuthResult.error(
+        "We couldn't send that just now. Please check your connection and try again.",
+      );
+    }
+  }
+
   // ── Sign Out ──────────────────────────────────────────────────────────────
   static Future<void> signOut() async {
     try {
