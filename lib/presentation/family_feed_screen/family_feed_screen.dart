@@ -698,7 +698,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           ),
         ),
         content: Text(
-          'You can approve or deny this in Setup. If you don\'t respond, other family members can still weigh in, and it won\'t happen without everyone being able to see it.',
+          'You can approve or deny this in Settings. If you don\'t respond, other family members can still weigh in, and it won\'t happen without everyone being able to see it.',
           style: GoogleFonts.nunitoSans(
             fontSize: 15,
             color: _isDarkMode ? const Color(0xFFB8AC98) : const Color(0xFF6B5E4E),

@@ -18,6 +18,7 @@ import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../tips_screen/tips_screen.dart';
 import '../../core/community_config.dart';
 import '../join_nest_flow.dart';
+import '../relationship_editor.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -31,6 +32,7 @@ class _SetupScreenState extends State<SetupScreen>
     with TickerProviderStateMixin {
   final int _currentNavIndex = 5;
   bool _isSenior = appIsSeniorNotifier.value;
+  int _relationshipRefresh = 0; // bumps to reload the "Your Relationship" row
   // Oct 26 2026 (build 314): true when this account belongs to 2+ Nests, so
   // the Daily Check-In / Medication switches can say they apply to all.
   bool _inMultipleNests = false;
@@ -2050,6 +2052,33 @@ class _SetupScreenState extends State<SetupScreen>
               label: 'Family Members',
               value: '${_familyMembers.length} members',
               onTap: () => _showFamilyMembersSheet(),
+            ),
+            // 1.05 (build 317): change how you are related to the senior.
+            // Everyone who joins picks one, so the row shows what they chose.
+            // Hidden when there is none (e.g. the senior at the center of
+            // their own nest, who is not "related" to anyone).
+            FutureBuilder<String>(
+              key: ValueKey('my_relationship_$_relationshipRefresh'),
+              future: RelationshipEditor.loadCurrent(),
+              builder: (context, snap) {
+                if (snap.connectionState != ConnectionState.done) {
+                  return const SizedBox.shrink();
+                }
+                final rel = snap.data ?? '';
+                if (rel.isEmpty) return const SizedBox.shrink();
+                return _buildSettingRow(
+                  icon: Icons.favorite_border_rounded,
+                  label: 'Your Relationship',
+                  value: rel,
+                  onTap: () async {
+                    final saved = await RelationshipEditor.show(context);
+                    if (saved && mounted) {
+                      setState(() => _relationshipRefresh++);
+                      _loadData();
+                    }
+                  },
+                );
+              },
             ),
             _buildSettingRow(
               icon: Icons.vpn_key_rounded,

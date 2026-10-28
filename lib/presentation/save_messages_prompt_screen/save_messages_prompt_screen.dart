@@ -1653,6 +1653,8 @@ class _EmailAuthSheetState extends State<_EmailAuthSheet> {
   String? _error;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  String? _info;
+  bool _sendingReset = false;
 
   @override
   void initState() {
@@ -1666,6 +1668,33 @@ class _EmailAuthSheetState extends State<_EmailAuthSheet> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _forgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() {
+        _info = null;
+        _error = 'Type your email above, then tap Forgot password again.';
+      });
+      return;
+    }
+    setState(() {
+      _sendingReset = true;
+      _error = null;
+      _info = null;
+    });
+    final result = await AuthService.sendPasswordReset(email);
+    if (!mounted) return;
+    setState(() {
+      _sendingReset = false;
+      if (result.isSuccess) {
+        _info = 'We sent a link to $email. Open it to choose a new '
+            'password, then come back here and sign in.';
+      } else {
+        _error = result.errorMessage;
+      }
+    });
   }
 
   Future<void> _submit() async {
@@ -1902,6 +1931,36 @@ class _EmailAuthSheetState extends State<_EmailAuthSheet> {
                 ),
               ),
             ),
+            if (_isSignIn) ...[
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: (_isLoading || _sendingReset)
+                      ? null
+                      : _forgotPassword,
+                  child: Text(
+                    _sendingReset ? 'Sending...' : 'Forgot password?',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF5DA399),
+                    ),
+                  ),
+                ),
+              ),
+              if (_info != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    _info!,
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF3F7F75),
+                    ),
+                  ),
+                ),
+            ],
             if (!_isSignIn) ...[
               const SizedBox(height: 12),
               TextField(
@@ -2009,6 +2068,7 @@ class _EmailAuthSheetState extends State<_EmailAuthSheet> {
                 onTap: () => setState(() {
                   _isSignIn = !_isSignIn;
                   _error = null;
+                  _info = null;
                 }),
                 child: RichText(
                   text: TextSpan(

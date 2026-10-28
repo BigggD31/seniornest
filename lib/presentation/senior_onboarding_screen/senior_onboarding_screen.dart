@@ -1224,7 +1224,7 @@ class _SeniorOnboardingScreenState extends State<SeniorOnboardingScreen>
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'You can always change these in Setup later.',
+                  'You can always change these in Settings later.',
                   style: GoogleFonts.nunitoSans(
                     fontSize: 13,
                     color: const Color(0xFF6B5E4E),
