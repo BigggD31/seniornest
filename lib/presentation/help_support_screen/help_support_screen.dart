@@ -26,13 +26,8 @@ class HelpSupportScreen extends StatelessWidget {
 
     final faqs = [
       {
-        'q': 'How do I invite a family member?',
-        'a':
-            'Go to Setup → Your Nest section and tap "Share Invite Code". Send the code to your family member.',
-      },
-      {
         'q': 'How do I change my display name?',
-        'a': 'Go to Setup → tap your name at the top of the screen to edit it.',
+        'a': 'Go to Settings → tap your name at the top of the screen to edit it.',
       },
       {
         'q': 'Can I use SeniorNest on multiple devices?',
@@ -42,12 +37,12 @@ class HelpSupportScreen extends StatelessWidget {
       {
         'q': 'How do I turn off notifications?',
         'a':
-            'Go to Setup → Notifications section and toggle off the notifications you don\'t want.',
+            'Go to Settings → Notifications section and toggle off the notifications you don\'t want.',
       },
       {
         'q': 'How do I delete my account?',
         'a':
-            'Go to Setup → Account section → Sign Out. To fully delete your account, contact us at the email below.',
+            'Go to Settings → Account section → Sign Out. To fully delete your account, contact us at the email below.',
       },
       {
         'q': 'Is my data private?',
@@ -61,6 +56,13 @@ class HelpSupportScreen extends StatelessWidget {
     // plain, no prices (the add-on does not exist yet), and honest that
     // extra storage is coming.
     if (appIsNestOwnerNotifier.value) {
+      // Oct 28 2026: inviting is something only the Nest Owner can do, so
+      // this answer is owner-only too (members have no invite code card).
+      faqs.insert(0, {
+        'q': 'How do I invite a family member?',
+        'a':
+            'Open Settings. Your invite code is at the top. Tap Share to send it by text or email. Everyone you invite joins for free.',
+      });
       faqs.insert(0, {
         'q': 'How much storage does my Nest include?',
         'a':

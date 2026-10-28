@@ -57,7 +57,7 @@ const List<_Tip> _tips = [
     emoji: '👤',
     title: 'Changing your name, birthday or photo',
     lines: [
-      'In Setup, tap the pencil on your profile card to change your name, what you want to be called, and your birthday and anniversary.',
+      'In Settings, tap the pencil on your profile card to change your name, what you want to be called, and your birthday and anniversary.',
       'Tap your picture to choose a new photo or emoji.',
       'Changes show up right away.',
     ],
@@ -94,8 +94,8 @@ const List<_Tip> _tips = [
     title: 'Inviting family and renaming your Nest',
     audience: _Audience.owner,
     lines: [
-      'Your invite code is at the top of Setup. Tap Share to send it by text or email. Everyone you invite joins for free.',
-      'To rename your Nest, open Setup, tap Nest Name under Your Nest, type the new name, and save.',
+      'Your invite code is at the top of Settings. Tap Share to send it by text or email. Everyone you invite joins for free.',
+      'To rename your Nest, open Settings, tap Nest Name under Your Nest, type the new name, and save.',
     ],
   ),
 ];
