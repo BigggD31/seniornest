@@ -2055,8 +2055,8 @@ class _SetupScreenState extends State<SetupScreen>
             ),
             // 1.05 (build 317): change how you are related to the senior.
             // Everyone who joins picks one, so the row shows what they chose.
-            // Hidden when there is none (e.g. the senior at the center of
-            // their own nest, who is not "related" to anyone).
+            // Hidden only for a senior with none (the person at the center
+            // of their own nest, who is not "related" to anyone).
             FutureBuilder<String>(
               key: ValueKey('my_relationship_$_relationshipRefresh'),
               future: RelationshipEditor.loadCurrent(),
@@ -2065,11 +2065,16 @@ class _SetupScreenState extends State<SetupScreen>
                   return const SizedBox.shrink();
                 }
                 final rel = snap.data ?? '';
-                if (rel.isEmpty) return const SizedBox.shrink();
+                // Oct 28 2026: some family accounts never saved a
+                // relationship (older sign-ups), so family members always
+                // see the row, with "Choose" when nothing is set yet. Only
+                // a senior with nothing set (centre of their own nest)
+                // does not see it.
+                if (rel.isEmpty && _isSenior) return const SizedBox.shrink();
                 return _buildSettingRow(
                   icon: Icons.favorite_border_rounded,
                   label: 'Your Relationship',
-                  value: rel,
+                  value: rel.isEmpty ? 'Choose' : rel,
                   onTap: () async {
                     final saved = await RelationshipEditor.show(context);
                     if (saved && mounted) {

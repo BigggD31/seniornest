@@ -146,6 +146,13 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     // before, restore after.
     final preWipeBirthday = preWipePrefs.getString('birthday');
     final preWipeAnniversary = preWipePrefs.getString('anniversary');
+    // Oct 28 2026: 'relationship' was added to the same wipe list on
+    // Aug 29 but never got this capture/restore, so a brand-new family
+    // sign-up on a device last used by a different account (a shared or
+    // re-used phone/iPad) lost the relationship they had just picked, and
+    // it was never saved (relation_type stayed empty). Same fix as
+    // birthday/anniversary above.
+    final preWipeRelationship = preWipePrefs.getString('relationship');
 
     // Must run before anything else that reads account-scoped data --
     // detects a genuine account switch on this device and wipes every
@@ -163,6 +170,9 @@ class _SaveMessagesPromptScreenState extends State<SaveMessagesPromptScreen>
     if (preWipeJoinedViaInvite != null) await prefs.setBool('joined_via_invite', preWipeJoinedViaInvite);
     if (preWipeBirthday != null) await prefs.setString('birthday', preWipeBirthday);
     if (preWipeAnniversary != null) await prefs.setString('anniversary', preWipeAnniversary);
+    if (preWipeRelationship != null && preWipeRelationship.isNotEmpty) {
+      await prefs.setString('relationship', preWipeRelationship);
+    }
 
     await prefs.setBool('onboarding_complete', true);
     await prefs.setBool('first_load', true);
@@ -1689,8 +1699,10 @@ class _EmailAuthSheetState extends State<_EmailAuthSheet> {
     setState(() {
       _sendingReset = false;
       if (result.isSuccess) {
-        _info = 'We sent a link to $email. Open it to choose a new '
-            'password, then come back here and sign in.';
+        // Supabase reports success even when no account has this email (so
+        // strangers can't probe for accounts), so word it honestly.
+        _info = "If there's an account for $email, we sent a link. Open it "
+            'to choose a new password, then come back here and sign in.';
       } else {
         _error = result.errorMessage;
       }
