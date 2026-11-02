@@ -863,8 +863,12 @@ Widget _androidNavBarLayer(bool isDark, Widget app) {
       child: Builder(
         builder: (context) {
           final mq = MediaQuery.of(context);
-          final navBar = mq.viewPadding.bottom;
-          if (navBar <= 0) return app;
+          // Nov 2 2026: always return this same wrapper, even when the bar
+          // has no height (e.g. hidden by the full-screen photo viewer).
+          // Returning `app` on its own changed the widget tree's shape, so
+          // Flutter rebuilt the whole app and sent the user back to the
+          // launch screen (Welcome or the top of Home).
+          final navBar = mq.viewPadding.bottom.clamp(0.0, double.infinity);
           return ColoredBox(
             color: isDark ? AppTheme.darkBackground : AppTheme.background,
             child: Padding(
