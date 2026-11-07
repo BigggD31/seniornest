@@ -24,6 +24,7 @@ import './widgets/meds_reminder_card_widget.dart';
 import './widgets/message_card_widget.dart';
 import './widgets/celebrations_card_widget.dart';
 import './widgets/nest_avatar_row_widget.dart';
+import './widgets/family_plans_tab_widget.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../core/app_state.dart';
 import '../../services/auth_service.dart';
@@ -241,6 +242,12 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   // this screen's own _loadData() reads later. See that notifier's own
   // comment for the full explanation.
   List<MessageModel> _messages = _seedCachedMessages();
+  // Nov 7 2026 (build 1.06): Home now has two tabs -- Family Feed (0) and
+  // Family Plans (1). The app ALWAYS opens on Family Feed: this starts at 0
+  // on every fresh instance of the screen (sign-in, switching nests).
+  int _homeTab = 0;
+  int _plansRefreshTick = 0;
+  String _plansNestId = '';
   // Tracks the messages list specifically, separate from _isLoading above.
   // Sep 28 2026: now starts true whenever the synchronous seed above
   // already found real cached messages -- mirrors _isLoading's own
@@ -584,9 +591,25 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   void _scheduleHomeSeenClear() {
     _homeSeenDelayTimer?.cancel();
     if (appActiveTabNotifier.value != 0) return;
-    // Oct 8 2026: 3s -> 15s. On a fresh sign-in the feed can take 6-8s to
-    // appear, so 3s meant the number was gone before anyone could see it.
-    _homeSeenDelayTimer = Timer(const Duration(seconds: 15), () {
+    _armHomeSeenTimer();
+  }
+
+  // Nov 7 2026: 15s -> 7s, and the 7 seconds are counted from when the feed
+  // is actually on screen -- not from the tap on the Home tab. While Home is
+  // still loading (branded screen / skeleton / feed placeholder) this just
+  // waits, then starts the 7 seconds.
+  void _armHomeSeenTimer() {
+    final feedOnScreen =
+        !_isLoading && !(_messages.isEmpty && _hasRealPost && !_messagesLoaded);
+    if (!feedOnScreen) {
+      _homeSeenDelayTimer = Timer(const Duration(milliseconds: 500), () {
+        if (!mounted) return;
+        if (appActiveTabNotifier.value != 0) return;
+        _armHomeSeenTimer();
+      });
+      return;
+    }
+    _homeSeenDelayTimer = Timer(const Duration(seconds: 7), () {
       if (appActiveTabNotifier.value != 0) return;
       ActivityBadgeService.markHomeSeen();
     });
@@ -2411,6 +2434,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   }
 
   Future<void> _onRefresh() async {
+    if (mounted && _homeTab == 1) setState(() => _plansRefreshTick++);
     // Oct 15 2026: pull-to-refresh now also re-checks the nest name and the
     // birthdays/anniversaries, not only the posts.
     await Future.wait([
@@ -3153,7 +3177,8 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 // content before reading what it is. Shown exactly when
                 // every card on screen is a built-in sample (their ids all
                 // start with 'msg_'), never over real posts.
-                if (_messages.isNotEmpty &&
+                if (_homeTab == 0 &&
+                    _messages.isNotEmpty &&
                     _messages.every((m) => m.id.startsWith('msg_'))) ...[
                   _buildSampleContentBanner(),
                   const SizedBox(height: 14),
@@ -3340,9 +3365,22 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 const SizedBox(height: 20),
                 // Sample content explainer banner (shown once, while sample cards are visible)
                 // (Sample-content banner now lives at the top of this list.)
-                // Feed header
-                _buildFeedHeader(),
+                // Nov 7 2026: the old "From Your Family" heading row is replaced
+                // by the two tabs; the messages-count pill moves just under them.
+                _buildHomeTabStrip(),
                 const SizedBox(height: 12),
+                if (_homeTab == 0 && _messages.isNotEmpty) ...[
+                  _buildFeedCountPill(),
+                  const SizedBox(height: 12),
+                ],
+                if (_homeTab == 1)
+                  FamilyPlansTabWidget(
+                    key: ValueKey('familyPlans_$_plansNestId'),
+                    isDarkMode: _isDarkMode,
+                    nestId: _plansNestId,
+                    isArchived: _isNestArchived,
+                    refreshTick: _plansRefreshTick,
+                  ),
               ]),
             ),
           ),
@@ -3353,7 +3391,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           // conditional, see its declaration) and _messages actually
           // finishing its own load, which is misleading for anyone who
           // genuinely has messages. See _messagesLoaded's own comment.
-          (_messages.isEmpty && _hasRealPost && !_messagesLoaded)
+          _homeTab == 1
+              ? const SliverToBoxAdapter(child: SizedBox.shrink())
+              : (_messages.isEmpty && _hasRealPost && !_messagesLoaded)
               ? SliverFillRemaining(
                   hasScrollBody: false,
                   child: _buildFeedLoadingPlaceholder(),
@@ -3376,37 +3416,87 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     );
   }
 
-  Widget _buildFeedHeader() {
-    return Row(
-      children: [
-        Text(
-          'From Your Family',
-          style: GoogleFonts.nunitoSans(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: _isDarkMode
-                ? const Color(0xFFF5EDD8)
-                : const Color(0xFF2C2417),
-          ),
-        ),
-        const Spacer(),
-        if (_messages.isNotEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+  /// Nov 7 2026: the two Home tabs. Family Feed is the feed exactly as it
+  /// was; Family Plans holds plans and polls.
+  Widget _buildHomeTabStrip() {
+    Widget tab(int index, String label) {
+      final selected = _homeTab == index;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _selectHomeTab(index),
+          child: Container(
+            height: 44,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: const Color(0xFF5DA399).withAlpha(31),
-              borderRadius: BorderRadius.circular(8),
+              color: selected ? const Color(0xFF5DA399) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              '${_messages.length} messages',
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.nunitoSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF5DA399),
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: selected
+                    ? Colors.white
+                    : (_isDarkMode
+                        ? const Color(0xFFB8A888)
+                        : const Color(0xFF6B5E4E)),
               ),
             ),
           ),
-      ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF2A241D) : const Color(0xFFF1EBDD),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          tab(0, 'Family Feed'),
+          tab(1, 'Family Plans'),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _selectHomeTab(int index) async {
+    if (index == _homeTab) return;
+    if (index == 1 && _plansNestId.isEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        _plansNestId = prefs.getString('nest_id') ?? '';
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() => _homeTab = index);
+  }
+
+  /// The "N messages" pill, same look as before, now under the tab strip.
+  Widget _buildFeedCountPill() {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF5DA399).withAlpha(31),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          '${_messages.length} messages',
+          style: GoogleFonts.nunitoSans(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF5DA399),
+          ),
+        ),
+      ),
     );
   }
 

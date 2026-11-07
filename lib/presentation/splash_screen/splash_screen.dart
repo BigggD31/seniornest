@@ -241,7 +241,11 @@ class _SplashScreenState extends State<SplashScreen> {
           Image.asset(
             _heroAsset,
             fit: BoxFit.cover,
-            alignment: const Alignment(0, -0.55),
+            // Nov 7 2026: phones keep the original crop; on iPad / wide
+            // screens keep both faces in frame.
+            alignment: MediaQuery.of(context).size.width >= 600
+                ? const Alignment(0, -0.8)
+                : const Alignment(0, -0.55),
           ),
 
           // Top scrim -- just enough for the status bar / small mark to

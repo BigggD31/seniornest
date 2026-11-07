@@ -265,6 +265,29 @@ class ActivityBadgeService {
             .neq('author_id', userId)
             .gt('created_at', _homeLastSeen!.toIso8601String());
         home = (rows as List).length;
+        // Nov 7 2026 (build 1.06): new Family Plans and polls count toward
+        // the Home number too. Reads go through row-level security, so a
+        // plan or poll hidden from this person is never counted. A failure
+        // here must not hide the feed count above.
+        try {
+          final since = _homeLastSeen!.toIso8601String();
+          final newPlans = await Supabase.instance.client
+              .from('family_plans')
+              .select('id')
+              .eq('nest_id', nestId)
+              .neq('author_id', userId)
+              .isFilter('canceled_at', null)
+              .gt('created_at', since);
+          final newPolls = await Supabase.instance.client
+              .from('family_polls')
+              .select('id')
+              .eq('nest_id', nestId)
+              .neq('author_id', userId)
+              .gt('created_at', since);
+          home += (newPlans as List).length + (newPolls as List).length;
+        } catch (e) {
+          debugPrint('ACTIVITY_BADGE_SERVICE plans/polls count error: $e');
+        }
       }
       if (_legacyLastSeen != null) {
         final rows = await Supabase.instance.client
@@ -326,6 +349,28 @@ class ActivityBadgeService {
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'feed_posts',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'nest_id',
+            value: nestId,
+          ),
+          callback: (payload) => _scheduleRefresh(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'family_plans',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'nest_id',
+            value: nestId,
+          ),
+          callback: (payload) => _scheduleRefresh(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'family_polls',
           filter: PostgresChangeFilter(
             type: PostgresChangeFilterType.eq,
             column: 'nest_id',

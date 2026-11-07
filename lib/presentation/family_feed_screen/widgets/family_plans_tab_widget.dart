@@ -1,0 +1,1054 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../services/family_plans_service.dart';
+import 'family_plans_sheets.dart';
+
+/// Nov 7 2026: the "Family Plans" tab on Home (build 1.06) -- plans and
+/// polls for one nest. Who can see each item is enforced by the database;
+/// this widget just shows whatever comes back.
+
+const Color _teal = Color(0xFF5DA399);
+const Color _gold = Color(0xFFD4AA00);
+
+class FamilyPlansTabWidget extends StatefulWidget {
+  const FamilyPlansTabWidget({
+    super.key,
+    required this.isDarkMode,
+    required this.nestId,
+    required this.isArchived,
+    required this.refreshTick,
+  });
+
+  final bool isDarkMode;
+  final String nestId;
+  final bool isArchived;
+
+  /// Bumped by Home's pull-to-refresh so this tab reloads too.
+  final int refreshTick;
+
+  @override
+  State<FamilyPlansTabWidget> createState() => _FamilyPlansTabWidgetState();
+}
+
+class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
+  // Last result per nest, so switching tabs back and forth never flashes
+  // an empty page while the fresh load runs.
+  static final Map<String, FamilyPlansData> _cache = {};
+
+  FamilyPlansData? _data;
+  List<Map<String, String>> _members = [];
+  bool _loadFailed = false;
+  RealtimeChannel? _channel;
+  Timer? _debounce;
+  bool _disposed = false;
+
+  bool get _dark => widget.isDarkMode;
+  String? get _me => FamilyPlansService.myId;
+
+  @override
+  void initState() {
+    super.initState();
+    _data = _cache[widget.nestId];
+    _load();
+    _loadMembers();
+    _subscribe();
+  }
+
+  @override
+  void didUpdateWidget(covariant FamilyPlansTabWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshTick != widget.refreshTick) _load();
+    if (oldWidget.nestId != widget.nestId) {
+      _data = _cache[widget.nestId];
+      _load();
+      _loadMembers();
+      _subscribe();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _debounce?.cancel();
+    final ch = _channel;
+    _channel = null;
+    if (ch != null) Supabase.instance.client.removeChannel(ch);
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    if (widget.nestId.isEmpty) return;
+    try {
+      final d = await FamilyPlansService.load(widget.nestId);
+      _cache[widget.nestId] = d;
+      if (!_disposed && mounted) {
+        setState(() {
+          _data = d;
+          _loadFailed = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('FAMILY_PLANS load error: $e');
+      if (!_disposed && mounted && _data == null) {
+        setState(() => _loadFailed = true);
+      }
+    }
+  }
+
+  Future<void> _loadMembers() async {
+    if (widget.nestId.isEmpty) return;
+    try {
+      final m = await FamilyPlansService.otherMembers(widget.nestId);
+      if (!_disposed && mounted) setState(() => _members = m);
+    } catch (_) {}
+  }
+
+  void _scheduleReload() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      if (!_disposed && mounted) _load();
+    });
+  }
+
+  void _subscribe() {
+    final old = _channel;
+    if (old != null) Supabase.instance.client.removeChannel(old);
+    if (widget.nestId.isEmpty) return;
+    var ch = Supabase.instance.client.channel('family_plans_rt_${widget.nestId}');
+    for (final table in const [
+      'family_plans',
+      'family_polls',
+      'poll_votes',
+      'plan_rsvps',
+      'family_item_hearts',
+      'family_item_comments',
+    ]) {
+      ch = ch.onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: table,
+        callback: (_) => _scheduleReload(),
+      );
+    }
+    _channel = ch.subscribe();
+  }
+
+  // ── helpers ──────────────────────────────────────────────────
+
+  Color get _textColor =>
+      _dark ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417);
+  Color get _mutedColor =>
+      _dark ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E);
+  Color get _cardColor =>
+      _dark ? const Color(0xFF2A241D) : const Color(0xFFFFFFFF);
+  Color get _cardBorder =>
+      _dark ? const Color(0xFF3D342B) : const Color(0xFFE9E1D3);
+
+  String _nameOf(String userId) {
+    if (userId == _me) return 'You';
+    return _data?.names[userId] ??
+        _members.firstWhere((m) => m['id'] == userId,
+            orElse: () => {'name': 'Family'})['name']!;
+  }
+
+  /// Names of members who cannot see an item (empty if it is for everyone).
+  List<String> _hiddenNames(List<String> visibleToIds) {
+    if (visibleToIds.isEmpty) return [];
+    return [
+      for (final m in _members)
+        if (!visibleToIds.contains(m['id'])) m['name']!
+    ];
+  }
+
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _run(Future<void> Function() action, {String? fail}) async {
+    try {
+      await action();
+      await _load();
+    } catch (e) {
+      debugPrint('FAMILY_PLANS action error: $e');
+      if (mounted) _toast(fail ?? 'That did not go through. Please try again.');
+    }
+  }
+
+  Future<bool> _confirm(String title, String body, String yes) async {
+    final r = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Not now')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true), child: Text(yes)),
+        ],
+      ),
+    );
+    return r == true;
+  }
+
+  Future<void> _createPlan() async {
+    final ok = await showCreatePlanSheet(context,
+        isDarkMode: _dark, nestId: widget.nestId);
+    if (ok == true) _load();
+  }
+
+  Future<void> _createPoll() async {
+    final ok = await showCreatePollSheet(context,
+        isDarkMode: _dark, nestId: widget.nestId);
+    if (ok == true) _load();
+  }
+
+  // ── build ────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final data = _data;
+    final canCreate = !widget.isArchived;
+    final plans = data?.plans ?? const <FamilyPlan>[];
+    final polls = data?.polls ?? const <FamilyPoll>[];
+    final upcoming = plans.where((p) => !p.isPast && !p.isCanceled).toList();
+    final earlier = plans.where((p) => p.isPast || p.isCanceled).toList()
+      ..sort((a, b) => b.startsAt.compareTo(a.startsAt));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (canCreate)
+          Row(
+            children: [
+              Expanded(
+                child: _createButton(
+                    Icons.event_rounded, 'Create a Plan', _createPlan),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _createButton(
+                    Icons.poll_rounded, 'Create a Poll', _createPoll),
+              ),
+            ],
+          ),
+        const SizedBox(height: 18),
+        if (data == null && !_loadFailed)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(child: CircularProgressIndicator(color: _teal)),
+          )
+        else if (data == null && _loadFailed)
+          _emptyNote('We could not load Family Plans. Pull down to try again.')
+        else ...[
+          _sectionTitle('Plans'),
+          if (upcoming.isEmpty && earlier.isEmpty)
+            _emptyNote(
+                'No plans yet. Tap Create a Plan to invite the family to something.'),
+          for (final p in upcoming) _planCard(p, data!),
+          for (final p in earlier) _planCard(p, data!),
+          const SizedBox(height: 10),
+          _sectionTitle('Polls'),
+          if (polls.isEmpty)
+            _emptyNote(
+                'No polls yet. Tap Create a Poll to ask the family a question.'),
+          for (final p in polls) _pollCard(p, data!),
+        ],
+      ],
+    );
+  }
+
+  Widget _createButton(IconData icon, String label, VoidCallback onTap) {
+    return SizedBox(
+      height: 52,
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _teal,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        onPressed: onTap,
+        icon: Icon(icon, size: 20),
+        label: Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.nunitoSans(
+                fontSize: 15, fontWeight: FontWeight.w800)),
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String t) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(t,
+            style: GoogleFonts.nunitoSans(
+                fontSize: 18, fontWeight: FontWeight.w700, color: _textColor)),
+      );
+
+  Widget _emptyNote(String t) => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Text(t,
+            style: GoogleFonts.nunitoSans(
+                fontSize: 14, height: 1.4, color: _mutedColor)),
+      );
+
+  Widget _cardShell({required Widget child, bool faded = false}) {
+    return Opacity(
+      opacity: faded ? 0.6 : 1,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _cardBorder),
+        ),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _privateTag(List<String> visibleToIds) {
+    final hidden = _hiddenNames(visibleToIds);
+    if (visibleToIds.isEmpty) return const SizedBox.shrink();
+    final text = hidden.isEmpty
+        ? 'Private'
+        : 'Private · Hidden from ${hiddenNamesText(hidden)}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: _gold.withAlpha(36),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.lock_rounded, size: 13, color: Color(0xFFB8860B)),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(text,
+                  style: GoogleFonts.nunitoSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFFB8860B))),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _initialDot(String name) {
+    final letter = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(color: _teal, shape: BoxShape.circle),
+      child: Text(letter,
+          style: GoogleFonts.nunitoSans(
+              fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
+    );
+  }
+
+  Widget _heartAndComments(String type, String id, FamilyPlansData data) {
+    final k = FamilyPlansService.key(type, id);
+    final hearted = data.hearts[k]?.contains(_me) ?? false;
+    final heartCount = data.hearts[k]?.length ?? 0;
+    final commentCount = data.commentCounts[k] ?? 0;
+    return Row(
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => _run(() => FamilyPlansService.setHeart(type, id, !hearted)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            child: Row(
+              children: [
+                Icon(hearted ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    size: 22,
+                    color: hearted ? const Color(0xFFE0566B) : _mutedColor),
+                if (heartCount > 0) ...[
+                  const SizedBox(width: 5),
+                  Text('$heartCount',
+                      style: GoogleFonts.nunitoSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _mutedColor)),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => _openComments(type, id),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            child: Row(
+              children: [
+                Icon(Icons.chat_bubble_outline_rounded,
+                    size: 21, color: _mutedColor),
+                if (commentCount > 0) ...[
+                  const SizedBox(width: 5),
+                  Text('$commentCount',
+                      style: GoogleFonts.nunitoSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _mutedColor)),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── plan card ────────────────────────────────────────────────
+
+  Widget _planCard(FamilyPlan p, FamilyPlansData data) {
+    final faded = p.isPast || p.isCanceled;
+    final mine = p.authorId == _me;
+    final month = DateFormat('MMM').format(p.startsAt).toUpperCase();
+    final day = DateFormat('d').format(p.startsAt);
+    final when = DateFormat('EEE, MMM d · h:mm a').format(p.startsAt);
+    final sameZone = p.sourceTz.isEmpty ||
+        p.sourceTz == FamilyPlansService.zoneLabel(p.startsAt);
+    final rsvps = data.rsvps[p.id] ?? const <String, String>{};
+    final myRsvp = _me == null ? null : rsvps[_me!];
+    final going = rsvps.values.where((v) => v == 'going').length;
+    final maybe = rsvps.values.where((v) => v == 'maybe').length;
+    final cant = rsvps.values.where((v) => v == 'cant').length;
+
+    return _cardShell(
+      faded: faded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _privateTag(p.visibleToIds),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 52,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: _teal.withAlpha(31),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(month,
+                        style: GoogleFonts.nunitoSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: _teal)),
+                    Text(day,
+                        style: GoogleFonts.nunitoSans(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: _textColor)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (p.isCanceled)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text('Canceled',
+                            style: GoogleFonts.nunitoSans(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFFC0392B))),
+                      ),
+                    Text(p.title,
+                        style: GoogleFonts.nunitoSans(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: _textColor,
+                            decoration: faded
+                                ? TextDecoration.lineThrough
+                                : TextDecoration.none)),
+                    const SizedBox(height: 2),
+                    Text(when,
+                        style: GoogleFonts.nunitoSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: _mutedColor)),
+                    if (!sameZone)
+                      Text('Planned in ${p.sourceTz}',
+                          style: GoogleFonts.nunitoSans(
+                              fontSize: 12, color: _mutedColor)),
+                    if (p.location.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.place_outlined,
+                              size: 16, color: _mutedColor),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(p.location,
+                                style: GoogleFonts.nunitoSans(
+                                    fontSize: 14, color: _mutedColor)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (mine && !p.isPast)
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_horiz_rounded, color: _mutedColor),
+                  onSelected: (v) => _onPlanMenu(v, p),
+                  itemBuilder: (ctx) => [
+                    if (!p.isCanceled)
+                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    if (!p.isCanceled)
+                      const PopupMenuItem(
+                          value: 'cancel', child: Text('Cancel plan')),
+                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
+                )
+              else if (mine)
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_horiz_rounded, color: _mutedColor),
+                  onSelected: (v) => _onPlanMenu(v, p),
+                  itemBuilder: (ctx) => const [
+                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
+                ),
+            ],
+          ),
+          if (p.details.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(p.details,
+                style: GoogleFonts.nunitoSans(
+                    fontSize: 15, height: 1.4, color: _textColor)),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _initialDot(_nameOf(p.authorId)),
+              const SizedBox(width: 8),
+              Text('Posted by ${_nameOf(p.authorId)}',
+                  style: GoogleFonts.nunitoSans(
+                      fontSize: 13, color: _mutedColor)),
+            ],
+          ),
+          if (p.rsvpEnabled && !p.isCanceled && !p.isPast) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _rsvpButton(p, 'going', 'Going', myRsvp),
+                const SizedBox(width: 8),
+                _rsvpButton(p, 'maybe', 'Maybe', myRsvp),
+                const SizedBox(width: 8),
+                _rsvpButton(p, 'cant', 'Can\'t', myRsvp),
+              ],
+            ),
+          ],
+          if (p.rsvpEnabled && rsvps.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () => _showRsvpList(p, rsvps),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  [
+                    if (going > 0) '$going going',
+                    if (maybe > 0) '$maybe maybe',
+                    if (cant > 0) '$cant can\'t',
+                  ].join(', '),
+                  style: GoogleFonts.nunitoSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: _teal),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 4),
+          _heartAndComments('plan', p.id, data),
+        ],
+      ),
+    );
+  }
+
+  Widget _rsvpButton(FamilyPlan p, String status, String label, String? mine) {
+    final selected = mine == status;
+    return Expanded(
+      child: SizedBox(
+        height: 42,
+        child: OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            backgroundColor: selected ? _teal : Colors.transparent,
+            foregroundColor: selected ? Colors.white : _teal,
+            side: const BorderSide(color: _teal, width: 1.5),
+            padding: EdgeInsets.zero,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          onPressed: () => _run(() => FamilyPlansService.setRsvp(p.id, status)),
+          child: Text(label,
+              style: GoogleFonts.nunitoSans(
+                  fontSize: 14, fontWeight: FontWeight.w800)),
+        ),
+      ),
+    );
+  }
+
+  void _showRsvpList(FamilyPlan p, Map<String, String> rsvps) {
+    List<String> namesFor(String status) => [
+          for (final e in rsvps.entries)
+            if (e.value == status) _nameOf(e.key)
+        ];
+    final groups = <MapEntry<String, List<String>>>[
+      MapEntry('Going', namesFor('going')),
+      MapEntry('Maybe', namesFor('maybe')),
+      MapEntry('Can\'t', namesFor('cant')),
+    ].where((g) => g.value.isNotEmpty).toList();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(p.title),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final g in groups) ...[
+                Text(g.key,
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text(g.value.join(', ')),
+                const SizedBox(height: 10),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _onPlanMenu(String v, FamilyPlan p) async {
+    if (v == 'edit') {
+      final ok = await showCreatePlanSheet(context,
+          isDarkMode: _dark, nestId: widget.nestId, editing: p);
+      if (ok == true) _load();
+    } else if (v == 'cancel') {
+      if (await _confirm('Cancel this plan?',
+          'Everyone who can see it will be told it was canceled.', 'Cancel plan')) {
+        _run(() => FamilyPlansService.cancelPlan(p));
+      }
+    } else if (v == 'delete') {
+      if (await _confirm('Delete this plan?',
+          'It will disappear for everyone. This cannot be undone.', 'Delete')) {
+        _run(() => FamilyPlansService.deletePlan(p.id));
+      }
+    }
+  }
+
+  // ── poll card ────────────────────────────────────────────────
+
+  String _closesText(FamilyPoll p) {
+    if (p.isClosed) return 'Closed';
+    final left = p.closesAt.difference(DateTime.now());
+    if (left.inDays >= 1) {
+      final d = left.inDays;
+      return 'Closes in $d ${d == 1 ? 'day' : 'days'}';
+    }
+    if (left.inHours >= 1) {
+      final h = left.inHours;
+      return 'Closes in $h ${h == 1 ? 'hour' : 'hours'}';
+    }
+    final m = left.inMinutes < 1 ? 1 : left.inMinutes;
+    return 'Closes in $m ${m == 1 ? 'minute' : 'minutes'}';
+  }
+
+  Widget _pollCard(FamilyPoll p, FamilyPlansData data) {
+    final mine = p.authorId == _me;
+    final votes = data.votes[p.id] ?? const <String, int>{};
+    final total = votes.length;
+    final counts = List<int>.filled(p.options.length, 0);
+    for (final v in votes.values) {
+      if (v >= 0 && v < counts.length) counts[v]++;
+    }
+    final myVote = _me == null ? null : votes[_me!];
+    final topCount = counts.isEmpty ? 0 : counts.reduce((a, b) => a > b ? a : b);
+
+    return _cardShell(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _privateTag(p.visibleToIds),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(p.question,
+                    style: GoogleFonts.nunitoSans(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: _textColor)),
+              ),
+              if (mine)
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_horiz_rounded, color: _mutedColor),
+                  onSelected: (v) => _onPollMenu(v, p),
+                  itemBuilder: (ctx) => [
+                    if (!p.isClosed)
+                      const PopupMenuItem(
+                          value: 'close', child: Text('Close poll now')),
+                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (var i = 0; i < p.options.length; i++)
+            _pollOption(p, i, counts[i], total, myVote == i,
+                p.isClosed && counts[i] == topCount && topCount > 0),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              _initialDot(_nameOf(p.authorId)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Posted by ${_nameOf(p.authorId)} · $total ${total == 1 ? 'vote' : 'votes'} · ${_closesText(p)}'
+                  '${myVote != null ? ' · You voted' : ''}',
+                  style: GoogleFonts.nunitoSans(
+                      fontSize: 13, color: _mutedColor),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          _heartAndComments('poll', p.id, data),
+        ],
+      ),
+    );
+  }
+
+  Widget _pollOption(
+      FamilyPoll p, int i, int count, int total, bool mine, bool winner) {
+    final frac = total == 0 ? 0.0 : count / total;
+    final highlight = mine || winner;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: p.isClosed
+            ? null
+            : () => _run(() => FamilyPlansService.vote(p.id, i)),
+        child: Container(
+          height: 46,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: highlight ? _teal : _cardBorder,
+                width: highlight ? 2 : 1),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(11),
+            child: Stack(
+              children: [
+                FractionallySizedBox(
+                  widthFactor: frac,
+                  child: Container(color: _teal.withAlpha(winner ? 70 : 38)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      if (mine)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 6),
+                          child: Icon(Icons.check_circle_rounded,
+                              size: 18, color: _teal),
+                        ),
+                      Expanded(
+                        child: Text(p.options[i],
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.nunitoSans(
+                                fontSize: 15,
+                                fontWeight:
+                                    highlight ? FontWeight.w800 : FontWeight.w600,
+                                color: _textColor)),
+                      ),
+                      Text('$count',
+                          style: GoogleFonts.nunitoSans(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: _mutedColor)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onPollMenu(String v, FamilyPoll p) async {
+    if (v == 'close') {
+      if (await _confirm('Close this poll now?',
+          'Nobody will be able to vote after this.', 'Close poll')) {
+        _run(() => FamilyPlansService.closePollEarly(p.id));
+      }
+    } else if (v == 'delete') {
+      if (await _confirm('Delete this poll?',
+          'It will disappear for everyone. This cannot be undone.', 'Delete')) {
+        _run(() => FamilyPlansService.deletePoll(p.id));
+      }
+    }
+  }
+
+  // ── comments ─────────────────────────────────────────────────
+
+  void _openComments(String type, String id) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor:
+          _dark ? const Color(0xFF1A1612) : const Color(0xFFFDFDFD),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => _CommentsSheet(
+        isDarkMode: _dark,
+        type: type,
+        itemId: id,
+        onChanged: _load,
+      ),
+    );
+  }
+}
+
+class _CommentsSheet extends StatefulWidget {
+  const _CommentsSheet({
+    required this.isDarkMode,
+    required this.type,
+    required this.itemId,
+    required this.onChanged,
+  });
+  final bool isDarkMode;
+  final String type;
+  final String itemId;
+  final Future<void> Function() onChanged;
+
+  @override
+  State<_CommentsSheet> createState() => _CommentsSheetState();
+}
+
+class _CommentsSheetState extends State<_CommentsSheet> {
+  final _controller = TextEditingController();
+  List<FamilyComment> _comments = [];
+  Map<String, String> _names = {};
+  bool _loading = true;
+  bool _sending = false;
+
+  bool get _dark => widget.isDarkMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final c = await FamilyPlansService.loadComments(widget.type, widget.itemId);
+      final n = await FamilyPlansService.namesFor(c.map((e) => e.userId));
+      if (mounted) {
+        setState(() {
+          _comments = c;
+          _names = n;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('FAMILY_PLANS comments error: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _send() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await FamilyPlansService.addComment(widget.type, widget.itemId, text);
+      _controller.clear();
+      await _load();
+      widget.onChanged();
+    } catch (e) {
+      debugPrint('FAMILY_PLANS add comment error: $e');
+    }
+    if (mounted) setState(() => _sending = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = _dark ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417);
+    final muted = _dark ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E);
+    final me = FamilyPlansService.myId;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Comments',
+                    style: GoogleFonts.nunitoSans(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: text)),
+                const SizedBox(height: 10),
+                Flexible(
+                  child: _loading
+                      ? const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(
+                              child: CircularProgressIndicator(color: _teal)),
+                        )
+                      : _comments.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              child: Text('No comments yet. Be the first.',
+                                  style: GoogleFonts.nunitoSans(
+                                      fontSize: 15, color: muted)),
+                            )
+                          : ListView(
+                              shrinkWrap: true,
+                              children: [
+                                for (final c in _comments)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                  c.userId == me
+                                                      ? 'You'
+                                                      : (_names[c.userId] ??
+                                                          'Family'),
+                                                  style: GoogleFonts.nunitoSans(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      color: _teal)),
+                                              Text(c.body,
+                                                  style: GoogleFonts.nunitoSans(
+                                                      fontSize: 15,
+                                                      height: 1.35,
+                                                      color: text)),
+                                            ],
+                                          ),
+                                        ),
+                                        if (c.userId == me)
+                                          IconButton(
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            tooltip: 'Delete comment',
+                                            icon: Icon(Icons.close_rounded,
+                                                size: 18, color: muted),
+                                            onPressed: () async {
+                                              await FamilyPlansService
+                                                  .deleteComment(c.id);
+                                              await _load();
+                                              widget.onChanged();
+                                            },
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        maxLength: 500,
+                        textCapitalization: TextCapitalization.sentences,
+                        style: GoogleFonts.nunitoSans(fontSize: 15, color: text),
+                        decoration: InputDecoration(
+                          hintText: 'Write a comment',
+                          counterText: '',
+                          filled: true,
+                          fillColor: _dark
+                              ? const Color(0xFF2A241D)
+                              : Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                                color: _dark
+                                    ? const Color(0xFF3D342B)
+                                    : const Color(0xFFE4D8C8)),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      style: IconButton.styleFrom(backgroundColor: _teal),
+                      onPressed: _sending ? null : _send,
+                      icon: const Icon(Icons.send_rounded, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

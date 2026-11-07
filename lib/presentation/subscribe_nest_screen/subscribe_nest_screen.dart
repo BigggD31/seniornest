@@ -113,11 +113,25 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
             ));
           }
           _restoreInFlight = false;
-          await _recordSubscription(purchase.productID, purchase.purchaseID,
+          // Nov 7 2026: the purchase is written to the database (three quick
+          // server round trips) WHILE the person is already typing the new
+          // Nest's name, instead of making them wait for the write before
+          // the name box even appears (a visible ~4 second pause on Android).
+          // The new Nest still waits for the write to finish before it is
+          // created and the subscription is attached to it (see
+          // _createAdditionalNest), so nothing about the order of the real
+          // work changes. _recordSubscription never throws (its own errors
+          // are caught inside), and .ignore() keeps an early error from
+          // being reported as unhandled while the name box is open.
+          final recording = _recordSubscription(
+              purchase.productID, purchase.purchaseID,
               isRestore: purchase.status == PurchaseStatus.restored);
+          recording.ignore();
           if (_isAdditionalNest) {
             _userStartedPurchase = false;
-            await _createAdditionalNest();
+            await _createAdditionalNest(recording);
+          } else {
+            await recording;
           }
           if (mounted) {
             setState(() => _isPurchasing = false);
@@ -185,7 +199,7 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
   // just recorded), so this mirrors the create-nest-then-attach pattern in
   // save_messages_prompt_screen.dart, then switches the app's active nest
   // to the new one so Home reflects it immediately on the next screen.
-  Future<void> _createAdditionalNest() async {
+  Future<void> _createAdditionalNest([Future<void>? recording]) async {
     final supabase = Supabase.instance.client;
     final userId = supabase.auth.currentUser?.id;
     if (userId == null || !mounted) return;
@@ -212,6 +226,10 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
       ),
     );
     final nestName = (enteredName != null && enteredName.isNotEmpty) ? enteredName : 'New Nest';
+
+    // The subscription row must exist before it can be attached to the new
+    // Nest below -- wait for the write that started in the purchase listener.
+    if (recording != null) await recording;
 
     String? nestId;
     for (int attempt = 0; attempt < 5 && nestId == null; attempt++) {
@@ -440,7 +458,11 @@ class _SubscribeNestScreenState extends State<SubscribeNestScreen>
           Image.asset(
             _heroAsset,
             fit: BoxFit.cover,
-            alignment: const Alignment(0, -0.5),
+            // Nov 7 2026: phones keep the original crop; on iPad / wide
+            // screens keep the faces and the tablet in frame.
+            alignment: MediaQuery.of(context).size.width >= 600
+                ? const Alignment(0, -0.7)
+                : const Alignment(0, -0.5),
           ),
 
           // Top scrim -- just enough for the back button to read. Sep 27
