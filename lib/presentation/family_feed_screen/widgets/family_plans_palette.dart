@@ -19,6 +19,10 @@ class PlansPalette {
   /// Background of the tab strip.
   Color get track => dark ? const Color(0xFF2A241D) : const Color(0xFFF1E3D3);
 
+  /// The selected tab (white pill in light mode).
+  Color get tabSelected =>
+      dark ? const Color(0xFF3D342B) : const Color(0xFFFFFFFF);
+
   /// Page background for the Plans tab.
   Color get cream => dark ? const Color(0xFF1F1A15) : const Color(0xFFFBF6EE);
 

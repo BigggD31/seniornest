@@ -3431,7 +3431,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: selected
-                  ? PlansPalette(_isDarkMode).accent
+                  ? PlansPalette(_isDarkMode).tabSelected
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
             ),
@@ -3443,7 +3443,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: selected
-                    ? Colors.white
+                    ? PlansPalette(_isDarkMode).deep
                     : PlansPalette(_isDarkMode).muted,
               ),
             ),
