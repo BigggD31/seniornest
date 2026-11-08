@@ -2270,6 +2270,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
   Future<Map<String, DateTime>> _lastActivityByMember(
       SupabaseClient supabase, String nestId) async {
     final latest = <String, DateTime>{};
+    // Only the last 30 days count, so this stays fast as a nest grows.
+    final since =
+        DateTime.now().toUtc().subtract(const Duration(days: 30)).toIso8601String();
     void note(dynamic userId, dynamic createdAt) {
       if (userId is! String || createdAt is! String) return;
       final t = DateTime.tryParse(createdAt);
@@ -2287,6 +2290,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             .from(table)
             .select(collectIds ? 'id, $authorCol, created_at' : '$authorCol, created_at')
             .eq('nest_id', nestId)
+            .gte('created_at', since)
             .order('created_at', ascending: false)
             .limit(300);
         for (final r in rows as List<dynamic>) {
@@ -2310,6 +2314,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             .from('family_item_comments')
             .select('user_id, created_at')
             .inFilter('item_id', itemIds)
+            .gte('created_at', since)
             .order('created_at', ascending: false)
             .limit(300);
         for (final r in rows as List<dynamic>) {
