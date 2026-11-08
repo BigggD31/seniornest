@@ -25,6 +25,7 @@ import './widgets/message_card_widget.dart';
 import './widgets/celebrations_card_widget.dart';
 import './widgets/nest_avatar_row_widget.dart';
 import './widgets/family_plans_tab_widget.dart';
+import './widgets/family_plans_palette.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import '../../core/app_state.dart';
 import '../../services/auth_service.dart';
@@ -3429,7 +3430,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
             height: 44,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: selected ? const Color(0xFF5DA399) : Colors.transparent,
+              color: selected
+                  ? PlansPalette(_isDarkMode).accent
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
@@ -3441,9 +3444,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                 fontWeight: FontWeight.w800,
                 color: selected
                     ? Colors.white
-                    : (_isDarkMode
-                        ? const Color(0xFFB8A888)
-                        : const Color(0xFF6B5E4E)),
+                    : PlansPalette(_isDarkMode).muted,
               ),
             ),
           ),
@@ -3454,7 +3455,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: _isDarkMode ? const Color(0xFF2A241D) : const Color(0xFFF1EBDD),
+        color: PlansPalette(_isDarkMode).track,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(

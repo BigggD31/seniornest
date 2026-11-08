@@ -6,14 +6,12 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../services/family_plans_service.dart';
+import 'family_plans_palette.dart';
 import 'family_plans_sheets.dart';
 
 /// Nov 7 2026: the "Family Plans" tab on Home (build 1.06) -- plans and
 /// polls for one nest. Who can see each item is enforced by the database;
 /// this widget just shows whatever comes back.
-
-const Color _teal = Color(0xFF5DA399);
-const Color _gold = Color(0xFFD4AA00);
 
 class FamilyPlansTabWidget extends StatefulWidget {
   const FamilyPlansTabWidget({
@@ -140,14 +138,11 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
 
   // ── helpers ──────────────────────────────────────────────────
 
-  Color get _textColor =>
-      _dark ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417);
-  Color get _mutedColor =>
-      _dark ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E);
-  Color get _cardColor =>
-      _dark ? const Color(0xFF2A241D) : const Color(0xFFFFFFFF);
-  Color get _cardBorder =>
-      _dark ? const Color(0xFF3D342B) : const Color(0xFFE9E1D3);
+  PlansPalette get _p => PlansPalette(_dark);
+  Color get _textColor => _p.ink;
+  Color get _mutedColor => _p.muted;
+  Color get _cardColor => _p.card;
+  Color get _cardBorder => _p.border;
 
   String _nameOf(String userId) {
     if (userId == _me) return 'You';
@@ -220,76 +215,123 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
     final upcoming = plans.where((p) => !p.isPast && !p.isCanceled).toList();
     final earlier = plans.where((p) => p.isPast || p.isCanceled).toList()
       ..sort((a, b) => b.startsAt.compareTo(a.startsAt));
+    final noPlans = upcoming.isEmpty && earlier.isEmpty;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (canCreate)
-          Row(
-            children: [
-              Expanded(
-                child: _createButton(
-                    Icons.event_rounded, 'Create a Plan', _createPlan),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _createButton(
-                    Icons.poll_rounded, 'Create a Poll', _createPoll),
-              ),
-            ],
-          ),
-        const SizedBox(height: 18),
-        if (data == null && !_loadFailed)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 40),
-            child: Center(child: CircularProgressIndicator(color: _teal)),
-          )
-        else if (data == null && _loadFailed)
+    final List<Widget> planBody;
+    final List<Widget> pollBody;
+    if (data == null) {
+      planBody = [
+        if (_loadFailed)
           _emptyNote('We could not load Family Plans. Pull down to try again.')
-        else ...[
-          _sectionTitle('Plans'),
-          if (upcoming.isEmpty && earlier.isEmpty)
-            _emptyNote(
-                'No plans yet. Tap Create a Plan to invite the family to something.'),
-          for (final p in upcoming) _planCard(p, data!),
-          for (final p in earlier) _planCard(p, data!),
-          const SizedBox(height: 10),
-          _sectionTitle('Polls'),
-          if (polls.isEmpty)
-            _emptyNote(
-                'No polls yet. Tap Create a Poll to ask the family a question.'),
-          for (final p in polls) _pollCard(p, data!),
-        ],
-      ],
-    );
-  }
+        else
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 30),
+            child:
+                Center(child: CircularProgressIndicator(color: _p.accent)),
+          ),
+      ];
+      pollBody = const [];
+    } else {
+      planBody = [
+        if (noPlans)
+          (canCreate ? _samplePlanCard() : _emptyNote('No plans yet.')),
+        for (final p in upcoming) _planCard(p, data),
+        for (final p in earlier) _planCard(p, data),
+      ];
+      pollBody = [
+        if (polls.isEmpty)
+          (canCreate ? _samplePollCard() : _emptyNote('No polls yet.')),
+        for (final p in polls) _pollCard(p, data),
+      ];
+    }
 
-  Widget _createButton(IconData icon, String label, VoidCallback onTap) {
-    return SizedBox(
-      height: 52,
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _teal,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-        onPressed: onTap,
-        icon: Icon(icon, size: 20),
-        label: Text(label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.nunitoSans(
-                fontSize: 15, fontWeight: FontWeight.w800)),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+      decoration: BoxDecoration(
+        color: _p.cream,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader('Upcoming Plans',
+              'Birthdays, dinners, games, visits. Put it on the family calendar.'),
+          if (canCreate) ...[
+            _wideButton(Icons.add_rounded, 'Create a Plan', _createPlan,
+                filled: true),
+            const SizedBox(height: 14),
+          ],
+          ...planBody,
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Divider(height: 1, thickness: 1, color: _p.border),
+          ),
+          _sectionHeader('Family Polls',
+              'Can\'t decide? Ask everyone. Anyone in the nest can start a poll.'),
+          if (canCreate) ...[
+            _wideButton(Icons.add_rounded, 'Create a Poll', _createPoll,
+                filled: false),
+            const SizedBox(height: 14),
+          ],
+          ...pollBody,
+        ],
       ),
     );
   }
 
-  Widget _sectionTitle(String t) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Text(t,
-            style: GoogleFonts.nunitoSans(
-                fontSize: 18, fontWeight: FontWeight.w700, color: _textColor)),
+  Widget _wideButton(IconData icon, String label, VoidCallback onTap,
+      {required bool filled}) {
+    final text = Text(label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style:
+            GoogleFonts.nunitoSans(fontSize: 17, fontWeight: FontWeight.w800));
+    final shape =
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16));
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: filled
+          ? ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _p.accent,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: shape,
+              ),
+              onPressed: onTap,
+              icon: Icon(icon, size: 22),
+              label: text,
+            )
+          : OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                backgroundColor: _p.card,
+                foregroundColor: _p.deep,
+                side: BorderSide(color: _p.accent, width: 2),
+                shape: shape,
+              ),
+              onPressed: onTap,
+              icon: Icon(icon, size: 22),
+              label: text,
+            ),
+    );
+  }
+
+  Widget _sectionHeader(String t, String sub) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(t,
+                style: GoogleFonts.nunitoSans(
+                    fontSize: 22, fontWeight: FontWeight.w800, color: _p.ink)),
+            const SizedBox(height: 4),
+            Text(sub,
+                style: GoogleFonts.nunitoSans(
+                    fontSize: 15, height: 1.35, color: _p.muted)),
+          ],
+        ),
       );
 
   Widget _emptyNote(String t) => Padding(
@@ -299,17 +341,219 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
                 fontSize: 14, height: 1.4, color: _mutedColor)),
       );
 
+  // ── sample placeholders (shown only while a section is empty) ───
+
+  Widget _sampleChip() => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: _p.chip,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text('SAMPLE · yours will look like this',
+              style: GoogleFonts.nunitoSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: _p.chipText)),
+        ),
+      );
+
+  Widget _samplePlanCard() {
+    final d = DateTime.now().add(const Duration(days: 6));
+    final weekday = DateFormat('EEE').format(d).toUpperCase();
+    final day = DateFormat('d').format(d);
+    Widget rsvp(String label, bool selected) => Expanded(
+          child: Container(
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? _p.accent : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _p.accent, width: 1.5),
+            ),
+            child: Text(label,
+                style: GoogleFonts.nunitoSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: selected ? Colors.white : _p.accent)),
+          ),
+        );
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _toast('This is a sample. Tap Create a Plan to make a real one.'),
+      child: _cardShell(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sampleChip(),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _dateBlock(weekday, day),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Nana\'s Birthday Dinner',
+                          style: GoogleFonts.nunitoSans(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: _p.ink)),
+                      const SizedBox(height: 2),
+                      Text('6:00 PM · Nana\'s house',
+                          style: GoogleFonts.nunitoSans(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: _p.muted)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text('Pot roast and her favorite lemon cake. Bring a story to tell.',
+                style: GoogleFonts.nunitoSans(
+                    fontSize: 15, height: 1.4, color: _p.ink)),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _initialDot('You'),
+                const SizedBox(width: 8),
+                Text('Posted by You',
+                    style:
+                        GoogleFonts.nunitoSans(fontSize: 13, color: _p.muted)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                rsvp('Going', true),
+                const SizedBox(width: 8),
+                rsvp('Maybe', false),
+                const SizedBox(width: 8),
+                rsvp('Can\'t', false),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text('2 going, 1 maybe',
+                style: GoogleFonts.nunitoSans(
+                    fontSize: 14, fontWeight: FontWeight.w700, color: _p.deep)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.favorite_rounded,
+                    size: 22, color: Color(0xFFE0566B)),
+                const SizedBox(width: 5),
+                Text('3',
+                    style: GoogleFonts.nunitoSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: _p.muted)),
+                const SizedBox(width: 18),
+                Icon(Icons.chat_bubble_outline_rounded,
+                    size: 21, color: _p.muted),
+                const SizedBox(width: 5),
+                Text('2',
+                    style: GoogleFonts.nunitoSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: _p.muted)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _samplePollCard() {
+    const options = [
+      ['A photo book of the grandkids', '4'],
+      ['Flowers and a spa day', '2'],
+      ['A new tablet', '1'],
+    ];
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _toast('This is a sample. Tap Create a Poll to make a real one.'),
+      child: _cardShell(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sampleChip(),
+            Text('What should we get Nana for her birthday?',
+                style: GoogleFonts.nunitoSans(
+                    fontSize: 17, fontWeight: FontWeight.w800, color: _p.ink)),
+            const SizedBox(height: 10),
+            for (var i = 0; i < options.length; i++)
+              _pollOptionBox(
+                text: options[i][0],
+                count: int.parse(options[i][1]),
+                frac: int.parse(options[i][1]) / 7,
+                mine: i == 0,
+                winner: false,
+                onTap: null,
+              ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                _initialDot('You'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Posted by You · 7 votes · Closes in 24 hours · You voted',
+                      style: GoogleFonts.nunitoSans(
+                          fontSize: 13, color: _p.muted)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dateBlock(String weekday, String day) => Container(
+        width: 60,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: _p.tint,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          children: [
+            Text(weekday,
+                style: GoogleFonts.nunitoSans(
+                    fontSize: 13, fontWeight: FontWeight.w800, color: _p.deep)),
+            Text(day,
+                style: GoogleFonts.nunitoSans(
+                    fontSize: 26,
+                    height: 1.1,
+                    fontWeight: FontWeight.w800,
+                    color: _p.deep)),
+          ],
+        ),
+      );
+
   Widget _cardShell({required Widget child, bool faded = false}) {
     return Opacity(
       opacity: faded ? 0.6 : 1,
       child: Container(
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: _cardColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _cardBorder),
+          borderRadius: BorderRadius.circular(20),
+          border: _dark ? Border.all(color: _cardBorder) : null,
+          boxShadow: _dark
+              ? null
+              : const [
+                  BoxShadow(
+                      color: Color(0x143B2F2A),
+                      blurRadius: 8,
+                      offset: Offset(0, 2)),
+                ],
         ),
         child: child,
       ),
@@ -327,20 +571,20 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: _gold.withAlpha(36),
-          borderRadius: BorderRadius.circular(8),
+          color: _p.chip,
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.lock_rounded, size: 13, color: Color(0xFFB8860B)),
+            Icon(Icons.lock_rounded, size: 13, color: _p.chipText),
             const SizedBox(width: 5),
             Flexible(
               child: Text(text,
                   style: GoogleFonts.nunitoSans(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: const Color(0xFFB8860B))),
+                      color: _p.chipText)),
             ),
           ],
         ),
@@ -354,7 +598,8 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
       width: 24,
       height: 24,
       alignment: Alignment.center,
-      decoration: const BoxDecoration(color: _teal, shape: BoxShape.circle),
+      decoration: BoxDecoration(
+          color: PlansPalette.personColor(name), shape: BoxShape.circle),
       child: Text(letter,
           style: GoogleFonts.nunitoSans(
               fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
@@ -421,7 +666,6 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
   Widget _planCard(FamilyPlan p, FamilyPlansData data) {
     final faded = p.isPast || p.isCanceled;
     final mine = p.authorId == _me;
-    final month = DateFormat('MMM').format(p.startsAt).toUpperCase();
     final day = DateFormat('d').format(p.startsAt);
     final when = DateFormat('EEE, MMM d · h:mm a').format(p.startsAt);
     final sameZone = p.sourceTz.isEmpty ||
@@ -441,28 +685,7 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 52,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                decoration: BoxDecoration(
-                  color: _teal.withAlpha(31),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Text(month,
-                        style: GoogleFonts.nunitoSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: _teal)),
-                    Text(day,
-                        style: GoogleFonts.nunitoSans(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: _textColor)),
-                  ],
-                ),
-              ),
+              _dateBlock(DateFormat('EEE').format(p.startsAt).toUpperCase(), day),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -579,7 +802,7 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
                   style: GoogleFonts.nunitoSans(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: _teal),
+                      color: _p.deep),
                 ),
               ),
             ),
@@ -598,9 +821,9 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
         height: 42,
         child: OutlinedButton(
           style: OutlinedButton.styleFrom(
-            backgroundColor: selected ? _teal : Colors.transparent,
-            foregroundColor: selected ? Colors.white : _teal,
-            side: const BorderSide(color: _teal, width: 1.5),
+            backgroundColor: selected ? _p.accent : Colors.transparent,
+            foregroundColor: selected ? Colors.white : _p.accent,
+            side: BorderSide(color: _p.accent, width: 1.5),
             padding: EdgeInsets.zero,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -753,56 +976,72 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
 
   Widget _pollOption(
       FamilyPoll p, int i, int count, int total, bool mine, bool winner) {
-    final frac = total == 0 ? 0.0 : count / total;
+    return _pollOptionBox(
+      text: p.options[i],
+      count: count,
+      frac: total == 0 ? 0.0 : count / total,
+      mine: mine,
+      winner: winner,
+      onTap: p.isClosed ? null : () => _run(() => FamilyPlansService.vote(p.id, i)),
+    );
+  }
+
+  Widget _pollOptionBox({
+    required String text,
+    required int count,
+    required double frac,
+    required bool mine,
+    required bool winner,
+    required VoidCallback? onTap,
+  }) {
     final highlight = mine || winner;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: p.isClosed
-            ? null
-            : () => _run(() => FamilyPlansService.vote(p.id, i)),
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
         child: Container(
-          height: 46,
+          height: 48,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
-                color: highlight ? _teal : _cardBorder,
-                width: highlight ? 2 : 1),
+                color: highlight ? _p.accent : _cardBorder, width: 2),
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(12),
             child: Stack(
               children: [
+                if (highlight) Positioned.fill(child: ColoredBox(color: _p.tint)),
                 FractionallySizedBox(
                   widthFactor: frac,
-                  child: Container(color: _teal.withAlpha(winner ? 70 : 38)),
+                  child: Container(
+                      color: _p.accent.withAlpha(winner ? 60 : 30)),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
                   child: Row(
                     children: [
                       if (mine)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 6),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
                           child: Icon(Icons.check_circle_rounded,
-                              size: 18, color: _teal),
+                              size: 18, color: _p.accent),
                         ),
                       Expanded(
-                        child: Text(p.options[i],
+                        child: Text(text,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.nunitoSans(
-                                fontSize: 15,
+                                fontSize: 16,
                                 fontWeight:
-                                    highlight ? FontWeight.w800 : FontWeight.w600,
-                                color: _textColor)),
+                                    highlight ? FontWeight.w800 : FontWeight.w700,
+                                color: highlight ? _p.deep : _textColor)),
                       ),
-                      Text('$count',
+                      Text('$count ${count == 1 ? 'vote' : 'votes'}',
                           style: GoogleFonts.nunitoSans(
-                              fontSize: 14,
+                              fontSize: 15,
                               fontWeight: FontWeight.w800,
-                              color: _mutedColor)),
+                              color: highlight ? _p.deep : _mutedColor)),
                     ],
                   ),
                 ),
@@ -834,8 +1073,7 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor:
-          _dark ? const Color(0xFF1A1612) : const Color(0xFFFDFDFD),
+      backgroundColor: _p.cream,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -873,6 +1111,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
   bool _sending = false;
 
   bool get _dark => widget.isDarkMode;
+  PlansPalette get _p => PlansPalette(_dark);
 
   @override
   void initState() {
@@ -920,8 +1159,8 @@ class _CommentsSheetState extends State<_CommentsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final text = _dark ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417);
-    final muted = _dark ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E);
+    final text = _p.ink;
+    final muted = _p.muted;
     final me = FamilyPlansService.myId;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -946,7 +1185,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                       ? const Padding(
                           padding: EdgeInsets.all(24),
                           child: Center(
-                              child: CircularProgressIndicator(color: _teal)),
+                              child: CircularProgressIndicator(color: _p.accent)),
                         )
                       : _comments.isEmpty
                           ? Padding(
@@ -979,7 +1218,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                                       fontSize: 13,
                                                       fontWeight:
                                                           FontWeight.w800,
-                                                      color: _teal)),
+                                                      color: _p.accent)),
                                               Text(c.body,
                                                   style: GoogleFonts.nunitoSans(
                                                       fontSize: 15,
@@ -1021,24 +1260,19 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                           hintText: 'Write a comment',
                           counterText: '',
                           filled: true,
-                          fillColor: _dark
-                              ? const Color(0xFF2A241D)
-                              : Colors.white,
+                          fillColor: _p.card,
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 12),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                                color: _dark
-                                    ? const Color(0xFF3D342B)
-                                    : const Color(0xFFE4D8C8)),
+                            borderSide: BorderSide(color: _p.border),
                           ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     IconButton.filled(
-                      style: IconButton.styleFrom(backgroundColor: _teal),
+                      style: IconButton.styleFrom(backgroundColor: _p.accent),
                       onPressed: _sending ? null : _send,
                       icon: const Icon(Icons.send_rounded, color: Colors.white),
                     ),

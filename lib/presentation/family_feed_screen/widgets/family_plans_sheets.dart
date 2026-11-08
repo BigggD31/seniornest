@@ -6,17 +6,17 @@ import '../../../services/family_plans_service.dart';
 
 /// Nov 7 2026: the three bottom sheets for Family Plans -- Create a Plan,
 /// Create a Poll, and "Who can see this". Colors follow the app's own
-/// palette (teal / gold), not the mockup's.
+/// look: terracotta on warm cream (see family_plans_palette.dart).
 
-const Color _teal = Color(0xFF5DA399);
-const Color _gold = Color(0xFFD4AA00);
+const Color _teal = Color(0xFFB94A2A);
+const Color _gold = Color(0xFF8A3A1F);
 
 Color _text(bool dark) =>
-    dark ? const Color(0xFFF5EDD8) : const Color(0xFF2C2417);
+    dark ? const Color(0xFFF5EDD8) : const Color(0xFF3B2F2A);
 Color _muted(bool dark) =>
-    dark ? const Color(0xFFB8A888) : const Color(0xFF6B5E4E);
+    dark ? const Color(0xFFC4B49C) : const Color(0xFF6B5A50);
 Color _sheetBg(bool dark) =>
-    dark ? const Color(0xFF1A1612) : const Color(0xFFFDFDFD);
+    dark ? const Color(0xFF1A1612) : const Color(0xFFFBF6EE);
 Color _fieldBg(bool dark) =>
     dark ? const Color(0xFF2A241D) : const Color(0xFFFFFFFF);
 Color _fieldBorder(bool dark) =>
@@ -264,7 +264,10 @@ class _WhoCanSeeRow extends StatelessWidget {
             child: Row(
               children: [
                 Icon(hiddenNames.isEmpty ? Icons.people_rounded : Icons.lock_rounded,
-                    color: hiddenNames.isEmpty ? _teal : _gold, size: 22),
+                    color: hiddenNames.isEmpty
+                        ? _teal
+                        : (dark ? const Color(0xFFF2B8A0) : _gold),
+                    size: 22),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(label,
