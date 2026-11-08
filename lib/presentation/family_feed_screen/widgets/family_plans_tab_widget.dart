@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../services/family_plans_service.dart';
+import '../../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'family_plans_palette.dart';
 import 'family_plans_sheets.dart';
 
@@ -41,6 +42,8 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
   FamilyPlansData? _data;
   List<Map<String, String>> _members = [];
   bool _loadFailed = false;
+  // Polls where the person tapped "Change my vote".
+  final Set<String> _changingVote = {};
   RealtimeChannel? _channel;
   Timer? _debounce;
   bool _disposed = false;
@@ -145,7 +148,7 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
   Color get _cardBorder => _p.border;
 
   String _nameOf(String userId) {
-    if (userId == _me) return 'You';
+    if (userId == _me) return _data?.names[userId] ?? 'You';
     return _data?.names[userId] ??
         _members.firstWhere((m) => m['id'] == userId,
             orElse: () => {'name': 'Family'})['name']!;
@@ -419,9 +422,9 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
             const SizedBox(height: 10),
             Row(
               children: [
-                _initialDot('You'),
+                _initialDot(_me ?? '', _nameOf(_me ?? '')),
                 const SizedBox(width: 8),
-                Text('Posted by You',
+                Text('Posted by ${_nameOf(_me ?? '')}',
                     style:
                         GoogleFonts.nunitoSans(fontSize: 13, color: _p.muted)),
               ],
@@ -498,10 +501,10 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
             const SizedBox(height: 4),
             Row(
               children: [
-                _initialDot('You'),
+                _initialDot(_me ?? '', _nameOf(_me ?? '')),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Posted by You · 7 votes · Closes in 24 hours · You voted',
+                  child: Text('Posted by ${_nameOf(_me ?? '')} · 7 votes · Closes in 24 hours · You voted',
                       style: GoogleFonts.nunitoSans(
                           fontSize: 13, color: _p.muted)),
                 ),
@@ -592,19 +595,15 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
     );
   }
 
-  Widget _initialDot(String name) {
-    final letter = name.isNotEmpty ? name[0].toUpperCase() : '?';
-    return Container(
-      width: 24,
-      height: 24,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-          color: PlansPalette.personColor(name), shape: BoxShape.circle),
-      child: Text(letter,
-          style: GoogleFonts.nunitoSans(
-              fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
-    );
-  }
+  /// The person's real profile picture (or their initial), same as the
+  /// rest of the app.
+  Widget _initialDot(String userId, String name) => ProfileAvatarWidget(
+        avatarUrl: FamilyPlansService.avatarUrls[userId] ?? '',
+        displayName: name,
+        size: 28,
+        borderColor: Colors.transparent,
+        borderWidth: 0,
+      );
 
   Widget _heartAndComments(String type, String id, FamilyPlansData data) {
     final k = FamilyPlansService.key(type, id);
@@ -768,7 +767,7 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
           const SizedBox(height: 10),
           Row(
             children: [
-              _initialDot(_nameOf(p.authorId)),
+              _initialDot(p.authorId, _nameOf(p.authorId)),
               const SizedBox(width: 8),
               Text('Posted by ${_nameOf(p.authorId)}',
                   style: GoogleFonts.nunitoSans(
@@ -951,11 +950,35 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
           const SizedBox(height: 10),
           for (var i = 0; i < p.options.length; i++)
             _pollOption(p, i, counts[i], total, myVote == i,
-                p.isClosed && counts[i] == topCount && topCount > 0),
+                p.isClosed && counts[i] == topCount && topCount > 0,
+                canPick: !p.isClosed &&
+                    (myVote == null || _changingVote.contains(p.id))),
+          if (!p.isClosed && myVote != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: _changingVote.contains(p.id)
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text('Tap your new choice',
+                          style: GoogleFonts.nunitoSans(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: _p.deep)),
+                    )
+                  : TextButton(
+                      style: TextButton.styleFrom(
+                          foregroundColor: _p.deep,
+                          padding: const EdgeInsets.symmetric(horizontal: 4)),
+                      onPressed: () => setState(() => _changingVote.add(p.id)),
+                      child: Text('Change my vote',
+                          style: GoogleFonts.nunitoSans(
+                              fontSize: 14, fontWeight: FontWeight.w800)),
+                    ),
+            ),
           const SizedBox(height: 4),
           Row(
             children: [
-              _initialDot(_nameOf(p.authorId)),
+              _initialDot(p.authorId, _nameOf(p.authorId)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -975,14 +998,20 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
   }
 
   Widget _pollOption(
-      FamilyPoll p, int i, int count, int total, bool mine, bool winner) {
+      FamilyPoll p, int i, int count, int total, bool mine, bool winner,
+      {required bool canPick}) {
     return _pollOptionBox(
       text: p.options[i],
       count: count,
       frac: total == 0 ? 0.0 : count / total,
       mine: mine,
       winner: winner,
-      onTap: p.isClosed ? null : () => _run(() => FamilyPlansService.vote(p.id, i)),
+      onTap: !canPick
+          ? null
+          : () async {
+              await _run(() => FamilyPlansService.vote(p.id, i));
+              if (mounted) setState(() => _changingVote.remove(p.id));
+            },
     );
   }
 
@@ -1017,9 +1046,11 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
                   child: Container(
                       color: _p.accent.withAlpha(winner ? 60 : 30)),
                 ),
-                Padding(
+                Positioned.fill(
+                  child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       if (mine)
                         Padding(
@@ -1043,6 +1074,7 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
                               fontWeight: FontWeight.w800,
                               color: highlight ? _p.deep : _mutedColor)),
                     ],
+                  ),
                   ),
                 ),
               ],
@@ -1149,8 +1181,11 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     try {
       await FamilyPlansService.addComment(widget.type, widget.itemId, text);
       _controller.clear();
-      await _load();
       widget.onChanged();
+      // The comment is posted, so the box closes. Tap the speech bubble on
+      // the card any time to read the comments again.
+      if (mounted) Navigator.of(context).pop();
+      return;
     } catch (e) {
       debugPrint('FAMILY_PLANS add comment error: $e');
     }
@@ -1182,8 +1217,8 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                 const SizedBox(height: 10),
                 Flexible(
                   child: _loading
-                      ? const Padding(
-                          padding: EdgeInsets.all(24),
+                      ? Padding(
+                          padding: const EdgeInsets.all(24),
                           child: Center(
                               child: CircularProgressIndicator(color: _p.accent)),
                         )
@@ -1204,16 +1239,27 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
+                                        ProfileAvatarWidget(
+                                          avatarUrl: FamilyPlansService
+                                                  .avatarUrls[c.userId] ??
+                                              '',
+                                          displayName:
+                                              _names[c.userId] ?? 'Family',
+                                          size: 30,
+                                          borderColor: Colors.transparent,
+                                          borderWidth: 0,
+                                        ),
+                                        const SizedBox(width: 10),
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                  c.userId == me
-                                                      ? 'You'
-                                                      : (_names[c.userId] ??
-                                                          'Family'),
+                                                  _names[c.userId] ??
+                                                      (c.userId == me
+                                                          ? 'You'
+                                                          : 'Family'),
                                                   style: GoogleFonts.nunitoSans(
                                                       fontSize: 13,
                                                       fontWeight:
@@ -1231,10 +1277,29 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                           IconButton(
                                             visualDensity:
                                                 VisualDensity.compact,
-                                            tooltip: 'Delete comment',
-                                            icon: Icon(Icons.close_rounded,
-                                                size: 18, color: muted),
+                                            tooltip: 'Delete my comment',
+                                            icon: Icon(Icons.delete_outline_rounded,
+                                                size: 20, color: muted),
                                             onPressed: () async {
+                                              final yes = await showDialog<bool>(
+                                                context: context,
+                                                builder: (ctx) => AlertDialog(
+                                                  title: const Text('Delete your comment?'),
+                                                  content: const Text(
+                                                      'This removes it for everyone.'),
+                                                  actions: [
+                                                    TextButton(
+                                                        onPressed: () =>
+                                                            Navigator.pop(ctx, false),
+                                                        child: const Text('Keep it')),
+                                                    TextButton(
+                                                        onPressed: () =>
+                                                            Navigator.pop(ctx, true),
+                                                        child: const Text('Delete')),
+                                                  ],
+                                                ),
+                                              );
+                                              if (yes != true) return;
                                               await FamilyPlansService
                                                   .deleteComment(c.id);
                                               await _load();

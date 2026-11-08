@@ -316,6 +316,8 @@ class FamilyPlansService {
       }
     }
 
+    final me = myId;
+    if (me != null) userIds.add(me);
     final names = await _namesFor(userIds);
     return FamilyPlansData(
       plans: plans,
@@ -328,15 +330,20 @@ class FamilyPlansService {
     );
   }
 
+  /// Profile pictures by user id, filled in whenever names are loaded, so
+  /// "Posted by" and comments can show the same avatar as the rest of the app.
+  static final Map<String, String> avatarUrls = {};
+
   static Future<Map<String, String>> _namesFor(Set<String> ids) async {
     final out = <String, String>{};
     if (ids.isEmpty) return out;
     try {
       final rows = await _db
           .from('user_profiles')
-          .select('id, display_name, preferred_name')
+          .select('id, display_name, preferred_name, avatar_url')
           .inFilter('id', ids.toList());
       for (final r in rows as List) {
+        avatarUrls[r['id'] as String] = (r['avatar_url'] as String?) ?? '';
         final preferred = ((r['preferred_name'] as String?) ?? '').trim();
         final display = ((r['display_name'] as String?) ?? '').trim();
         final n = preferred.isNotEmpty ? preferred : display;
