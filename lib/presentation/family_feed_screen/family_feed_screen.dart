@@ -2213,6 +2213,36 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         });
       }
 
+      // Nov 7 2026: most recently active first. Activity = a post, reply or
+      // "I'm Good" in the feed, a plan, a poll, or a comment on a plan/poll.
+      // The database only returns what this person is allowed to see, so a
+      // secret plan never moves anyone. Ties and people with no activity
+      // fall back to name order so the row never shuffles by accident.
+      if (loaded.length > 1) {
+        try {
+          final last = await _lastActivityByMember(supabase, nestId);
+          loaded.sort((a, b) {
+            final ta = last[a['id']];
+            final tb = last[b['id']];
+            if (ta != null && tb != null) {
+              final c = tb.compareTo(ta);
+              if (c != 0) return c;
+            } else if (ta != null) {
+              return -1;
+            } else if (tb != null) {
+              return 1;
+            }
+            final byName = (a['name'] as String)
+                .toLowerCase()
+                .compareTo((b['name'] as String).toLowerCase());
+            if (byName != 0) return byName;
+            return (a['id'] as String).compareTo(b['id'] as String);
+          });
+        } catch (e) {
+          debugPrint('NEST_MEMBERS_ACTIVITY_ORDER_ERROR: $e');
+        }
+      }
+
       // Real members always fully replace samples — even just one real
       // member is enough to drop every placeholder.
       final membersToShow = loaded.isNotEmpty ? loaded : _sampleNestMembers;
@@ -2233,6 +2263,63 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
     } catch (e) {
       debugPrint('NEST_MEMBERS_LOAD_ERROR: $e');
     }
+  }
+
+  /// Newest activity time per member for this nest (see _loadNestMembers).
+  /// Each source is optional: if one query fails the others still count.
+  Future<Map<String, DateTime>> _lastActivityByMember(
+      SupabaseClient supabase, String nestId) async {
+    final latest = <String, DateTime>{};
+    void note(dynamic userId, dynamic createdAt) {
+      if (userId is! String || createdAt is! String) return;
+      final t = DateTime.tryParse(createdAt);
+      if (t == null) return;
+      final old = latest[userId];
+      if (old == null || t.isAfter(old)) latest[userId] = t;
+    }
+
+    final itemIds = <String>[];
+
+    Future<void> fromTable(String table, String authorCol,
+        {bool collectIds = false}) async {
+      try {
+        final rows = await supabase
+            .from(table)
+            .select(collectIds ? 'id, $authorCol, created_at' : '$authorCol, created_at')
+            .eq('nest_id', nestId)
+            .order('created_at', ascending: false)
+            .limit(300);
+        for (final r in rows as List<dynamic>) {
+          note(r[authorCol], r['created_at']);
+          if (collectIds && r['id'] is String) itemIds.add(r['id'] as String);
+        }
+      } catch (e) {
+        debugPrint('NEST_MEMBERS_ACTIVITY $table error: $e');
+      }
+    }
+
+    await Future.wait([
+      fromTable('feed_posts', 'author_id'),
+      fromTable('family_plans', 'author_id', collectIds: true),
+      fromTable('family_polls', 'author_id', collectIds: true),
+    ]);
+
+    if (itemIds.isNotEmpty) {
+      try {
+        final rows = await supabase
+            .from('family_item_comments')
+            .select('user_id, created_at')
+            .inFilter('item_id', itemIds)
+            .order('created_at', ascending: false)
+            .limit(300);
+        for (final r in rows as List<dynamic>) {
+          note(r['user_id'], r['created_at']);
+        }
+      } catch (e) {
+        debugPrint('NEST_MEMBERS_ACTIVITY comments error: $e');
+      }
+    }
+    return latest;
   }
 
   void _onAvatarRowMemberTap(Map<String, dynamic> member) {
