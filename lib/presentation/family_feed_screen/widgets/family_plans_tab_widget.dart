@@ -1039,12 +1039,21 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Stack(
+              // Fill the whole option even when there are no votes yet
+              // (a zero-width vote bar used to collapse the option).
+              fit: StackFit.expand,
               children: [
                 if (highlight) Positioned.fill(child: ColoredBox(color: _p.tint)),
-                FractionallySizedBox(
-                  widthFactor: frac,
-                  child: Container(
-                      color: _p.accent.withAlpha(winner ? 60 : 30)),
+                Positioned.fill(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: frac.clamp(0.0, 1.0),
+                      heightFactor: 1,
+                      child: ColoredBox(
+                          color: _p.accent.withAlpha(winner ? 60 : 30)),
+                    ),
+                  ),
                 ),
                 Positioned.fill(
                   child: Padding(
