@@ -84,6 +84,7 @@ class FamilyPoll {
     required this.closedEarlyAt,
     required this.visibleToIds,
     required this.createdAt,
+    this.hideVoters = false,
   });
 
   final String id;
@@ -95,6 +96,10 @@ class FamilyPoll {
   final DateTime? closedEarlyAt;
   final List<String> visibleToIds;
   final DateTime createdAt;
+
+  /// Nov 8 2026: the creator chose not to show who voted for what. The
+  /// database then only lets each person read their own vote.
+  final bool hideVoters;
 
   bool get isPrivate => visibleToIds.isNotEmpty;
   bool get isClosed =>
@@ -117,6 +122,7 @@ class FamilyPoll {
           : DateTime.parse(m['closed_early_at'] as String).toLocal(),
       visibleToIds: _stringList(m['visible_to_ids']),
       createdAt: DateTime.parse(m['created_at'] as String).toLocal(),
+      hideVoters: m['hide_voters'] == true,
     );
   }
 }
@@ -144,6 +150,7 @@ class FamilyPlansData {
     required this.hearts,
     required this.commentCounts,
     required this.names,
+    this.hiddenCounts = const {},
   });
 
   final List<FamilyPlan> plans;
@@ -163,6 +170,10 @@ class FamilyPlansData {
 
   /// userId -> first name to show
   final Map<String, String> names;
+
+  /// pollId -> votes per option, only for polls whose voters are hidden
+  /// (the database gives those as counts, never as individual votes).
+  final Map<String, List<int>> hiddenCounts;
 
   static FamilyPlansData empty() => FamilyPlansData(
         plans: [],
@@ -256,6 +267,7 @@ class FamilyPlansService {
     final rsvps = <String, Map<String, String>>{};
     final hearts = <String, Set<String>>{};
     final commentCounts = <String, int>{};
+    final hiddenCounts = <String, List<int>>{};
     final userIds = <String>{
       for (final p in plans) p.authorId,
       for (final p in polls) p.authorId,
@@ -272,6 +284,25 @@ class FamilyPlansService {
         }
       } catch (e) {
         debugPrint('FAMILY_PLANS votes load error: $e');
+      }
+      for (final m in votes.values) {
+        userIds.addAll(m.keys);
+      }
+      for (final p in polls.where((p) => p.hideVoters)) {
+        try {
+          final rows = await _db
+              .rpc('poll_option_counts', params: {'p_poll_id': p.id});
+          final counts = List<int>.filled(p.options.length, 0);
+          for (final r in rows as List) {
+            final i = (r['option_index'] as num).toInt();
+            if (i >= 0 && i < counts.length) {
+              counts[i] = (r['votes'] as num).toInt();
+            }
+          }
+          hiddenCounts[p.id] = counts;
+        } catch (e) {
+          debugPrint('FAMILY_PLANS hidden counts error: $e');
+        }
       }
     }
     if (planIds.isNotEmpty) {
@@ -327,6 +358,7 @@ class FamilyPlansService {
       hearts: hearts,
       commentCounts: commentCounts,
       names: names,
+      hiddenCounts: hiddenCounts,
     );
   }
 
@@ -470,6 +502,7 @@ class FamilyPlansService {
     required List<String> options,
     required Duration closesIn,
     required List<String> visibleToIds,
+    bool hideVoters = false,
   }) async {
     final uid = myId;
     if (uid == null) throw StateError('Not signed in');
@@ -477,6 +510,7 @@ class FamilyPlansService {
         ? null
         : ({...visibleToIds, uid}.toList());
     await _db.from('family_polls').insert({
+      'hide_voters': hideVoters,
       'nest_id': nestId,
       'author_id': uid,
       'question': question,

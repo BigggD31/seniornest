@@ -782,6 +782,7 @@ class _CreatePollSheetState extends State<_CreatePollSheet> {
   String? _error;
   List<Map<String, String>> _members = [];
   Set<String> _hidden = {};
+  bool _hideVoters = false;
 
   static const _closeLabels = ['24 hours', '3 days', '7 days'];
   static const _closeDurations = [
@@ -854,6 +855,7 @@ class _CreatePollSheetState extends State<_CreatePollSheet> {
         options: options,
         closesIn: _closeDurations[_closeChoice],
         visibleToIds: visible,
+        hideVoters: _hideVoters,
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -897,6 +899,27 @@ class _CreatePollSheetState extends State<_CreatePollSheet> {
                 const SizedBox(height: 14),
                 _label(dark, 'Options', hint: '(2 to 4)'),
                 const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: ActionChip(
+                    avatar: const Icon(Icons.bolt_rounded, size: 18, color: _teal),
+                    label: Text('Quick: Yes or No',
+                        style: GoogleFonts.nunitoSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: _text(dark))),
+                    backgroundColor: _fieldBg(dark),
+                    side: BorderSide(color: _teal.withAlpha(120)),
+                    onPressed: () => setState(() {
+                      while (_options.length > 2) {
+                        _options.removeLast().dispose();
+                      }
+                      _options[0].text = 'Yes';
+                      _options[1].text = 'No';
+                    }),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 for (var i = 0; i < _options.length; i++) ...[
                   TextField(
                     controller: _options[i],
@@ -935,7 +958,7 @@ class _CreatePollSheetState extends State<_CreatePollSheet> {
                   decoration: BoxDecoration(
                     color: dark
                         ? const Color(0xFF2A241D)
-                        : const Color(0xFFF1EBDD),
+                        : const Color(0xFFF1E3D3),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
@@ -973,6 +996,44 @@ class _CreatePollSheetState extends State<_CreatePollSheet> {
                   hiddenIds: _hidden,
                   noun: 'poll',
                   onTap: _members.isEmpty ? () {} : _pickVisibility,
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+                  decoration: BoxDecoration(
+                    color: _fieldBg(dark),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: _fieldBorder(dark)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Hide who voted',
+                                style: GoogleFonts.nunitoSans(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: _text(dark))),
+                            Text(
+                                _hideVoters
+                                    ? 'Everyone sees the totals, but nobody (not even you) sees who picked what.'
+                                    : 'Names show under each option.',
+                                style: GoogleFonts.nunitoSans(
+                                    fontSize: 13,
+                                    height: 1.3,
+                                    color: _muted(dark))),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: _hideVoters,
+                        activeColor: _teal,
+                        onChanged: (v) => setState(() => _hideVoters = v),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 14),
                 Container(

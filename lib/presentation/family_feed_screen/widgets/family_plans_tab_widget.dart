@@ -473,9 +473,9 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
 
   Widget _samplePollCard() {
     const options = [
-      ['A photo book of the grandkids', '4'],
-      ['Flowers and a spa day', '2'],
-      ['A new tablet', '1'],
+      ['A photo book of the grandkids', '4', 'Ben, Lily, Michael, Sarah'],
+      ['Flowers and a spa day', '2', 'Grandpa, Nana'],
+      ['A new tablet', '1', 'Aunt Rosa'],
     ];
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -492,6 +492,7 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
             for (var i = 0; i < options.length; i++)
               _pollOptionBox(
                 text: options[i][0],
+                names: options[i][2],
                 count: int.parse(options[i][1]),
                 frac: int.parse(options[i][1]) / 7,
                 mine: i == 0,
@@ -911,11 +912,24 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
   Widget _pollCard(FamilyPoll p, FamilyPlansData data) {
     final mine = p.authorId == _me;
     final votes = data.votes[p.id] ?? const <String, int>{};
-    final total = votes.length;
-    final counts = List<int>.filled(p.options.length, 0);
-    for (final v in votes.values) {
-      if (v >= 0 && v < counts.length) counts[v]++;
+    var counts = List<int>.filled(p.options.length, 0);
+    // Names under each option, only when the creator left voters visible.
+    final voters = List<List<String>>.generate(p.options.length, (_) => []);
+    if (p.hideVoters && data.hiddenCounts[p.id] != null) {
+      counts = List<int>.from(data.hiddenCounts[p.id]!);
+    } else {
+      for (final e in votes.entries) {
+        final v = e.value;
+        if (v >= 0 && v < counts.length) {
+          counts[v]++;
+          if (!p.hideVoters) voters[v].add(_nameOf(e.key));
+        }
+      }
+      for (final l in voters) {
+        l.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      }
     }
+    final total = counts.fold<int>(0, (a, b) => a + b);
     final myVote = _me == null ? null : votes[_me!];
     final topCount = counts.isEmpty ? 0 : counts.reduce((a, b) => a > b ? a : b);
 
@@ -951,6 +965,7 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
           for (var i = 0; i < p.options.length; i++)
             _pollOption(p, i, counts[i], total, myVote == i,
                 p.isClosed && counts[i] == topCount && topCount > 0,
+                names: voters[i].join(', '),
                 canPick: !p.isClosed &&
                     (myVote == null || _changingVote.contains(p.id))),
           if (!p.isClosed && myVote != null)
@@ -974,6 +989,23 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
                           style: GoogleFonts.nunitoSans(
                               fontSize: 14, fontWeight: FontWeight.w800)),
                     ),
+            ),
+          if (p.hideVoters)
+            Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline_rounded, size: 14, color: _p.chipText),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text('Private votes · nobody sees who voted for what',
+                        style: GoogleFonts.nunitoSans(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: _p.chipText)),
+                  ),
+                ],
+              ),
             ),
           const SizedBox(height: 4),
           Row(
@@ -999,9 +1031,10 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
 
   Widget _pollOption(
       FamilyPoll p, int i, int count, int total, bool mine, bool winner,
-      {required bool canPick}) {
+      {required bool canPick, String names = ''}) {
     return _pollOptionBox(
       text: p.options[i],
+      names: names,
       count: count,
       frac: total == 0 ? 0.0 : count / total,
       mine: mine,
@@ -1022,11 +1055,15 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
     required bool mine,
     required bool winner,
     required VoidCallback? onTap,
+    String names = '',
   }) {
     final highlight = mine || winner;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
@@ -1090,6 +1127,15 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
             ),
           ),
         ),
+      ),
+          if (names.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 14, top: 4),
+              child: Text(names,
+                  style: GoogleFonts.nunitoSans(
+                      fontSize: 13, height: 1.3, color: _mutedColor)),
+            ),
+        ],
       ),
     );
   }
