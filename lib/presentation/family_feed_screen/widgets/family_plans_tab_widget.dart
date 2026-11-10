@@ -47,6 +47,8 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
   RealtimeChannel? _channel;
   Timer? _debounce;
   bool _disposed = false;
+  // Items whose reply box is open (keys from FamilyPlansService.key).
+  final Set<String> _replyOpen = {};
 
   bool get _dark => widget.isDarkMode;
   String? get _me => FamilyPlansService.myId;
@@ -611,51 +613,70 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
     final hearted = data.hearts[k]?.contains(_me) ?? false;
     final heartCount = data.hearts[k]?.length ?? 0;
     final commentCount = data.commentCounts[k] ?? 0;
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => _run(() => FamilyPlansService.setHeart(type, id, !hearted)),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-            child: Row(
-              children: [
-                Icon(hearted ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    size: 22,
-                    color: hearted ? const Color(0xFFE0566B) : _mutedColor),
-                if (heartCount > 0) ...[
-                  const SizedBox(width: 5),
-                  Text('$heartCount',
-                      style: GoogleFonts.nunitoSans(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: _mutedColor)),
-                ],
-              ],
+        Row(
+          children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () =>
+                  _run(() => FamilyPlansService.setHeart(type, id, !hearted)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                        hearted
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        size: 22,
+                        color: hearted ? const Color(0xFFE0566B) : _mutedColor),
+                    if (heartCount > 0) ...[
+                      const SizedBox(width: 5),
+                      Text('$heartCount',
+                          style: GoogleFonts.nunitoSans(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: _mutedColor)),
+                    ],
+                  ],
+                ),
+              ),
             ),
-          ),
+            const SizedBox(width: 10),
+            // Same Reply button as the home page.
+            InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => setState(() {
+                if (!_replyOpen.remove(k)) _replyOpen.add(k);
+              }),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.reply_rounded, size: 20, color: _mutedColor),
+                    const SizedBox(width: 4),
+                    Text(commentCount > 0 ? 'Reply ($commentCount)' : 'Reply',
+                        style: GoogleFonts.nunitoSans(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: _mutedColor)),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 6),
-        InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => _openComments(type, id),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-            child: Row(
-              children: [
-                Icon(Icons.chat_bubble_outline_rounded,
-                    size: 21, color: _mutedColor),
-                if (commentCount > 0) ...[
-                  const SizedBox(width: 5),
-                  Text('$commentCount',
-                      style: GoogleFonts.nunitoSans(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: _mutedColor)),
-                ],
-              ],
-            ),
-          ),
+        _InlineReplies(
+          key: ValueKey('replies_$k'),
+          isDarkMode: _dark,
+          type: type,
+          itemId: id,
+          count: commentCount,
+          composerOpen: _replyOpen.contains(k),
+          onClose: () => setState(() => _replyOpen.remove(k)),
+          onChanged: _load,
         ),
       ],
     );
@@ -1153,48 +1174,47 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
       }
     }
   }
-
-  // ── comments ─────────────────────────────────────────────────
-
-  void _openComments(String type, String id) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: _p.cream,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => _CommentsSheet(
-        isDarkMode: _dark,
-        type: type,
-        itemId: id,
-        onChanged: _load,
-      ),
-    );
-  }
 }
 
-class _CommentsSheet extends StatefulWidget {
-  const _CommentsSheet({
+String _replyAgo(DateTime ts) {
+  final diff = DateTime.now().difference(ts);
+  if (diff.inMinutes < 60) return '${diff.inMinutes < 0 ? 0 : diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays == 1) return 'Yesterday';
+  return '${diff.inDays}d ago';
+}
+
+/// Replies shown under a plan or poll card, laid out like the home page:
+/// an "N replies" toggle, the thread, and a "Write a reply..." box that
+/// opens under the card. Replaces the old Comments pop-up (build 1.06).
+class _InlineReplies extends StatefulWidget {
+  const _InlineReplies({
+    super.key,
     required this.isDarkMode,
     required this.type,
     required this.itemId,
+    required this.count,
+    required this.composerOpen,
+    required this.onClose,
     required this.onChanged,
   });
   final bool isDarkMode;
   final String type;
   final String itemId;
+  final int count;
+  final bool composerOpen;
+  final VoidCallback onClose;
   final Future<void> Function() onChanged;
 
   @override
-  State<_CommentsSheet> createState() => _CommentsSheetState();
+  State<_InlineReplies> createState() => _InlineRepliesState();
 }
 
-class _CommentsSheetState extends State<_CommentsSheet> {
+class _InlineRepliesState extends State<_InlineReplies> {
   final _controller = TextEditingController();
-  List<FamilyComment> _comments = [];
+  List<FamilyComment> _replies = [];
   Map<String, String> _names = {};
-  bool _loading = true;
+  bool _showReplies = false;
   bool _sending = false;
 
   bool get _dark => widget.isDarkMode;
@@ -1203,7 +1223,21 @@ class _CommentsSheetState extends State<_CommentsSheet> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.count > 0) _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _InlineReplies old) {
+    super.didUpdateWidget(old);
+    // The parent reloads (and the count changes) when anyone replies or
+    // deletes, so refresh the thread whenever the count moves.
+    if (old.count != widget.count) {
+      if (widget.count == 0) {
+        setState(() => _replies = []);
+      } else {
+        _load();
+      }
+    }
   }
 
   @override
@@ -1218,14 +1252,12 @@ class _CommentsSheetState extends State<_CommentsSheet> {
       final n = await FamilyPlansService.namesFor(c.map((e) => e.userId));
       if (mounted) {
         setState(() {
-          _comments = c;
+          _replies = c;
           _names = n;
-          _loading = false;
         });
       }
     } catch (e) {
-      debugPrint('FAMILY_PLANS comments error: $e');
-      if (mounted) setState(() => _loading = false);
+      debugPrint('FAMILY_PLANS replies error: $e');
     }
   }
 
@@ -1236,173 +1268,177 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     try {
       await FamilyPlansService.addComment(widget.type, widget.itemId, text);
       _controller.clear();
+      await _load();
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _showReplies = true;
+        });
+      }
+      widget.onClose();
       widget.onChanged();
-      // The comment is posted, so the box closes. Tap the speech bubble on
-      // the card any time to read the comments again.
-      if (mounted) Navigator.of(context).pop();
       return;
     } catch (e) {
-      debugPrint('FAMILY_PLANS add comment error: $e');
+      debugPrint('FAMILY_PLANS add reply error: $e');
     }
     if (mounted) setState(() => _sending = false);
   }
 
+  Future<void> _delete(FamilyComment c) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete your reply?'),
+        content: const Text('This removes it for everyone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Keep it')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (yes != true) return;
+    try {
+      await FamilyPlansService.deleteComment(c.id);
+      await _load();
+      widget.onChanged();
+    } catch (e) {
+      debugPrint('FAMILY_PLANS delete reply error: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final text = _p.ink;
     final muted = _p.muted;
     final me = FamilyPlansService.myId;
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.8),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Comments',
+    final teal = const Color(0xFF5DA399);
+    final boxColor =
+        _dark ? const Color(0xFF1A1612) : const Color(0xFFF0EBE3);
+    final boxBorder =
+        _dark ? const Color(0xFF3D3428) : const Color(0xFFE0D8CC);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_replies.isNotEmpty) ...[
+          GestureDetector(
+            onTap: () => setState(() => _showReplies = !_showReplies),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
+              child: Row(
+                children: [
+                  Icon(_showReplies ? Icons.expand_less : Icons.expand_more,
+                      size: 16, color: teal),
+                  const SizedBox(width: 4),
+                  Text(
+                    _showReplies
+                        ? 'Hide replies'
+                        : '${_replies.length} ${_replies.length == 1 ? 'reply' : 'replies'}',
                     style: GoogleFonts.nunitoSans(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: text)),
-                const SizedBox(height: 10),
-                Flexible(
-                  child: _loading
-                      ? Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Center(
-                              child: CircularProgressIndicator(color: _p.accent)),
-                        )
-                      : _comments.isEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              child: Text('No comments yet. Be the first.',
-                                  style: GoogleFonts.nunitoSans(
-                                      fontSize: 15, color: muted)),
-                            )
-                          : ListView(
-                              shrinkWrap: true,
-                              children: [
-                                for (final c in _comments)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        ProfileAvatarWidget(
-                                          avatarUrl: FamilyPlansService
-                                                  .avatarUrls[c.userId] ??
-                                              '',
-                                          displayName:
-                                              _names[c.userId] ?? 'Family',
-                                          size: 30,
-                                          borderColor: Colors.transparent,
-                                          borderWidth: 0,
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                  _names[c.userId] ??
-                                                      (c.userId == me
-                                                          ? 'You'
-                                                          : 'Family'),
-                                                  style: GoogleFonts.nunitoSans(
-                                                      fontSize: 13,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      color: _p.accent)),
-                                              Text(c.body,
-                                                  style: GoogleFonts.nunitoSans(
-                                                      fontSize: 15,
-                                                      height: 1.35,
-                                                      color: text)),
-                                            ],
-                                          ),
-                                        ),
-                                        if (c.userId == me)
-                                          IconButton(
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            tooltip: 'Delete my comment',
-                                            icon: Icon(Icons.delete_outline_rounded,
-                                                size: 20, color: muted),
-                                            onPressed: () async {
-                                              final yes = await showDialog<bool>(
-                                                context: context,
-                                                builder: (ctx) => AlertDialog(
-                                                  title: const Text('Delete your comment?'),
-                                                  content: const Text(
-                                                      'This removes it for everyone.'),
-                                                  actions: [
-                                                    TextButton(
-                                                        onPressed: () =>
-                                                            Navigator.pop(ctx, false),
-                                                        child: const Text('Keep it')),
-                                                    TextButton(
-                                                        onPressed: () =>
-                                                            Navigator.pop(ctx, true),
-                                                        child: const Text('Delete')),
-                                                  ],
-                                                ),
-                                              );
-                                              if (yes != true) return;
-                                              await FamilyPlansService
-                                                  .deleteComment(c.id);
-                                              await _load();
-                                              widget.onChanged();
-                                            },
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                            ),
+                        fontSize: 12,
+                        color: teal,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_showReplies)
+            for (final c in _replies)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(10, 0, 0, 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: boxColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: boxBorder),
                 ),
-                const SizedBox(height: 8),
-                Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        maxLength: 500,
-                        textCapitalization: TextCapitalization.sentences,
-                        style: GoogleFonts.nunitoSans(fontSize: 15, color: text),
-                        decoration: InputDecoration(
-                          hintText: 'Write a comment',
-                          counterText: '',
-                          filled: true,
-                          fillColor: _p.card,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: _p.border),
+                    Row(
+                      children: [
+                        Text(
+                            _names[c.userId] ??
+                                (c.userId == me ? 'You' : 'Family'),
+                            style: GoogleFonts.nunitoSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: _p.ink)),
+                        const SizedBox(width: 8),
+                        Text(_replyAgo(c.createdAt),
+                            style: GoogleFonts.nunitoSans(
+                                fontSize: 11, color: muted)),
+                        const Spacer(),
+                        if (c.userId == me)
+                          GestureDetector(
+                            onTap: () => _delete(c),
+                            child: Icon(Icons.delete_outline_rounded,
+                                size: 18, color: muted),
                           ),
-                        ),
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(
-                      style: IconButton.styleFrom(backgroundColor: _p.accent),
-                      onPressed: _sending ? null : _send,
-                      icon: const Icon(Icons.send_rounded, color: Colors.white),
-                    ),
+                    const SizedBox(height: 4),
+                    Text(c.body,
+                        style: GoogleFonts.nunitoSans(
+                            fontSize: 13, color: _p.ink)),
                   ],
+                ),
+              ),
+        ],
+        if (widget.composerOpen)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 4, 0, 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    autofocus: true,
+                    maxLength: 500,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: GoogleFonts.nunitoSans(fontSize: 13, color: _p.ink),
+                    decoration: InputDecoration(
+                      hintText: 'Write a reply...',
+                      hintStyle:
+                          GoogleFonts.nunitoSans(fontSize: 13, color: muted),
+                      counterText: '',
+                      filled: true,
+                      fillColor: boxColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _sending ? null : _send,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration:
+                        BoxDecoration(color: teal, shape: BoxShape.circle),
+                    child: _sending
+                        ? const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_rounded,
+                            color: Colors.white, size: 18),
+                  ),
                 ),
               ],
             ),
           ),
-        ),
-      ),
+      ],
     );
   }
 }
