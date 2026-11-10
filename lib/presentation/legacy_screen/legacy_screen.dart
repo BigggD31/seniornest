@@ -362,8 +362,22 @@ class _LegacyScreenState extends State<LegacyScreen>
   void _scheduleLegacySeenClear() {
     _legacySeenDelayTimer?.cancel();
     if (appActiveTabNotifier.value != 2) return;
-    // Oct 8 2026: 3s -> 15s, same reason as Home.
-    _legacySeenDelayTimer = Timer(const Duration(seconds: 15), () {
+    _armLegacySeenTimer();
+  }
+
+  // Nov 7 2026: 15s -> 7s, same rule as Home -- counted from when the page
+  // is actually on screen (waits while Legacy is still loading), not from
+  // the tap on the tab.
+  void _armLegacySeenTimer() {
+    if (_isLoading) {
+      _legacySeenDelayTimer = Timer(const Duration(milliseconds: 500), () {
+        if (!mounted) return;
+        if (appActiveTabNotifier.value != 2) return;
+        _armLegacySeenTimer();
+      });
+      return;
+    }
+    _legacySeenDelayTimer = Timer(const Duration(seconds: 7), () {
       if (appActiveTabNotifier.value != 2) return;
       ActivityBadgeService.markLegacySeen();
     });
