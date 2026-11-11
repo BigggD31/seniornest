@@ -497,6 +497,19 @@ class FamilyPlansService {
         title: 'Plan changed',
         body: '${await _myName()} changed a plan. Open SeniorNest to see it.',
       );
+    } else if (!plan.isPast &&
+        !plan.isCanceled &&
+        (title != plan.title ||
+            location != plan.location ||
+            details != plan.details)) {
+      // Nov 11 2026: a new place, title or details is worth a heads-up too.
+      // Not sent for old or canceled plans, and not for switch-only edits.
+      _pushToViewers(
+        nestId: plan.nestId,
+        visibleToIds: plan.visibleToIds,
+        title: 'Plan updated',
+        body: '${await _myName()} updated a plan. Open SeniorNest to see it.',
+      );
     }
   }
 
@@ -512,8 +525,20 @@ class FamilyPlansService {
     );
   }
 
-  static Future<void> deletePlan(String id) async {
-    await _db.from('family_plans').delete().eq('id', id);
+  static Future<void> deletePlan(FamilyPlan plan) async {
+    // Name first: the push should not fail because the row is gone.
+    final who = await _myName();
+    await _db.from('family_plans').delete().eq('id', plan.id);
+    // Nov 11 2026: tell people, but only for a plan that was still on.
+    // Clearing out an old or already-canceled plan stays quiet.
+    if (!plan.isPast && !plan.isCanceled) {
+      _pushToViewers(
+        nestId: plan.nestId,
+        visibleToIds: plan.visibleToIds,
+        title: 'Plan removed',
+        body: '$who deleted a plan.',
+      );
+    }
   }
 
   static Future<void> setRsvp(String planId, String status) async {
@@ -559,14 +584,32 @@ class FamilyPlansService {
     );
   }
 
-  static Future<void> closePollEarly(String id) async {
+  static Future<void> closePollEarly(FamilyPoll poll) async {
     await _db.from('family_polls').update(
         {'closed_early_at': DateTime.now().toUtc().toIso8601String()}).eq(
-        'id', id);
+        'id', poll.id);
+    // Nov 11 2026: let people know the poll is over.
+    _pushToViewers(
+      nestId: poll.nestId,
+      visibleToIds: poll.visibleToIds,
+      title: 'Poll closed',
+      body: '${await _myName()} closed a poll. Open SeniorNest to see the results.',
+    );
   }
 
-  static Future<void> deletePoll(String id) async {
-    await _db.from('family_polls').delete().eq('id', id);
+  static Future<void> deletePoll(FamilyPoll poll) async {
+    final who = await _myName();
+    await _db.from('family_polls').delete().eq('id', poll.id);
+    // Only for a poll that was still open; clearing out a finished one
+    // stays quiet.
+    if (!poll.isClosed) {
+      _pushToViewers(
+        nestId: poll.nestId,
+        visibleToIds: poll.visibleToIds,
+        title: 'Poll removed',
+        body: '$who deleted a poll.',
+      );
+    }
   }
 
   static Future<void> vote(String pollId, int optionIndex) async {

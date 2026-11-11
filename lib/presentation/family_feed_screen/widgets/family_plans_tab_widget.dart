@@ -959,7 +959,7 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
     } else if (v == 'delete') {
       if (await _confirm('Delete this plan?',
           'It will disappear for everyone. This cannot be undone.', 'Delete')) {
-        _run(() => FamilyPlansService.deletePlan(p.id));
+        _run(() => FamilyPlansService.deletePlan(p));
       }
     }
   }
@@ -1216,12 +1216,12 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
     if (v == 'close') {
       if (await _confirm('Close this poll now?',
           'Nobody will be able to vote after this.', 'Close poll')) {
-        _run(() => FamilyPlansService.closePollEarly(p.id));
+        _run(() => FamilyPlansService.closePollEarly(p));
       }
     } else if (v == 'delete') {
       if (await _confirm('Delete this poll?',
           'It will disappear for everyone. This cannot be undone.', 'Delete')) {
-        _run(() => FamilyPlansService.deletePoll(p.id));
+        _run(() => FamilyPlansService.deletePoll(p));
       }
     }
   }
