@@ -558,6 +558,12 @@ class FamilyPlansService {
         'item_id': itemId,
         'user_id': uid,
       }, onConflict: 'item_type,item_id,user_id');
+      _pushToPoster(
+        type: type,
+        itemId: itemId,
+        title: '${await _myName()} loved your ${type == 'poll' ? 'poll' : 'plan'}',
+        body: 'Tap to see it in SeniorNest.',
+      );
     } else {
       await _db
           .from('family_item_hearts')
@@ -595,6 +601,12 @@ class FamilyPlansService {
       'user_id': uid,
       'body': body,
     });
+    _pushToPoster(
+      type: type,
+      itemId: itemId,
+      title: '${await _myName()} replied to your ${type == 'poll' ? 'poll' : 'plan'}',
+      body: body.length > 80 ? '${body.substring(0, 80)}...' : body,
+    );
   }
 
   static Future<void> deleteComment(String id) async {
@@ -627,6 +639,37 @@ class FamilyPlansService {
   }
 
   // ── Pushes ─────────────────────────────────────────────────────
+
+  /// Nov 11 2026: push to ONLY the person who posted the plan or poll
+  /// (never to me, never to anyone else). Used for hearts and replies.
+  /// Fire-and-forget: a failed push must never fail the heart or reply.
+  static Future<void> _pushToPoster({
+    required String type,
+    required String itemId,
+    required String title,
+    required String body,
+  }) async {
+    try {
+      final uid = myId;
+      final row = await _db
+          .from(type == 'poll' ? 'family_polls' : 'family_plans')
+          .select('author_id')
+          .eq('id', itemId)
+          .maybeSingle();
+      final dynamic raw = row == null ? null : row['author_id'];
+      final String? authorId = raw is String ? raw : null;
+      if (authorId == null || authorId == uid) return;
+      await PushService.notify(
+        userIds: [authorId],
+        title: title,
+        body: body,
+        category: 'activity',
+        data: {'type': 'home'},
+      );
+    } catch (e) {
+      debugPrint('FAMILY_PLANS poster push error: $e');
+    }
+  }
 
   /// Push to everyone who can see the item, except me. Fire-and-forget:
   /// a failed push must never fail the post itself.
