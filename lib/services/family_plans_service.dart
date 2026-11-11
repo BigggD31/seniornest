@@ -22,6 +22,7 @@ class FamilyPlan {
     required this.sourceTz,
     required this.remind24h,
     required this.rsvpEnabled,
+    this.hideRsvpNames = false,
     required this.visibleToIds,
     required this.canceledAt,
     required this.createdAt,
@@ -37,6 +38,10 @@ class FamilyPlan {
   final String sourceTz; // friendly label, e.g. "Eastern Time"
   final bool remind24h;
   final bool rsvpEnabled;
+
+  /// Nov 11 2026: poster chose to show counts only. The database enforces
+  /// it (other people's answers are not readable), like polls' hide_voters.
+  final bool hideRsvpNames;
   final List<String> visibleToIds; // empty = everyone
   final DateTime? canceledAt;
   final DateTime createdAt;
@@ -64,6 +69,7 @@ class FamilyPlan {
       sourceTz: (m['source_tz'] as String?) ?? '',
       remind24h: m['remind_24h'] as bool? ?? true,
       rsvpEnabled: m['rsvp_enabled'] as bool? ?? false,
+      hideRsvpNames: m['hide_rsvp_names'] as bool? ?? false,
       visibleToIds: _stringList(m['visible_to_ids']),
       canceledAt: m['canceled_at'] == null
           ? null
@@ -151,6 +157,7 @@ class FamilyPlansData {
     required this.commentCounts,
     required this.names,
     this.hiddenCounts = const {},
+    this.rsvpCounts = const {},
   });
 
   final List<FamilyPlan> plans;
@@ -174,6 +181,9 @@ class FamilyPlansData {
   /// pollId -> votes per option, only for polls whose voters are hidden
   /// (the database gives those as counts, never as individual votes).
   final Map<String, List<int>> hiddenCounts;
+
+  /// planId -> [going, maybe, cant], only for plans that hide names.
+  final Map<String, List<int>> rsvpCounts;
 
   static FamilyPlansData empty() => FamilyPlansData(
         plans: [],
@@ -268,6 +278,7 @@ class FamilyPlansService {
     final hearts = <String, Set<String>>{};
     final commentCounts = <String, int>{};
     final hiddenCounts = <String, List<int>>{};
+    final rsvpCounts = <String, List<int>>{};
     final userIds = <String>{
       for (final p in plans) p.authorId,
       for (final p in polls) p.authorId,
@@ -318,6 +329,22 @@ class FamilyPlansService {
       } catch (e) {
         debugPrint('FAMILY_PLANS rsvps load error: $e');
       }
+      for (final p in plans.where((p) => p.hideRsvpNames)) {
+        try {
+          final rows =
+              await _db.rpc('plan_rsvp_counts', params: {'p_plan_id': p.id});
+          final r = (rows as List).isEmpty ? null : rows.first as Map;
+          if (r != null) {
+            rsvpCounts[p.id] = [
+              (r['going'] as num).toInt(),
+              (r['maybe'] as num).toInt(),
+              (r['cant'] as num).toInt(),
+            ];
+          }
+        } catch (e) {
+          debugPrint('FAMILY_PLANS rsvp counts error: $e');
+        }
+      }
     }
     final allItemIds = [...planIds, ...pollIds];
     if (allItemIds.isNotEmpty) {
@@ -359,6 +386,7 @@ class FamilyPlansService {
       commentCounts: commentCounts,
       names: names,
       hiddenCounts: hiddenCounts,
+      rsvpCounts: rsvpCounts,
     );
   }
 
@@ -408,6 +436,7 @@ class FamilyPlansService {
     required DateTime startsAt,
     required bool remind24h,
     required bool rsvpEnabled,
+    bool hideRsvpNames = false,
     required List<String> visibleToIds,
   }) async {
     final uid = myId;
@@ -426,6 +455,7 @@ class FamilyPlansService {
       'source_tz': zoneLabel(startsAt),
       'remind_24h': remind24h,
       'rsvp_enabled': rsvpEnabled,
+      if (hideRsvpNames) 'hide_rsvp_names': true,
       'visible_to_ids': visible,
     });
     _pushToViewers(
@@ -444,6 +474,7 @@ class FamilyPlansService {
     required DateTime startsAt,
     required bool remind24h,
     required bool rsvpEnabled,
+    bool hideRsvpNames = false,
   }) async {
     final timeChanged = startsAt.toUtc() != plan.startsAt.toUtc();
     await _db.from('family_plans').update({
@@ -454,6 +485,8 @@ class FamilyPlansService {
       if (timeChanged) 'source_tz': zoneLabel(startsAt),
       'remind_24h': remind24h,
       'rsvp_enabled': rsvpEnabled,
+      if (hideRsvpNames != plan.hideRsvpNames)
+        'hide_rsvp_names': hideRsvpNames,
       // A new time means the 24-hour reminder should be sent fresh.
       if (timeChanged) 'reminder_sent_at': null,
     }).eq('id', plan.id);

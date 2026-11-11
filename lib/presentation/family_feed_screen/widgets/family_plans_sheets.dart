@@ -448,6 +448,7 @@ class _CreatePlanSheetState extends State<_CreatePlanSheet> {
   TimeOfDay? _time;
   bool _remind = true;
   bool _rsvp = false;
+  bool _showNames = true; // false = counts only (hide_rsvp_names)
   bool _saving = false;
   String? _error;
   List<Map<String, String>> _members = [];
@@ -467,6 +468,7 @@ class _CreatePlanSheetState extends State<_CreatePlanSheet> {
       _time = TimeOfDay(hour: e.startsAt.hour, minute: e.startsAt.minute);
       _remind = e.remind24h;
       _rsvp = e.rsvpEnabled;
+      _showNames = !e.hideRsvpNames;
     } else {
       _loadMembers();
     }
@@ -547,6 +549,7 @@ class _CreatePlanSheetState extends State<_CreatePlanSheet> {
           startsAt: startsAt,
           remind24h: _remind,
           rsvpEnabled: _rsvp,
+          hideRsvpNames: _rsvp && !_showNames,
         );
       } else {
         final visible = _hidden.isEmpty
@@ -563,6 +566,7 @@ class _CreatePlanSheetState extends State<_CreatePlanSheet> {
           startsAt: startsAt,
           remind24h: _remind,
           rsvpEnabled: _rsvp,
+          hideRsvpNames: _rsvp && !_showNames,
           visibleToIds: visible,
         );
       }
@@ -681,6 +685,15 @@ class _CreatePlanSheetState extends State<_CreatePlanSheet> {
                 _switchRow(dark, 'Ask who\'s coming',
                     'Family taps Going, Maybe, or Can\'t', _rsvp,
                     (v) => setState(() => _rsvp = v)),
+                if (_rsvp) ...[
+                  const SizedBox(height: 10),
+                  _switchRow(
+                      dark,
+                      'Show who answered',
+                      'Family can open a list of names. Turn off to show counts only.',
+                      _showNames,
+                      (v) => setState(() => _showNames = v)),
+                ],
                 if (_error != null) ...[
                   const SizedBox(height: 12),
                   Text(_error!,

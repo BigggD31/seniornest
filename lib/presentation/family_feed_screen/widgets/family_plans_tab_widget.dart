@@ -49,6 +49,8 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
   bool _disposed = false;
   // Items whose reply box is open (keys from FamilyPlansService.key).
   final Set<String> _replyOpen = {};
+  // Plans whose RSVP names are opened (each person's own choice).
+  final Set<String> _namesOpen = {};
 
   bool get _dark => widget.isDarkMode;
   String? get _me => FamilyPlansService.myId;
@@ -693,9 +695,16 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
         p.sourceTz == FamilyPlansService.zoneLabel(p.startsAt);
     final rsvps = data.rsvps[p.id] ?? const <String, String>{};
     final myRsvp = _me == null ? null : rsvps[_me!];
-    final going = rsvps.values.where((v) => v == 'going').length;
-    final maybe = rsvps.values.where((v) => v == 'maybe').length;
-    final cant = rsvps.values.where((v) => v == 'cant').length;
+    // When the poster hides names, the database only gives counts.
+    final hiddenRsvp = data.rsvpCounts[p.id];
+    final going = hiddenRsvp?[0] ?? rsvps.values.where((v) => v == 'going').length;
+    final maybe = hiddenRsvp?[1] ?? rsvps.values.where((v) => v == 'maybe').length;
+    final cant = hiddenRsvp?[2] ?? rsvps.values.where((v) => v == 'cant').length;
+    final audience =
+        p.isPrivate ? p.visibleToIds.length : _members.length + 1;
+    final waiting = audience - (going + maybe + cant);
+    final namesOpen = _namesOpen.contains(p.id);
+    final canOpenNames = !p.hideRsvpNames && rsvps.isNotEmpty;
 
     return _cardShell(
       faded: faded,
@@ -808,25 +817,56 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
               ],
             ),
           ],
-          if (p.rsvpEnabled && rsvps.isNotEmpty) ...[
+          if (p.rsvpEnabled && (going + maybe + cant > 0 || waiting > 0)) ...[
             const SizedBox(height: 8),
             InkWell(
-              onTap: () => _showRsvpList(p, rsvps),
+              onTap: canOpenNames
+                  ? () => setState(() {
+                        if (!_namesOpen.remove(p.id)) _namesOpen.add(p.id);
+                      })
+                  : null,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(
-                  [
-                    if (going > 0) '$going going',
-                    if (maybe > 0) '$maybe maybe',
-                    if (cant > 0) '$cant can\'t',
-                  ].join(', '),
-                  style: GoogleFonts.nunitoSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: _p.deep),
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        [
+                          [
+                            if (going > 0) '$going going',
+                            if (maybe > 0) '$maybe maybe',
+                            if (cant > 0) '$cant can\'t',
+                          ].join(', '),
+                          if (waiting > 0)
+                            '$waiting ${waiting == 1 ? 'hasn\'t' : 'haven\'t'} answered',
+                        ].where((t) => t.isNotEmpty).join(' · '),
+                        style: GoogleFonts.nunitoSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: _p.deep),
+                      ),
+                    ),
+                    if (canOpenNames) ...[
+                      const SizedBox(width: 6),
+                      Icon(namesOpen ? Icons.expand_less : Icons.expand_more,
+                          size: 18, color: _p.deep),
+                    ],
+                  ],
                 ),
               ),
             ),
+            if (p.hideRsvpNames)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  mine
+                      ? 'You are keeping the names private'
+                      : '${_nameOf(p.authorId)} is keeping the names private',
+                  style:
+                      GoogleFonts.nunitoSans(fontSize: 12, color: _mutedColor),
+                ),
+              ),
+            if (canOpenNames && namesOpen) _rsvpNames(rsvps),
           ],
           const SizedBox(height: 4),
           _heartAndComments('plan', p.id, data),
@@ -858,7 +898,7 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
     );
   }
 
-  void _showRsvpList(FamilyPlan p, Map<String, String> rsvps) {
+  Widget _rsvpNames(Map<String, String> rsvps) {
     List<String> namesFor(String status) => [
           for (final e in rsvps.entries)
             if (e.value == status) _nameOf(e.key)
@@ -868,28 +908,39 @@ class _FamilyPlansTabWidgetState extends State<FamilyPlansTabWidget> {
       MapEntry('Maybe', namesFor('maybe')),
       MapEntry('Can\'t', namesFor('cant')),
     ].where((g) => g.value.isNotEmpty).toList();
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(p.title),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final g in groups) ...[
-                Text(g.key,
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                Text(g.value.join(', ')),
-                const SizedBox(height: 10),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 4, bottom: 6),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+      decoration: BoxDecoration(
+        color: _dark ? const Color(0xFF1A1612) : const Color(0xFFF6EFE3),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final g in groups)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 64,
+                    child: Text(g.key,
+                        style: GoogleFonts.nunitoSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: _p.deep)),
+                  ),
+                  Expanded(
+                    child: Text(g.value.join(', '),
+                        style: GoogleFonts.nunitoSans(
+                            fontSize: 14, height: 1.35, color: _textColor)),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
