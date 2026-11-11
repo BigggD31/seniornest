@@ -590,7 +590,7 @@ class FamilyPlansService {
         'item_type': type,
         'item_id': itemId,
         'user_id': uid,
-      }, onConflict: 'item_type,item_id,user_id');
+      }, onConflict: 'item_type,item_id,user_id', ignoreDuplicates: true);
       _pushToPoster(
         type: type,
         itemId: itemId,
