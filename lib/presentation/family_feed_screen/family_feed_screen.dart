@@ -50,6 +50,7 @@ class MessageModel {
     required this.type,
     required this.content,
     required this.imageUrl,
+    this.imageUrls = const [],
     required this.imageSemanticLabel,
     required this.timestamp,
     required this.heartCount,
@@ -77,6 +78,9 @@ class MessageModel {
   final MessageType type;
   final String content;
   final String imageUrl;
+  // Nov 17 2026: every photo of a multi-photo post, in order (imageUrl is
+  // always the first). Empty for a normal single-photo post.
+  final List<String> imageUrls;
   final String imageSemanticLabel;
   final DateTime timestamp;
   int heartCount;
@@ -115,6 +119,9 @@ class MessageModel {
       type: _messageTypeFromString(map['type'] as String),
       content: map['content'] as String,
       imageUrl: map['imageUrl'] as String,
+      imageUrls: ((map['imageUrls'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .toList(),
       imageSemanticLabel: map['imageSemanticLabel'] as String,
       timestamp: DateTime.parse(map['timestamp'] as String),
       heartCount: map['heartCount'] as int,
@@ -151,6 +158,7 @@ class MessageModel {
     'type': type.name,
     'content': content,
     'imageUrl': imageUrl,
+    'imageUrls': imageUrls,
     'imageSemanticLabel': imageSemanticLabel,
     'timestamp': timestamp.toIso8601String(),
     'heartCount': heartCount,
@@ -2618,6 +2626,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
                     type: m.type,
                     content: m.content,
                     imageUrl: m.imageUrl,
+                    imageUrls: m.imageUrls,
                     imageSemanticLabel: m.imageSemanticLabel,
                     timestamp: m.timestamp,
                     heartCount: m.heartCount,
@@ -2939,6 +2948,9 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
           type: MessageModel._messageTypeFromString(type),
           content: post['content'] as String? ?? '',
           imageUrl: post['media_url'] as String? ?? '',
+          imageUrls: ((post['media_urls'] as List?) ?? const [])
+              .map((e) => e.toString())
+              .toList(),
           imageSemanticLabel: '',
           timestamp: DateTime.parse(post['created_at'] as String),
           heartCount: heartCounts[post['id'] as String] ?? 0,
