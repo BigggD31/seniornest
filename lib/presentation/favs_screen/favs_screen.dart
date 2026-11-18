@@ -13,6 +13,7 @@ import '../../widgets/collapsible_date_group_header.dart';
 import '../profile_photo_picker_screen/profile_photo_picker_screen.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../widgets/fullscreen_media_viewer.dart';
+import '../../widgets/photo_carousel.dart';
 import '../../widgets/save_audio_button.dart';
 import '../../core/app_state.dart';
 
@@ -1213,6 +1214,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
     final content2 = item['content'] as String? ?? '';
     final title = item['senderName'] as String? ?? item['storyTitle'] as String? ?? 'Memory';
     final imageUrl = item['imageUrl'] as String? ?? '';
+    final imageUrls = ((item['imageUrls'] as List?) ?? const []).map((e) => e.toString()).toList();
 
     showModalBottomSheet(
       context: context,
@@ -1327,6 +1329,13 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
                       _FavsAudioPlayer(audioUrl: mediaUrl, isDarkMode: _isDarkMode)
                     else if ((category == 'Video' || entryType == 'video') && mediaUrl.isNotEmpty)
                       _FavsVideoPlayer(videoUrl: mediaUrl, isDarkMode: _isDarkMode)
+                    else if ((category == 'Photos') && imageUrls.length > 1)
+                      PhotoCarousel(
+                        urls: imageUrls,
+                        height: 220,
+                        semanticLabel: title,
+                        isDarkMode: _isDarkMode,
+                      )
                     else if ((category == 'Photos') && imageUrl.isNotEmpty)
                       GestureDetector(
                         onTap: () => openFullscreenImage(
@@ -1395,6 +1404,7 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
     final entryType = item['entry_type'] as String? ?? 'text';
     final mediaUrl = item['media_url'] as String? ?? '';
     final imageUrl = item['imageUrl'] as String? ?? '';
+    final imageUrls = ((item['imageUrls'] as List?) ?? const []).map((e) => e.toString()).toList();
     final senderRelationship = item['senderRelationship'] as String? ?? '';
 
     // Format date
@@ -1440,7 +1450,15 @@ class _FavsScreenState extends State<FavsScreen> with TickerProviderStateMixin {
               // opened the intermediate popup -- there was no direct path
               // to fullscreen from the card at all, which is the real
               // structural gap Home never had.
-              if (imageUrl.isNotEmpty)
+              if (imageUrls.length > 1)
+                PhotoCarousel(
+                  urls: imageUrls,
+                  height: 160,
+                  semanticLabel: title,
+                  isDarkMode: _isDarkMode,
+                  radius: const BorderRadius.vertical(top: Radius.circular(14)),
+                )
+              else if (imageUrl.isNotEmpty)
                 GestureDetector(
                   onTap: () => openFullscreenImage(
                     context: context,
