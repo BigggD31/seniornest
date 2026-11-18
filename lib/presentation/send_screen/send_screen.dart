@@ -59,15 +59,11 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   // should attach and preview it without moving the highlighted tab,
   // exactly like picking any other file type already does.
   String _activeTabId = 'text';
-  String? _selectedPhotoBase64;
-  // Memoizes the decoded photo bytes so rebuilds (e.g. every time the
-  // keyboard opens/closes, since build() reads keyboard height directly)
-  // reuse the same decoded object instead of re-decoding from scratch
-  // every time -- a fresh Uint8List each rebuild made Flutter treat it as
-  // a brand-new image and briefly flicker/redraw it, even though the
-  // actual photo never changed.
-  String? _lastDecodedPhotoBase64;
-  Uint8List? _lastDecodedPhotoBytes;
+  // Nov 17 2026: a post can carry up to _maxPhotosPerPost photos (swipeable
+  // on Home). Kept as raw bytes in pick order. The first one is also the
+  // post's media_url, so builds without multi-photo still show a photo.
+  static const int _maxPhotosPerPost = 10;
+  final List<Uint8List> _photos = [];
   final List<String> _selectedRecipients = [];
   List<Map<String, dynamic>> _nestRecipients = []; // real nest members (excludes current user)
   // Sep 3 2026: distinct from _selectedRecipients (who can SEE this post,
@@ -144,6 +140,16 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         content: Text('That $mediaType is too large. Please choose one under ${maxMb}MB.'),
         backgroundColor: Colors.red,
         duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+
+  void _showPhotoLimitMessage() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('You can add up to 10 photos to one post.'),
+        duration: Duration(seconds: 4),
       ),
     );
   }
@@ -1634,47 +1640,91 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
     );
   }
 
-  /// Opens photo/video library — shows both photos and videos.
+  /// Opens photo/video library. Photos: pick several at once (up to
+  /// _maxPhotosPerPost in total). A video is still one per post.
   Future<void> _pickPhotoFromGallery() async {
     final picker = ImagePicker();
-    final picked = await picker.pickMedia();
-    if (picked != null && mounted) {
-      final isVideo = picked.path.toLowerCase().endsWith('.mp4') ||
-          picked.path.toLowerCase().endsWith('.mov') ||
-          picked.path.toLowerCase().endsWith('.m4v');
-      if (isVideo) {
-        final fileSize = await File(picked.path).length();
-        if (fileSize > _maxVideoBytes) {
-          _showSizeLimitError('video', _maxVideoBytes);
-          return;
-        }
-        setState(() {
-          _videoFilePath = picked.path;
-          _videoIsFromRecording = false;
-          _selectedType = 'video';
-          _videoHasRecording = true;
-        });
-        _videoPlayerController = VideoPlayerController.file(File(picked.path));
-        await _videoPlayerController!.initialize();
-        // _videoSeconds is otherwise only ever set by the live-recording
-        // timer -- for an uploaded video it was staying at 0 (or whatever
-        // was left over from a prior recording attempt), which made the
-        // play button think the video was already over almost immediately.
-        setState(() {
-          _videoSeconds = _videoPlayerController!.value.duration.inSeconds;
-        });
-      } else {
-        final bytes = await picked.readAsBytes();
-        if (bytes.length > _maxPhotoBytes) {
-          _showSizeLimitError('photo', _maxPhotoBytes);
-          return;
-        }
-        setState(() {
-          _selectedPhotoBase64 = base64Encode(bytes);
-          _selectedType = 'photo';
-        });
-      }
+    final room = _maxPhotosPerPost - _photos.length;
+    if (room <= 0) {
+      _showPhotoLimitMessage();
+      return;
     }
+    // Photos are scaled to 2400px on the long side (plenty for the feed)
+    // so ten of them stay light on memory and upload quickly.
+    final List<XFile> picked;
+    if (room >= 2) {
+      picked = await picker.pickMultipleMedia(
+        maxWidth: 2400,
+        maxHeight: 2400,
+        imageQuality: 88,
+        limit: room,
+      );
+    } else {
+      final one = await picker.pickMedia(
+        maxWidth: 2400,
+        maxHeight: 2400,
+        imageQuality: 88,
+      );
+      picked = one == null ? <XFile>[] : <XFile>[one];
+    }
+    if (picked.isEmpty || !mounted) return;
+
+    bool isVideoFile(XFile x) {
+      final p = x.path.toLowerCase();
+      return p.endsWith('.mp4') || p.endsWith('.mov') || p.endsWith('.m4v');
+    }
+
+    if (picked.any(isVideoFile)) {
+      if (picked.length > 1) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Videos are sent one at a time. Choose photos only, or a single video.'),
+            duration: Duration(seconds: 5),
+          ),
+        );
+        return;
+      }
+      final vid = picked.first;
+      final fileSize = await File(vid.path).length();
+      if (fileSize > _maxVideoBytes) {
+        _showSizeLimitError('video', _maxVideoBytes);
+        return;
+      }
+      setState(() {
+        _photos.clear();
+        _videoFilePath = vid.path;
+        _videoIsFromRecording = false;
+        _selectedType = 'video';
+        _videoHasRecording = true;
+      });
+      _videoPlayerController = VideoPlayerController.file(File(vid.path));
+      await _videoPlayerController!.initialize();
+      // _videoSeconds is otherwise only ever set by the live-recording
+      // timer -- for an uploaded video it was staying at 0 (or whatever
+      // was left over from a prior recording attempt), which made the
+      // play button think the video was already over almost immediately.
+      setState(() {
+        _videoSeconds = _videoPlayerController!.value.duration.inSeconds;
+      });
+      return;
+    }
+
+    final added = <Uint8List>[];
+    var tooBig = false;
+    for (final x in picked) {
+      final bytes = await x.readAsBytes();
+      if (bytes.length > _maxPhotoBytes) {
+        tooBig = true;
+        continue;
+      }
+      added.add(bytes);
+    }
+    if (tooBig) _showSizeLimitError('photo', _maxPhotoBytes);
+    if (added.isEmpty || !mounted) return;
+    setState(() {
+      _photos.addAll(added.take(room));
+      _selectedType = 'photo';
+    });
   }
 
   /// Opens camera directly — no action sheet.
@@ -1687,8 +1737,12 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         _showSizeLimitError('photo', _maxPhotoBytes);
         return;
       }
+      if (_photos.length >= _maxPhotosPerPost) {
+        _showPhotoLimitMessage();
+        return;
+      }
       setState(() {
-        _selectedPhotoBase64 = base64Encode(bytes);
+        _photos.add(bytes);
         _selectedType = 'photo';
       });
     }
@@ -1769,8 +1823,12 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         _showSizeLimitError('photo', _maxPhotoBytes);
         return;
       }
+      if (_photos.length >= _maxPhotosPerPost) {
+        _showPhotoLimitMessage();
+        return;
+      }
       setState(() {
-        _selectedPhotoBase64 = base64Encode(bytes);
+        _photos.add(bytes);
         _selectedType = 'photo';
       });
     }
@@ -2697,58 +2755,163 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildPhotoComposer() {
-    Uint8List? photoBytes;
-    if (_selectedPhotoBase64 != null) {
-      if (_selectedPhotoBase64 == _lastDecodedPhotoBase64 && _lastDecodedPhotoBytes != null) {
-        photoBytes = _lastDecodedPhotoBytes;
-      } else {
-        try {
-          photoBytes = base64Decode(_selectedPhotoBase64!);
-          _lastDecodedPhotoBase64 = _selectedPhotoBase64;
-          _lastDecodedPhotoBytes = photoBytes;
-        } catch (_) {
-          photoBytes = null;
-        }
-      }
-    }
-
-    if (photoBytes == null) {
+    if (_photos.isEmpty) {
       return _buildTextComposer();
     }
+    const accent = Color(0xFFD4AA00);
+    final canAddMore = _photos.length < _maxPhotosPerPost;
 
-    return Column(
-      children: [
-        Stack(
+    Widget thumb(int i) {
+      return SizedBox(
+        width: 104,
+        height: 104,
+        child: Stack(
+          clipBehavior: Clip.none,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Image.memory(
-                photoBytes,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: 140,
+            Positioned(
+              left: 0,
+              bottom: 0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.memory(
+                  _photos[i],
+                  key: ObjectKey(_photos[i]),
+                  width: 96,
+                  height: 96,
+                  fit: BoxFit.cover,
+                  cacheWidth: 288,
+                  gaplessPlayback: true,
+                ),
               ),
             ),
             Positioned(
-              top: 8,
-              right: 8,
-              child: GestureDetector(
-                onTap: () => setState(() => _selectedPhotoBase64 = null),
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withAlpha(140),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.close_rounded,
+              left: 8,
+              bottom: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(140),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${i + 1}',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
                     color: Colors.white,
-                    size: 18,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Semantics(
+                button: true,
+                label: 'Remove photo ${i + 1}',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() {
+                    _photos.removeAt(i);
+                    if (_photos.isEmpty) _selectedType = 'text';
+                  }),
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Align(
+                      alignment: Alignment.topRight,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF2C2417),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
           ],
+        ),
+      );
+    }
+
+    Widget addTile() {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 0),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: GestureDetector(
+            onTap: _showPhotoOptionsSheet,
+            child: Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: accent, width: 2),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.add_rounded, color: accent, size: 28),
+                  Text(
+                    'Add',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: accent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              _photos.length == 1 ? 'Photo' : 'Photos',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: _textPrimary,
+              ),
+            ),
+            Text(
+              '${_photos.length} of $_maxPhotosPerPost',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: accent,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 104,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            itemCount: _photos.length + (canAddMore ? 1 : 0),
+            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            itemBuilder: (context, i) =>
+                i < _photos.length ? thumb(i) : addTile(),
+          ),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -3846,15 +4009,34 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
               : (effectiveType == 'voice' ? _voiceFilePath : null));
 
       // Upload media if present
-      if (_selectedPhotoBase64 != null) {
-        final bytes = base64Decode(_selectedPhotoBase64!);
-        final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await supabase.storage.from('media').uploadBinary(
-          'posts/$fileName',
-          bytes,
-          fileOptions: const FileOptions(contentType: 'image/jpeg'),
-        );
-        mediaUrl = supabase.storage.from('media').getPublicUrl('posts/$fileName');
+      final photoUrls = <String>[];
+      if (_photos.isNotEmpty) {
+        // Nov 17 2026: up to 10 photos, uploaded in order. The first is
+        // also media_url so older builds still show a photo.
+        final photosToSend = List<Uint8List>.from(_photos);
+        final stamp = DateTime.now().millisecondsSinceEpoch;
+        final uploadedPaths = <String>[];
+        try {
+          for (var i = 0; i < photosToSend.length; i++) {
+            final path = 'posts/${userId}_${stamp}_$i.jpg';
+            await supabase.storage.from('media').uploadBinary(
+              path,
+              photosToSend[i],
+              fileOptions: const FileOptions(contentType: 'image/jpeg'),
+            );
+            uploadedPaths.add(path);
+            photoUrls.add(supabase.storage.from('media').getPublicUrl(path));
+          }
+        } catch (_) {
+          // Don't leave half a post's photos behind in storage.
+          if (uploadedPaths.isNotEmpty) {
+            try {
+              await supabase.storage.from('media').remove(uploadedPaths);
+            } catch (_) {}
+          }
+          rethrow;
+        }
+        mediaUrl = photoUrls.first;
       } else if (effectiveType == 'voice' && effectivePath != null) {
         final file = File(effectivePath);
         final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.m4a';
@@ -3884,6 +4066,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         'post_type': effectiveType,
         'content': overrideContent ?? _messageController.text.trim(),
         'media_url': mediaUrl,
+        'media_urls': photoUrls.length > 1 ? photoUrls : null,
         'is_recorded_video': effectiveType == 'video' ? _videoIsFromRecording : false,
         // Oct 17 2026: a post always goes to the whole Nest. Tapping a
         // name on Share now tags that person (shown as "To: Name"); it no
@@ -3952,7 +4135,9 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
           body: preview.isNotEmpty
               ? (preview.length > 80 ? '${preview.substring(0, 80)}...' : preview)
               : (effectiveType == 'photo'
-                  ? 'Sent a photo'
+                  ? (photoUrls.length > 1
+                      ? 'Sent ${photoUrls.length} photos'
+                      : 'Sent a photo')
                   : effectiveType == 'voice'
                       ? 'Sent a voice message'
                       : 'Sent a video'),
@@ -3988,7 +4173,7 @@ class _SendScreenState extends State<SendScreen> with TickerProviderStateMixin {
         _messageController.clear();
         _voiceCaptionController.clear();
         _videoCaptionController.clear();
-        _selectedPhotoBase64 = null;
+        _photos.clear();
         _selectedType = 'text';
         _voiceIsRecording = false;
         _voiceHasRecording = false;

@@ -12,12 +12,32 @@ void openFullscreenImage({
   String semanticLabel = '',
   bool isDarkMode = false,
 }) {
+  openFullscreenImages(
+    context: context,
+    imageUrls: [imageUrl],
+    semanticLabel: semanticLabel,
+    isDarkMode: isDarkMode,
+  );
+}
+
+/// Nov 17 2026: full-screen viewer for a post with several photos. Swipe
+/// left/right between them; the counter shows "2 of 4" and Save saves the
+/// photo on screen. With one photo it looks and behaves as it always did.
+void openFullscreenImages({
+  required BuildContext context,
+  required List<String> imageUrls,
+  int initialIndex = 0,
+  String semanticLabel = '',
+  bool isDarkMode = false,
+}) {
+  if (imageUrls.isEmpty) return;
   Navigator.of(context).push(
     PageRouteBuilder(
       opaque: false,
       barrierColor: Colors.black,
       pageBuilder: (_, __, ___) => _FullscreenImagePage(
-        imageUrl: imageUrl,
+        imageUrls: imageUrls,
+        initialIndex: initialIndex.clamp(0, imageUrls.length - 1),
         semanticLabel: semanticLabel,
       ),
       transitionsBuilder: (_, anim, __, child) =>
@@ -52,11 +72,13 @@ void openFullscreenVideo({
 
 class _FullscreenImagePage extends StatefulWidget {
   const _FullscreenImagePage({
-    required this.imageUrl,
+    required this.imageUrls,
+    required this.initialIndex,
     required this.semanticLabel,
   });
 
-  final String imageUrl;
+  final List<String> imageUrls;
+  final int initialIndex;
   final String semanticLabel;
 
   @override
@@ -64,9 +86,17 @@ class _FullscreenImagePage extends StatefulWidget {
 }
 
 class _FullscreenImagePageState extends State<_FullscreenImagePage> {
+  late final PageController _pageController;
+  late int _index;
+  // While a photo is pinched in, swiping would fight the zoom pan, so
+  // page-swiping is switched off until it is back to normal size.
+  bool _zoomed = false;
+
   @override
   void initState() {
     super.initState();
+    _index = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
     // Allow all orientations so device auto-rotates to landscape
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -78,6 +108,7 @@ class _FullscreenImagePageState extends State<_FullscreenImagePage> {
 
   @override
   void dispose() {
+    _pageController.dispose();
     // Restore portrait-only and system UI on close
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -88,6 +119,8 @@ class _FullscreenImagePageState extends State<_FullscreenImagePage> {
 
   @override
   Widget build(BuildContext context) {
+    final urls = widget.imageUrls;
+    final multi = urls.length > 1;
     return WillPopScope(
       onWillPop: () async {
         _close();
@@ -97,37 +130,87 @@ class _FullscreenImagePageState extends State<_FullscreenImagePage> {
         backgroundColor: Colors.black,
         body: Stack(
           children: [
-            // Pinch-to-zoom image
-            Center(
-              child: InteractiveViewer(
-                minScale: 0.8,
-                maxScale: 4.0,
-                child: Image.network(
-                  widget.imageUrl,
-                  fit: BoxFit.contain,
-                  semanticLabel: widget.semanticLabel,
-                  loadingBuilder: (_, child, progress) {
-                    if (progress == null) return child;
-                    return const Center(
-                      child: CircularProgressIndicator(color: Colors.white54),
-                    );
-                  },
-                  errorBuilder: (_, __, ___) => const Center(
-                    child: Icon(
-                      Icons.broken_image_rounded,
-                      color: Colors.white38,
-                      size: 64,
+            // Swipeable, pinch-to-zoom photos
+            PageView.builder(
+              controller: _pageController,
+              itemCount: urls.length,
+              physics: _zoomed
+                  ? const NeverScrollableScrollPhysics()
+                  : const PageScrollPhysics(),
+              onPageChanged: (i) => setState(() => _index = i),
+              itemBuilder: (_, i) => _ZoomableImage(
+                url: urls[i],
+                semanticLabel: widget.semanticLabel,
+                onZoomChanged: (z) {
+                  if (i == _index && z != _zoomed) {
+                    setState(() => _zoomed = z);
+                  }
+                },
+              ),
+            ),
+            // Save to phone — top-left (saves the photo on screen)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 12,
+              left: 16,
+              child: _SaveButton(
+                key: ValueKey(urls[_index]),
+                url: urls[_index],
+                isVideo: false,
+              ),
+            ),
+            if (multi)
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 12,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withAlpha(160),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${_index + 1} of ${urls.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            // Save to phone — top-left
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 12,
-              left: 16,
-              child: _SaveButton(url: widget.imageUrl, isVideo: false),
-            ),
+            if (multi)
+              Positioned(
+                bottom: MediaQuery.of(context).padding.bottom + 20,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      for (var i = 0; i < urls.length; i++)
+                        Container(
+                          width: i == _index ? 9 : 8,
+                          height: i == _index ? 9 : 8,
+                          margin: const EdgeInsets.symmetric(horizontal: 3.5),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: i == _index
+                                ? Colors.white
+                                : Colors.white38,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
             // Close button — top-right
             Positioned(
               top: MediaQuery.of(context).padding.top + 12,
@@ -135,6 +218,77 @@ class _FullscreenImagePageState extends State<_FullscreenImagePage> {
               child: _CloseButton(onTap: _close),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One photo in the swipe viewer: pinch to zoom, reports when it is zoomed.
+class _ZoomableImage extends StatefulWidget {
+  const _ZoomableImage({
+    required this.url,
+    required this.semanticLabel,
+    required this.onZoomChanged,
+  });
+
+  final String url;
+  final String semanticLabel;
+  final ValueChanged<bool> onZoomChanged;
+
+  @override
+  State<_ZoomableImage> createState() => _ZoomableImageState();
+}
+
+class _ZoomableImageState extends State<_ZoomableImage> {
+  final TransformationController _tc = TransformationController();
+  bool _zoomed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tc.addListener(_onChanged);
+  }
+
+  void _onChanged() {
+    final z = _tc.value.getMaxScaleOnAxis() > 1.02;
+    if (z != _zoomed) {
+      _zoomed = z;
+      widget.onZoomChanged(z);
+    }
+  }
+
+  @override
+  void dispose() {
+    _tc.removeListener(_onChanged);
+    _tc.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: InteractiveViewer(
+        transformationController: _tc,
+        minScale: 0.8,
+        maxScale: 4.0,
+        child: Image.network(
+          widget.url,
+          fit: BoxFit.contain,
+          semanticLabel: widget.semanticLabel,
+          loadingBuilder: (_, child, progress) {
+            if (progress == null) return child;
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.white54),
+            );
+          },
+          errorBuilder: (_, __, ___) => const Center(
+            child: Icon(
+              Icons.broken_image_rounded,
+              color: Colors.white38,
+              size: 64,
+            ),
+          ),
         ),
       ),
     );
@@ -349,7 +503,7 @@ class _CloseButton extends StatelessWidget {
 // ── Save to phone button ───────────────────────────────────────────────────
 
 class _SaveButton extends StatefulWidget {
-  const _SaveButton({required this.url, required this.isVideo});
+  const _SaveButton({super.key, required this.url, required this.isVideo});
 
   final String url;
   final bool isVideo;
