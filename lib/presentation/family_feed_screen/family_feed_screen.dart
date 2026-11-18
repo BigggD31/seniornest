@@ -3098,6 +3098,7 @@ class _FamilyFeedScreenState extends State<FamilyFeedScreen>
         'senderAvatarLabel': msg.senderAvatarLabel,
         'content': msg.content,
         'imageUrl': msg.imageUrl,
+        'imageUrls': msg.imageUrls,
         'imageSemanticLabel': msg.imageSemanticLabel,
         'timestamp': msg.timestamp.toIso8601String(),
         'sourceType': 'message',
